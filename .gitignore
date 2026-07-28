@@ -1,0 +1,27 @@
+# RTL_Temp is a local development-history repository.
+# Track modules only after explicitly adding them to this allowlist.
+/*
+!/.gitignore
+!/.gitattributes
+!/AGENTS.md
+!/ASU_TOP/
+
+# Disposable verification and EDA outputs
+**/.work/verification/sim/
+**/.work/verification/waves/
+**/*.vcd
+**/*.fsdb
+**/*.wlf
+**/*.jou
+**/*.pb
+**/*.str
+**/work/
+**/csrc/
+**/simv*
+**/ucli.key
+
+# Editor and operating-system metadata
+**/.vscode/
+**/.idea/
+**/Thumbs.db
+**/.DS_Store
