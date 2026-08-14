@@ -1,0 +1,30 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_format_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_format_rtl_designer"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_filename_simulation_worker_r3"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_format_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_format_verification"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_format_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "baf55e3e6cea9d3b329a3965d763ab61129b808d95e93e3d10831f6679bb0d37",
+  "release_baseline_fingerprint": "84adc305c7874b4d34649563d94ab151d65f8ba047a1017c3daef3e8191b6f44",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "5bc65de03b0b12dfa41072be327d68d706437d7183d7cf52ef6c0eea244cf037",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "52ee69c0ae9019f37fbe2a157f4fb74f1805fddd6d9dedde8503f0538e1bac6f"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-12_RTL_handoff.md", "sha256": "c337e660407d11345849e82814282d28782cf837abc87ddc6101fc7e220fb65e"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "dac9612b98fd3bf0cf99382dd9a2c4da823b635c3ea41b5d09bb982c1ae21c3b"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "MODEL_EQUIVALENCE=NON_VENDOR_EQUIVALENT; Vivado JESD PHY/GTH and FIFO XCI timing/reset/flag behavior remain for integrated XSIM.",
+    "VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream, and board validation are NOT_RUN."
+  ]
+}

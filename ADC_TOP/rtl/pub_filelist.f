@@ -1,0 +1,12 @@
+# SHA256 is normalized LF/trailing-whitespace-insensitive text content.
+# Windows paths are relative to D:\Codex\RTL\PUB; VMware paths are relative
+# to /home/zezhoux/Project/pub/rtl. lib.v supplies the selected CDC cells;
+# cell.v is retained as its companion PUB dependency. The FIFO is FWFT.
+7df5ee7bf7dc3176b27f909ff6dacb9874c6f4ea68b8198a24e22f67b512d066 lib.v Lib.v
+73b62937e01ece6cdfa9889f1e2c1ad1d1c2602087d0685461558f137f0d7e35 cell.v Cell.v
+8e84cc866ed46eed540c2ae139d222dc68f615b1c397e58627574fef85761478 async_fifo_fwft/async_fifo.v async_fifo_fwft/async_fifo.v
+9cd67c11b193f9ebc169b04f7777bce719f0216a08e16f88a0ba4f498a639fc3 async_fifo_fwft/async_fifo_wctrl.v async_fifo_fwft/async_fifo_wctrl.v
+2440d01a6ac2b24a1c196ad87bd6eb2a11fd363d325876762f8b56fccdfb3ca6 async_fifo_fwft/async_fifo_rctrl.v async_fifo_fwft/async_fifo_rctrl.v
+951269acf49f75b272fb9c62ef92e6ec88135e945d5a1af5c3ba06bc463413f3 async_fifo_fwft/async_fifo_sync.v async_fifo_fwft/async_fifo_sync.v
+9798c3c6d80f6be4ece27fa20318826a77d11db901b5a57b54eb46fd0d3dcfd8 async_fifo_fwft/async_fifo_gray.v async_fifo_fwft/async_fifo_gray.v
+6e169093138cf4330fbfd89b8f4d09d8cdd83688f7a80763e62f1d7580905554 async_fifo_fwft/async_fifo_dpram.v async_fifo_fwft/async_fifo_dpram.v

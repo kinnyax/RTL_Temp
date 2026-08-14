@@ -1,0 +1,42 @@
+# ADC_TOP constraint dependency manifest v5 -- UTF-8/LF, deterministic row order
+# scope=EXTERNAL_ONLY; classification=DEFERRED_TO_TOP; XDC=NONE
+KIND	IDENTIFIER	DETAIL
+DESIGN	ADC_TOP_Design.md	SHA256=ca40cd68dcc207c2a7f876075bdc3f92198a6e43814cb3774508bb07002016f9; RTL_MODULE_CONTRACT_V1; VERILOG_2001_EXPLICIT_V1; MODIFIED_THIRD_PARTY_RTL; v1.1
+RTL	ADI_JESD204/jesd204_rx.v	SHA256=3b30e702ef440d19fb04656be61f0fc088103f3823846c4f6825b8163f873fc7; fixed ADI boundary
+RTL	ADC_REG.v	SHA256=febc24b63874baedfa92969457bd8ec6490ae3983311f80108bb3ec543aa17d0
+RTL	ADC_SYNC.v	SHA256=cc63c40d051f97e80013ddbd59f7288665da3dfbeaeed85400aafafb6ad91a9b
+RTL	CHN_SYNC.v	SHA256=c98892f9f831c5a7b3c38f0c1fbe575cd4aae1cdd4fb193c51b84e45ef6ca742; fail-closed ddc_admit_ok AFE-to-ADC level_sync anchor
+RTL	ADC_TGC.v	SHA256=5dfb412f5dde0eb56e524d6d49f7fc7859f37618b64693ee2f7e31b3e86435e7
+RTL	ADC_PKT.v	SHA256=9761a3bbfe7296d056a6f61e69fb6b422ff1698506476af9b5720d7cdb74d867; fail-closed ddc_admit_ok packet-start gate anchor
+RTL	ADC_RXD.v	SHA256=26aa5811127ba977cde8d86e2a7d63f6a86c370eb1bdc01df87f4125a96c8571; fixed SOMF[0], conservative DDC abort source anchor
+RTL	ADC_CHN.v	SHA256=30f1eb0d7c51540a9c222df310f39d581f97d4268e454dcb541ecd1d161f9a78; FIFO reset, abort inversion and admit wiring anchor
+RTL	ADC_TOP.v	SHA256=8d8d15b6b75af88348ab7c115d6d85ebcf1ee546355fcd5985d0ac6fe2fccdd2
+FILELIST	filelist.f	SHA256=76aa2d06650dc14aae941c422ef6a2d183be3cd0076386c84d8085aa44a0f648
+PUB_MANIFEST	pub_filelist.f	SHA256=5b598ccd8fb78fe9360b960b14f0139bc738596d87783245421fab573af1d34c
+PUB_RTL	D:/Codex/RTL/PUB/Lib.v	SHA256=7df5ee7bf7dc3176b27f909ff6dacb9874c6f4ea68b8198a24e22f67b512d066; level_sync DS=2 default RV=0 provides fail-closed destination reset value
+CLOCK	sys_clk	EXTERNAL REGISTER_CLOCK; source/parent=CMU/RMU integration; consumer=ADC_REG, ADC_SYNC; period/duty/start-stop/relationship=Detector_v1 integration-owned
+CLOCK	adc_clk	EXTERNAL REGISTER_CLOCK; source/parent=CMU/RMU integration; consumer=ADC_SYNC, ADC_CHN, ADC_PKT and FIFO read port; period/duty/start-stop/relationship=Detector_v1 integration-owned
+CLOCK	afe_clk	EXTERNAL REGISTER_CLOCK; source/parent=CMU/RMU integration; consumer=ADC_TGC, ADC_CHN, ADC_RXD, CHN_SYNC and FIFO write port; period/duty/start-stop/relationship=Detector_v1 integration-owned
+CLOCK	jesd_clk[7:0]	EXTERNAL recovered PHY clocks; source/parent=JESD PHY/GTH; consumer=ADC_CHN, ADC_RXD, CHN_SYNC and ADI RX; generated-clock parent/period/phase/PHY topology=Detector_v1 plus vendor-IP-owned
+RESET	sys_rst_n	EXTERNAL RMU reset; asynchronous assertion and SYS_CLK-safe release assumed; consumers=ADC_REG, ADC_SYNC SYS endpoints
+RESET	adc_rst_n	EXTERNAL RMU reset; asynchronous assertion and ADC_CLK-safe release assumed; consumers=ADC_PKT, ADC-side CDC endpoints, FIFO combined reset, ddc_admit_ok fail-closed destination
+RESET	afe_rst_n	EXTERNAL RMU reset; asynchronous assertion and AFE_CLK-safe release assumed; consumers=ADC_TGC, ADC_RXD device/unpack logic, AFE-side CDC endpoints, FIFO combined reset, ddc_abort source and ddc_admit_ok source level
+RESET	jesd_rst_n[7:0]	EXTERNAL RMU/PHY reset; asynchronous assertion and JESD_CLK[n]-safe release assumed; consumers=ADI JESD logic and JESD-side CDC endpoints
+EVENT	sysref_in	EXTERNAL SAMPLED_SIGNAL, not a generated clock; capture relation/timing and PHY relation=Detector_v1 plus vendor-IP-owned
+PORT_SET	ADC_TOP.v:6-320	Complete top-level external-port declaration and public integration interface; SHA256 of containing source=8d8d15b6b75af88348ab7c115d6d85ebcf1ee546355fcd5985d0ac6fe2fccdd2
+PORT	{sys_clk,adc_clk,afe_clk}; jesd_clk[7:0]	Input clocks; no module-owned source, buffer, generated-clock anchor, or period
+PORT	{sys_rst_n,adc_rst_n,afe_rst_n}; jesd_rst_n[7:0]	Input resets; RMU-owned synchronized release; no module-generated reset synchronizer
+PORT	sysref_in	Input sampled event; no clock constraint created at module scope
+PORT	AXI4-Lite	All s_axi_* inputs/outputs; external system timing and I/O ownership=Detector_v1 top
+PORT	PHY/JESD	All afe0..afe7 RX inputs and rx_encommalign/sync_n outputs; PHY timing and vendor-XDC ownership=Detector_v1 top/vendor IP
+PORT	AXIS	All m_axis_afe0..m_axis_afe7 inputs/outputs; downstream timing ownership=Detector_v1 top
+PORT	TGC	All tgc0..tgc7 slope/up_dn/prof1/prof2 outputs; external-device timing ownership=Detector_v1 top
+STRUCTURAL_ANCHOR	ADC_TOP public reset/CDC connections	ADC_TOP.v:6-14,326-400; maps afe_rst_n to ADC_SYNC and ADC_TGC and per-channel interfaces
+STRUCTURAL_ANCHOR	ADC_SYNC AFE CDC reset endpoints	ADC_SYNC.v:6-12,69-94; SYS<->AFE TGC and AFE->SYS FIFO-overflow endpoints use afe_rst_n on AFE side
+STRUCTURAL_ANCHOR	CHN_SYNC fail-closed admit CDC	CHN_SYNC.v:6-45,53-71; level_sync ddc_admit_ok_to_adc uses adc_clk/adc_rst_n destination and resets output low
+STRUCTURAL_ANCHOR	PUB level_sync fail-closed reset	D:/Codex/RTL/PUB/Lib.v:223-246; parameter RV defaults 0 and reset fills synchronization stages with RV
+STRUCTURAL_ANCHOR	ADC_RXD fixed unpack and conservative abort source	ADC_RXD.v:3-39,251-354,839-893; accepts SOMF[0], positions payload, latches ddc_abort_afe on valid DDC epoch link/valid loss with AFE reset/clear ownership
+STRUCTURAL_ANCHOR	ADC_PKT fail-closed admission gate	ADC_PKT.v:6-19,53-54; ddc_admit_ok_adc is required only for a new packet_start and does not gate admitted packet progress
+STRUCTURAL_ANCHOR	ADC_CHN FIFO reset/admit wiring	ADC_CHN.v:6-12,70-154,196-219; forms ddc_admit_ok_afe as inverse abort, wires level CDC/gate, and keeps fifo_rst_n=afe_rst_n & adc_rst_n & ~fifo_clr with direct PUB FWFT FIFO
+INTERNAL_OBJECT	NONE	No module XDC, generated-clock anchor, internal pin/cell, or module exception endpoint exists for this classification
+EXCEPTION	NONE	No broad asynchronous clock group, false path, or module exception is justified before integrated CMU/RMU/PHY/FIFO topology exists

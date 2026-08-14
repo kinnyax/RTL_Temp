@@ -1,0 +1,12 @@
+# Detector ADC simulation sources.
+# Paths are resolved relative to Project/Detector or Project/pub.
+include:
+    pub:include
+
+source:
+    project:rtl/ADC
+    pub:rtl/Cell.v
+    pub:rtl/Lib.v
+    pub:rtl/async_fifo_fwft
+    pub:model/AXI_MASTER.v
+    pub:model/AC9810_MASTER.sv

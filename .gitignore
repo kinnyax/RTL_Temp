@@ -5,10 +5,17 @@
 !/.gitattributes
 !/AGENTS.md
 !/ASU_TOP/
+!/ADC_TOP/
 
 # Disposable verification and EDA outputs
 **/.work/verification/sim/
 **/.work/verification/waves/
+**/.work/verification/history/
+**/.work/verification/state/
+**/.work/verification/vcs/results/
+**/.work/verification/**/__pycache__/
+**/.work/verification/**/*.pyc
+**/.work/verification/.vmware_transport_*.log
 **/*.vcd
 **/*.fsdb
 **/*.wlf

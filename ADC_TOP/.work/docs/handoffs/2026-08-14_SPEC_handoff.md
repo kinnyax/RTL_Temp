@@ -1,0 +1,23 @@
+<DOCS_HANDOFF>
+  <AGENT_ID>/root/adc_upk_design_docs</AGENT_ID>
+  <HANDOFF_PATH>D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_SPEC_handoff.md</HANDOFF_PATH>
+  <STATUS>COMPLETED</STATUS>
+  <WORKFLOW_STAGE>DESIGN_READY</WORKFLOW_STAGE>
+  <ROLE_ROSTER_RECORDED>TRUE</ROLE_ROSTER_RECORDED>
+  <USER_DECISION_SOURCE>2026-08-14 user explicitly accepted the minimal one-bit ddc_abort option after rejecting occupancy/count-only protection: preserve immediate DDC I/Q writes and wlevel &gt;= 2 reservation, add an AFE-domain abort latch synchronized to ADC, block only new packet admission, retain structural completion of an already admitted 256-beat packet, use FIFO_CLR recovery, and add neither a 512-bit pair buffer nor a new software-visible register bit.</USER_DECISION_SOURCE>
+  <DESIGN_PATH>D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md</DESIGN_PATH>
+  <DESIGN_BASELINE_FINGERPRINT>21786a415756b598cb58f4c85a439dd9f4dbafa82549080a9dac8e4fe46ff382</DESIGN_BASELINE_FINGERPRINT>
+  <DESIGN_REVIEW>/root/adc_upk_design_review, D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_FINAL_DESIGN_REVIEW_handoff_03.md, SHA256 f56e2474b20ed78a4de55618b421cb9ebbbb4243d3ccbfe8be3e12dc52c4212b, ACCEPTED</DESIGN_REVIEW>
+  <PRE_REVIEW_CONTRIBUTOR_SET>Lead /root; Evidence Researcher /root/adc_upk_evidence, 2026-08-13_EVIDENCE_RESEARCH_handoff.md, SHA256 233e6b4f6dc83cd672646280440e99e3e4d55348b434ff83d1af1ef0aee5c8bb; Architecture Analyst /root/adc_upk_arch, 2026-08-13_ARCHITECTURE_handoff.md, SHA256 0b307ab571771b150566ee75369111fecee7a1dc9c43b7df72f6b1ca540a88ac, and 2026-08-14_ARCHITECTURE_handoff_02.md, SHA256 9147bcdd84dabc4a91e06362a9af13983506ab8fcc711bf2c6694e14c0d274b2; Design Author /root/adc_upk_design_author, 2026-08-14_DESIGN_AUTHOR_handoff_03.md, SHA256 7662c9881eb8a94cc51cfe77d25ebab615068db413223bea4b956b8aa5c39c53.</PRE_REVIEW_CONTRIBUTOR_SET>
+  <FINAL_CONTRIBUTOR_SET>PRE_REVIEW_CONTRIBUTOR_SET plus Final Design Review /root/adc_upk_design_review and Docs Worker /root/adc_upk_design_docs. All agent identities are unique; option-challenge reviewer is NOT_REQUIRED because the user decision is settled and independent Evidence, Architecture, and FINAL_DESIGN Review roles were completed.</FINAL_CONTRIBUTOR_SET>
+  <DECISIONS>Fixed 255/15/15 transport; valid SOMF[0]-only epoch acquisition; eight-word aligned payload start; positional prefix/padding removal with preserved mid-beat terminal slicing; WC=0 native FIFO full/overflow behavior for normal writes; DDC wlevel&gt;=2 pair capacity reservation and a single active drop on insufficient capacity; persistent ddc_abort admission gate on committed-I interruption before Q; fifo-clear recovery semantics; no fixed 5 ms timer.</DECISIONS>
+  <SOURCES>Evidence handoff 2026-08-13 (local ADI JESD204 RX frame marker/provenance, AC9810 grouping workbook, active ADC_RXD/TB); Architecture handoffs 2026-08-13 and 2026-08-14 (PUB FWFT FIFO occupancy/pair-identity analysis); user decisions recorded above; Design Author and independent Review handoffs.</SOURCES>
+  <ASSUMPTIONS>External RMU supplies safe reset release; selected official FIFO must later prove equivalent FWFT, WC=0, level, reset and clear behavior; first-board work must prove ILAS/controller/wrap mapping. A structurally complete packet admitted before abort is discarded by backend/software from DATA_DROP_PD/recovery context.</ASSUMPTIONS>
+  <PPA_INTENT>HYPOTHESIS: fixed-transport specialization removes generic marker-offset and first-beat control; one AFE bit plus one level CDC is materially smaller than a 512-bit I holding buffer. Synthesis PPA has not been run.</PPA_INTENT>
+  <MODEL_BOUNDARY>Design-only phase. No RTL/TB/XDC modification, VMware sanity, VCS/Verdi, Vivado XSIM, synthesis, implementation, timing closure, bitstream, or board validation occurred. Official IP behavior is not proven vendor-equivalent.</MODEL_BOUNDARY>
+  <RISKS>ddc_abort cannot retract or tag a half-pair already included in a packet before the ADC-domain gate observes it. Previous READY_FOR_VCS and VMware evidence was produced for the superseded design and is invalidated by this design revision; retain it only as history. First-board mapping and official-IP equivalence remain downstream risks.</RISKS>
+  <CHANGED_FILES>D:\Codex\RTL_Temp\ADC_TOP\.work\state\ADC_TOP_Current_State.md; D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_SPEC_handoff.md</CHANGED_FILES>
+  <KNOWLEDGE_WRITEBACK_CANDIDATE>NONE: no Wiki or Archive write authorization was granted, and this workflow proceeds directly to scoped rtl-vibe implementation.</KNOWLEDGE_WRITEBACK_CANDIDATE>
+  <CONFLICT_REPORT>NONE</CONFLICT_REPORT>
+  <NEXT_OWNER>LEAD_AGENT</NEXT_OWNER>
+</DOCS_HANDOFF>

@@ -1,0 +1,122 @@
+{
+  "schema": "RTL_VMWARE_TEST_PLAN_V1",
+  "module": "ADC_TOP",
+  "test_module": "test_ADC_TOP",
+  "seed": 20260730,
+  "timeout_seconds": 600,
+  "all_legal_configurations": false,
+  "reset_cases": [
+    "reset defaults and domain release recovery",
+    "afe_rst_n asserts whole-FIFO reset, discards source context, and cleanly relinks",
+    "adc_rst_n resets whole FIFO plus read/packet domain and cleanly restarts",
+    "jesd_rst_n relinks without committing a stale partial block",
+    "software disable JESD reset re-enable and CGS/ILAS recovery",
+    "FIFO_CLR is selected-reset cycle/status based with stable FIFO_EMPTY convergence"
+  ],
+  "normal_configurations": [
+    "pure ADC 10-bit right-aligned mapping and fixed packet",
+    "decimation 12-bit left-aligned DEC_M=32 mapping",
+    "decimation plus DDC 14-bit right-aligned DEC_M=32 I/Q mapping"
+  ],
+  "boundary_cases": [
+    "AXI AW and W independent arrival with full-word WSTRB contract",
+    "reserved and unimplemented registers read zero",
+    "static configuration remains stable while active",
+    "FIFO_CLR empty status and stopped ADC clock",
+    "FWFT WC=0 full write request gives native overflow without normal-mode data-drop",
+    "empty FIFO no-underflow guard",
+    "fixed SOMF bit0 epoch alignment and unsupported non-bit0 marker boundary",
+    "legal zero-valued payload is preserved positionally",
+    "all supported payload starts are eight-word aligned with exact positional start",
+    "mid-beat period terminal slicing remains correct",
+    "DDC wlevel two-slot reservation rejects 0/1 free slots without an orphan",
+    "DDC startup and first-SOMF wait do not false-abort",
+    "healthy effective disable ends DDC epoch without data-drop",
+    "DDC valid-epoch link or data-valid loss blocks new packet admission until FIFO_CLR",
+    "DDC DATA_DROP W1C alone does not reopen packet admission",
+    "DDC FIFO_CLR relink produces only clean new-epoch packets",
+    "link drop discards an incomplete AC9810 block",
+    "reset-domain whole-FIFO discard and clean relink payload scoreboard",
+    "exact one header plus 256 payload packet with no tail packet",
+    "TGC single and multi mask slope no-slope and unselected retention",
+    "decimation zero-padding removal and 12-bit signed sample mapping",
+    "DDC zero-padding removal and 14-bit signed I/Q mapping"
+  ],
+  "error_cases": [
+    "TGC mask-zero target error and busy reentry W1C",
+    "public ADI SYSREF alignment error sticky and software recovery",
+    "FIFO native overflow sticky reporting",
+    "DDC data-drop sticky reporting",
+    "unsupported partial WSTRB is rejected before DUT drive"
+  ],
+  "backpressure_cases": [
+    "AXI B response stability while BREADY is low",
+    "AXI R response stability while RREADY is low",
+    "AXIS header and payload stability with started-packet completion under backpressure"
+  ],
+  "testcase_map": {
+    "reset_and_top_level_defaults": [
+      "reset:reset defaults and domain release recovery"
+    ],
+    "axi_register_contract_and_modes": [
+      "boundary:AXI AW and W independent arrival with full-word WSTRB contract",
+      "boundary:reserved and unimplemented registers read zero",
+      "error:unsupported partial WSTRB is rejected before DUT drive",
+      "backpressure:AXI B response stability while BREADY is low"
+    ],
+    "fifo_clear_and_adc_clock_stop": [
+      "reset:FIFO_CLR is selected-reset cycle/status based with stable FIFO_EMPTY convergence",
+      "boundary:FIFO_CLR empty status and stopped ADC clock"
+    ],
+    "tgc_sticky_error_and_inactive_backpressure": [
+      "boundary:TGC single and multi mask slope no-slope and unselected retention",
+      "error:TGC mask-zero target error and busy reentry W1C"
+    ],
+    "axi_read_response_backpressure_and_reset_ready_low": [
+      "backpressure:AXI R response stability while RREADY is low"
+    ],
+    "public_phy_cgs_ilas_packet_header_and_axis": [
+      "reset:afe_rst_n asserts whole-FIFO reset, discards source context, and cleanly relinks",
+      "reset:software disable JESD reset re-enable and CGS/ILAS recovery",
+      "normal:pure ADC 10-bit right-aligned mapping and fixed packet",
+      "boundary:FWFT WC=0 full write request gives native overflow without normal-mode data-drop",
+      "boundary:exact one header plus 256 payload packet with no tail packet",
+      "error:public ADI SYSREF alignment error sticky and software recovery",
+      "error:FIFO native overflow sticky reporting",
+      "backpressure:AXIS header and payload stability with started-packet completion under backpressure"
+    ],
+    "decimation12_end_to_end_scoreboard_and_empty_fifo_guard": [
+      "normal:decimation 12-bit left-aligned DEC_M=32 mapping",
+      "boundary:decimation zero-padding removal and 12-bit signed sample mapping",
+      "boundary:empty FIFO no-underflow guard"
+    ],
+    "ddc14_end_to_end_scoreboard": [
+      "normal:decimation plus DDC 14-bit right-aligned DEC_M=32 I/Q mapping",
+      "boundary:DDC zero-padding removal and 14-bit signed I/Q mapping",
+      "boundary:all supported payload starts are eight-word aligned with exact positional start",
+      "boundary:mid-beat period terminal slicing remains correct",
+      "boundary:DDC wlevel two-slot reservation rejects 0/1 free slots without an orphan",
+      "error:DDC data-drop sticky reporting"
+    ],
+    "fixed_somf_alignment_and_legal_zero_payload": [
+      "boundary:fixed SOMF bit0 epoch alignment and unsupported non-bit0 marker boundary",
+      "boundary:legal zero-valued payload is preserved positionally"
+    ],
+    "ddc_abort_blocks_admission_until_fifo_clear_recovery": [
+      "boundary:DDC startup and first-SOMF wait do not false-abort",
+      "boundary:healthy effective disable ends DDC epoch without data-drop",
+      "boundary:DDC valid-epoch link or data-valid loss blocks new packet admission until FIFO_CLR",
+      "boundary:DDC DATA_DROP W1C alone does not reopen packet admission",
+      "boundary:DDC FIFO_CLR relink produces only clean new-epoch packets"
+    ],
+    "reset_domains_whole_fifo_and_relink": [
+      "reset:adc_rst_n resets whole FIFO plus read/packet domain and cleanly restarts",
+      "reset:jesd_rst_n relinks without committing a stale partial block",
+      "boundary:reset-domain whole-FIFO discard and clean relink payload scoreboard"
+    ],
+    "link_drop_incomplete_block_discard": [
+      "boundary:static configuration remains stable while active",
+      "boundary:link drop discards an incomplete AC9810 block"
+    ]
+  }
+}

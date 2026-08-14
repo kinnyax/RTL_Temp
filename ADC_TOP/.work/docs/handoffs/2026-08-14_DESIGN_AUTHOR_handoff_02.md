@@ -1,0 +1,14 @@
+<DESIGN_AUTHOR_HANDOFF>
+  <AGENT_ID>/root/adc_upk_design_author</AGENT_ID>
+  <HANDOFF_PATH>D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_DESIGN_AUTHOR_handoff_02.md</HANDOFF_PATH>
+  <STATUS>COMPLETED</STATUS>
+  <USER_DECISION_SOURCE>2026-08-14 user decision after independent review: choose option 2. Preserve immediate DDC I then Q writes and fifo_wlevel&gt;=2 reservation; scope atomicity to normal-link capacity admission. On I-to-Q interruption, require software AFE_EN=0, AFE_IDLE, FIFO_CLR, stable FIFO_EMPTY, JESD relink, then re-enable before reuse; do not add a 512-bit pair buffer.</USER_DECISION_SOURCE>
+  <DESIGN_PATH>D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md</DESIGN_PATH>
+  <DESIGN_BASELINE_FINGERPRINT>7bf1ca2bb83bd43f796bc6d1f99a72c7235b24bfe072a4f362783e2c2c822ca9</DESIGN_BASELINE_FINGERPRINT>
+  <SCHEMA_SELF_CHECK>PASS. Front matter is RTL_MODULE_CONTRACT_V1, VERILOG_2001_EXPLICIT_V1, MODIFIED_THIRD_PARTY_RTL, status finalized, v0.9 dated 2026-08-14. Deterministic validate_design_contract.py returned DESIGN_CONTRACT_PRECHECK_PASS for the recorded exact design SHA256. The PPA envelope now has all required columns and five required HYPOTHESIS rows.</SCHEMA_SELF_CHECK>
+  <CORRECTION_BATCH>Complete correction batch from D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_FINAL_DESIGN_REVIEW_handoff.md SHA256 cfab34cdd080b99ef42de85885686d4b2648c8e48d5a56901708354ba87f3c8e: (1) replaced impossible DDC all-condition pair atomicity with user-selected normal-link capacity admission plus mandatory FIFO clear/relink recovery after I-to-Q interruption; added exact interruption verification; (2) corrected all self-written planned basenames to uppercase actual baseline names; (3) added frozen ADI upstream/commit/GPLv2/notice/original-and-current-hash/modification/deviation provenance; (4) added complete PPA intent envelope. All v0.8 fixed-SOMF, positional payload and WC=0 decisions remain preserved.</CORRECTION_BATCH>
+  <OPEN_QUESTIONS>NONE</OPEN_QUESTIONS>
+  <CONFLICT_REPORT>NONE. The user-selected immediate-write recovery contract is realizable without a pair buffer. It explicitly supersedes only the prior over-broad guarantee that no orphan I could remain through an interruption; before the specified recovery, all FIFO contents are invalid and unavailable to downstream use.</CONFLICT_REPORT>
+  <RESIDUAL_RISKS>All PPA estimates remain HYPOTHESIS until synthesis. The local ADI/PUB boundary is NON_VENDOR_EQUIVALENT for later official-IP integration. First-board ILAS/controller/wrap capture must still confirm SOMF epoch anchoring. The RTL/TB implementation must prove the added I-to-Q interruption recovery acceptance; this design phase did not modify or execute RTL/TB/XDC.</RESIDUAL_RISKS>
+  <NEXT_OWNER>LEAD_AGENT for deterministic precheck confirmation and re-review by the same independent Design Review Worker when available.</NEXT_OWNER>
+</DESIGN_AUTHOR_HANDOFF>

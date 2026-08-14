@@ -1,0 +1,33 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "REJECTED",
+  "agent_id": "/root/adc_reset_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_reset_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_reset_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_reset_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_reset_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_reset_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "5ac4a773b5f21f837b71dd736e612928c75299c8b12f02ddf1bfc52960f87dd6",
+  "release_baseline_fingerprint": "a8e053d8518772577fa9985aa681fb5abf35a4572a01a12f31a23f76fa5e77a8",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "23b060b443769e5e600b25c0c70afa34db9f9a43aeb44cb3463f9bf3f095efdf",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "2cec7e826f045f890ed882bce0af1e011ffc23540158022b8f0657e6b56d6064"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-12_RTL_handoff.md", "sha256": "978eee6d4772f23f41a00ad99d7a36afd89fbd3da80d197f208d3a4b6d23f28a"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "cce12b3cb7bcbb6b249e89393baf8b4d46f655b145666ab16defdc6043964853"}
+  ],
+  "findings": [
+    "P1 FINALIZATION/STALE_STATUS: The reviewed RTL_FINALIZATION_PATCH_V1 substitutes only the three header tokens, but all three resulting documents retain ordinary-body REVIEW_PENDING/pending-review language. Current State says independent review is the sole remaining gate and Review is pending; RTL handoff says it is a REVIEW_PENDING draft; VCS handoff gates execution on review acceptance. The patch schema permits exactly three mechanical substitutions, so it cannot produce truthful READY_FOR_VCS records. Docs must revise the review-pending drafts, rebuild the sidecar and patch, and request a new independent review."
+  ],
+  "residual_risks": [
+    "Functional audit passed for the frozen baseline: AFE/ADC/JESD reset ownership, CDC endpoint resets, FIFO combined reset, no fixed 5 ms timer, software clear sequence, and reset-discard scoreboards are consistent with the design and 10/10 VMware evidence.",
+    "MODEL_EQUIVALENCE=NON_VENDOR_EQUIVALENT; official Vivado FIFO/JESD PHY reset, clear, latency, and flag behavior require later integration evidence.",
+    "VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream, and board validation remain NOT_RUN."
+  ]
+}

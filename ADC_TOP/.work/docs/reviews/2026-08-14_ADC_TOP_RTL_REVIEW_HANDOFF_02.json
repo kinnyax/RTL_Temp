@@ -1,0 +1,30 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_upk_release_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_upk_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_upk_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_upk_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_upk_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_upk_release_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "8b74a563c97e7651a4b4b1e4fc6fd46750fd63623832f07e35bb1388a566dbaf",
+  "release_baseline_fingerprint": "914505209a6db90f4fc27294438ddbfbb0e0418f6962c7d1af0b14e58fd1b4d9",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "7e01a6282b6d2d1721a22be09697aef03e701f68da7cc5c79c38098fab697039",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "7a71efd6d03e3d4e1be15fd8b8072024522743099bff6d9d5df31c05649c9ccc"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-14_RTL_handoff.md", "sha256": "4217ed139242f6651139eda6b3bfdc59aeef41eb22bdf0e2c7eb0740c388dd9f"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "c3660caa09972f6276309317951f3098e3538cfeab0be808183b9072233cdc7b"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "The frozen VMware run ADC_TOP_5919384c91544c329654ee2bbdc3d444 has matching verification-input fingerprint f724cfdcbed1010b27cbc5c7a5245e68d928276af8c2651edd348f77ce1a243d and toolchain fingerprint 979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c, with owned lint exit 0 and 12/12 self-checking tests PASS. This sixth fresh batch was explicitly user-authorized.",
+    "MODEL_EQUIVALENCE=NON_VENDOR_EQUIVALENT; official Vivado FIFO/JESD PHY reset, clear, latency, flag behavior, topology constraints, VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream, and board validation remain unproved or NOT_RUN."
+  ]
+}

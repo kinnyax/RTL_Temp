@@ -1,0 +1,31 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_reset_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_reset_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_reset_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_reset_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_reset_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_reset_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "e48642ce69231c90b0a3fb33c419a20fedc9ef59f6fc46b69f37b0d1a8e85c4f",
+  "release_baseline_fingerprint": "b0188a8b8f4281e6baa7a476fe88c4328639043b2d0f5b7f867db2567b33c85e",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "e9ef1fe0f04662abdcbd0a396c534f6cc277f2a81f9e38ac35ba4866f3d041db",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "95aa85e6fb986952c153cb9d7c856a3e17df99e6c727c4c1a6cce5730d69fd70"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-12_RTL_handoff.md", "sha256": "89ef531f2ea47d4e5fa1ce8d800838f0abdfbef07e669b2b066ef3dd8ae48e5c"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "6fb0231ae4db8d879181d82100c450a298fae472b7165924a6b6a9985869bb32"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "The user-authorized omission of paired default_nettype none/wire directives remains a limited compile-time implicit-net-protection exception; frozen owned/preprocessed lint reports no implicit or undeclared net.",
+    "MODEL_EQUIVALENCE=NON_VENDOR_EQUIVALENT; official Vivado FIFO/JESD PHY reset, clear, latency, and flag behavior require later integration evidence.",
+    "VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream, and board validation are NOT_RUN."
+  ]
+}

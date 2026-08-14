@@ -1,0 +1,41 @@
+#!/bin/bash
+set -euo pipefail
+
+PROJECTS_ROOT="${PROJECTS_ROOT:-/home/${USER}/Project}"
+RUN_DIR="$(pwd -P)"
+
+relative="${RUN_DIR#${PROJECTS_ROOT}/}"
+IFS='/' read -r PROJECT_NAME SIM_TOKEN MODULE_NAME PATTERN_NAME EXTRA <<< "${relative}"
+if [[ "${RUN_DIR}" == "${relative}" || "${SIM_TOKEN:-}" != "sim" || \
+      -z "${PROJECT_NAME:-}" || -z "${MODULE_NAME:-}" || \
+      -z "${PATTERN_NAME:-}" || -n "${EXTRA:-}" ]]; then
+    echo "Error: refusing to clean outside Project/<project>/sim/<module>/<pattern>: ${RUN_DIR}" >&2
+    exit 1
+fi
+
+if [[ "${1:-}" == "--wave-only" ]]; then
+    find "${RUN_DIR}" -maxdepth 1 -type f \( \
+        -name '*.fsdb' -o -name '*.vpd' -o -name '*.vcd' -o \
+        -name 'novas*.log' -o -name 'verdi_config_file' \) -delete
+    rm -rf -- "${RUN_DIR}/verdiLog"
+    echo "Cleaned waveform and Verdi cache: ${RUN_DIR}"
+    exit 0
+fi
+
+if [[ $# -gt 0 && "${1}" != "--all" ]]; then
+    echo "Usage: run_clr [--all|--wave-only]" >&2
+    exit 1
+fi
+
+shopt -s nullglob dotglob
+for entry in "${RUN_DIR}"/*; do
+    name=$(basename "${entry}")
+    case "${name}" in
+        gold_run|run_sim|run_deb|run_clr) ;;
+        *) rm -rf -- "${entry}" ;;
+    esac
+done
+shopt -u nullglob dotglob
+
+echo "Cleaned all generated files; kept gold_run, run_sim, run_deb and run_clr: ${RUN_DIR}"
+
