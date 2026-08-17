@@ -11,7 +11,6 @@ from cocotb.triggers import FallingEdge, ReadOnly, RisingEdge, Timer, ValueChang
 
 
 TEST_TIMEOUT_US = 50
-ADC_CTL_MASK = 0xCE00FFFF
 
 
 def _required(dut, name):
@@ -123,7 +122,7 @@ async def _setup(dut):
 async def _axi_write(dut, address, data, strobe=0xF, split=False,
                      split_order="aw_then_w", b_hold_cycles=0):
     """AXI4-Lite write: drive on falling edge, sample only after ReadOnly."""
-    assert strobe == 0xF, "ADC_TOP AXI-Lite integration permits full-word writes only"
+    assert 0 <= strobe <= 0xF
     async def _send_aw():
         await FallingEdge(dut.sys_clk)
         ready_before_rising = int(dut.s_axi_awready.value)
@@ -157,6 +156,7 @@ async def _axi_write(dut, address, data, strobe=0xF, split=False,
 
     # Do not use concurrent coroutines: this helper remains the single owner
     # of AW/W/B signals.  Split mode deliberately separates the channels.
+    await FallingEdge(dut.sys_clk)
     dut.s_axi_bready.value = 0
     if split:
         assert split_order in ("aw_then_w", "w_then_aw")
@@ -602,13 +602,38 @@ async def _enable_afe0_and_link(dut, adc_ctl, frame_cfg):
     dut.afe0_rx_reset_done.value = 1
     dut.afe0_byte_aligned.value = 0x3
     dut.m_axis_afe0_tready.value = 1
-    # FRAME_CFG is static and must be legal before AFE_EN reaches the AFE
-    # domain.  In particular, DEC_M=0 disables formal decimation/DDC writes.
+    _assert_software_static_config(adc_ctl, frame_cfg)
     await _axi_write(dut, 0x0008, frame_cfg, 0xF)
     await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
     for _ in range(2100):
         await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
     await _drive_afe0_documented_cgs_ilas(dut)
+
+
+def _assert_software_static_config(adc_ctl, frame_cfg):
+    """TB assumption: software enables an AFE only with a supported config."""
+    smp_prec = (adc_ctl >> 30) & 0x3
+    smp_mode = (adc_ctl >> 26) & 0x3
+    dec_del_mode = (frame_cfg >> 8) & 0x3
+    dec_m = frame_cfg & 0xFF
+    assert smp_prec in (0, 1, 2), f"software contract SMP_PREC={smp_prec}"
+    assert smp_mode in (0, 1, 2), f"software contract SMP_MODE={smp_mode}"
+    assert dec_del_mode in (0, 1, 2), f"software contract DEC_DEL_MODE={dec_del_mode}"
+    if smp_mode == 1:
+        assert 1 <= (dec_m >> 2) <= 63, f"software contract single N={dec_m >> 2}"
+    elif smp_mode == 2:
+        assert 2 <= (dec_m >> 2) <= 63, f"software contract DDC N={dec_m >> 2}"
+
+
+async def _assert_static_config_stable(dut, adc_ctl, frame_cfg):
+    """Public readback check that capture did not change software static fields."""
+    _assert_software_static_config(adc_ctl, frame_cfg)
+    observed_ctl = await _axi_read(dut, 0x0000)
+    observed_frame = await _axi_read(dut, 0x0008)
+    assert observed_ctl & 0xCE000000 == adc_ctl & 0xCE000000, (
+        f"static ADC_CTL changed during capture: 0x{observed_ctl:08x}")
+    assert observed_frame == (frame_cfg & 0x3FF), (
+        f"static FRAME_CFG changed during capture: 0x{observed_frame:08x}")
 
 
 async def _inject_afe0_out_of_phase_sysref(dut):
@@ -737,49 +762,51 @@ class RegisterScoreboard:
         self.adc_tgc = 0
         self.frame_cfg = 0
 
-    def write_adc_ctl(self, data, strobe):
-        assert strobe == 0xF
-        self.adc_ctl = data & ADC_CTL_MASK
+    def write_adc_ctl(self, data, cfg_safe):
+        static = data & 0xCE000000 if cfg_safe else self.adc_ctl & 0xCE000000
+        self.adc_ctl = static | (data & 0x0000FFFF)
 
-    def write_frame_cfg(self, data, strobe):
-        assert strobe == 0xF
-        self.frame_cfg = data & 0x3FF
+    def write_frame_cfg(self, data, cfg_safe):
+        if cfg_safe:
+            self.frame_cfg = data & 0x3FF
 
 
 class UnpackScheduleScoreboard:
-    """Independent v1.2 positive-coordinate AC9810 unpack schedule model."""
+    """Independent v1.9 E={N,f} positive-coordinate schedule model."""
 
     @staticmethod
     def configuration(mode, dec_m, dec_del_mode):
         assert mode in (0, 1, 2), f"unsupported formal sample mode {mode}"
-        assert dec_del_mode in (0, 1, 2), f"unsupported DEC_DEL_MODE {dec_del_mode}"
         if mode == 0:
             return 16, 15, (16,), ("R",)
 
-        assert 32 <= dec_m <= 96, f"DEC_M out of legal range: {dec_m}"
         n = dec_m >> 2
-        rem = dec_m & 0x3
-        delay_words = (0, 32 * dec_m, 64 * dec_m)[dec_del_mode]
-        if rem == 0:
-            start_word = 16 * n + 184 + delay_words
+        frac = dec_m & 0x3
+        assert dec_del_mode in (0, 1, 2), f"software contract delay={dec_del_mode}"
+        assert ((mode == 1 and 1 <= n <= 63) or
+                (mode == 2 and 2 <= n <= 63)), (
+            f"software contract mode={mode} N={n}")
+        prefix_extra = (0, 4 * dec_m, 8 * dec_m)[dec_del_mode]
+        if frac == 0:
+            start_beat = 2 * n + 23 + prefix_extra
             gaps = (16, 16 * n - 16) if mode == 2 else (16 * n, 16 * n)
             phases = ("I", "Q") if mode == 2 else ("R",)
-        elif rem == 1:
-            start_word = 64 * n + 200 + delay_words
-            gaps = ((16,) * 7 + (64 * n - 96,)) if mode == 2 else (16, 16, 16, 64 * n - 48)
+        elif frac == 1:
+            start_beat = 8 * n + 25 + prefix_extra
+            gaps = ((16,) * 7 + (64 * n - 96,)) if mode == 2 else (16, 16, 16, 64 * n - 32)
             phases = ("I", "Q") * 4 if mode == 2 else ("R",)
-        elif rem == 2:
-            start_word = 32 * n + 200 + delay_words
+        elif frac == 2:
+            start_beat = 4 * n + 25 + prefix_extra
             gaps = ((16,) * 7 + (32 * n - 32,)) if mode == 2 else (16, 32 * n + 1, 16, 32 * n + 1)
             phases = ("I", "Q") * 4 if mode == 2 else ("R",)
         else:
-            start_word = 64 * n + 232 + delay_words
+            start_beat = 8 * n + 29 + prefix_extra
             gaps = ((16,) * 7 + (64 * n - 64,)) if mode == 2 else (16, 16, 16, 64 * n)
             phases = ("I", "Q") * 4 if mode == 2 else ("R",)
 
-        assert start_word % 8 == 0, f"payload start is not beat aligned: {start_word}"
+        assert 0 < start_beat <= 2573
         assert all(gap >= 16 for gap in gaps), f"illegal multi-block beat gap: {gaps}"
-        return start_word >> 3, 15, gaps, phases
+        return start_beat, 15, gaps, phases
 
     @staticmethod
     def terminals(first_term, gaps, count):
@@ -792,30 +819,32 @@ class UnpackScheduleScoreboard:
 
 
 def _assert_unpack_schedule_reference_vectors():
-    """Compare each frozen n=8 branch with independent absolute vectors."""
+    """Cross-check v1.9 supported branches against independent absolute vectors."""
     vectors = (
         (0,  0, 0,  16, (16,),                 ("R",),
          (15, 31, 47, 63, 79, 95, 111, 127, 143)),
-        (1, 32, 0,  39, (128, 128),             ("R",),
-         (15, 143, 271, 399, 527, 655, 783, 911, 1039)),
-        (1, 33, 1, 221, (16, 16, 16, 464),      ("R",),
-         (15, 31, 47, 63, 527, 543, 559, 575, 1039)),
-        (1, 34, 2, 329, (16, 257, 16, 257),     ("R",),
-         (15, 31, 288, 304, 561, 577, 834, 850,
-          1107, 1123, 1380, 1396, 1653, 1669, 1926, 1942)),
-        (1, 35, 0,  93, (16, 16, 16, 512),      ("R",),
-         (15, 31, 47, 63, 575, 591, 607, 623, 1135)),
-        (2, 32, 1, 167, (16, 112),              ("I", "Q"),
-         (15, 31, 143, 159, 271, 287, 399, 415, 527)),
-        (2, 33, 2, 353, (16, 16, 16, 16, 16, 16, 16, 416),
+        (1,  4, 0,  25, (16, 16),               ("R",),
+         (15, 31, 47, 63, 79, 95, 111, 127, 143)),
+        (1,  5, 0,  33, (16, 16, 16, 32),       ("R",),
+         (15, 31, 47, 63, 95, 111, 127, 143, 175)),
+        (1,  6, 1,  53, (16, 33, 16, 33),       ("R",),
+         (15, 31, 64, 80, 113, 129, 162, 178,
+          211, 227, 260, 276, 309, 325, 358, 374)),
+        (1,  7, 2,  93, (16, 16, 16, 64),       ("R",),
+         (15, 31, 47, 63, 127, 143, 159, 175, 239)),
+        (1, 252, 0, 149, (1008, 1008),          ("R",),
+         (15, 1023, 2031, 3039, 4047)),
+        (2,  8, 1,  59, (16, 16),               ("I", "Q"),
+         (15, 31, 47, 63, 79, 95, 111, 127, 143)),
+        (2,  9, 2, 113, (16, 16, 16, 16, 16, 16, 16, 32),
          ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
-         (15, 31, 47, 63, 79, 95, 111, 127, 543)),
-        (2, 34, 0,  57, (16, 16, 16, 16, 16, 16, 16, 224),
+         (15, 31, 47, 63, 79, 95, 111, 127, 159)),
+        (2, 10, 0,  33, (16, 16, 16, 16, 16, 16, 16, 32),
          ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
-         (15, 31, 47, 63, 79, 95, 111, 127, 351)),
-        (2, 35, 1, 233, (16, 16, 16, 16, 16, 16, 16, 448),
+         (15, 31, 47, 63, 79, 95, 111, 127, 159)),
+        (2, 11, 1,  89, (16, 16, 16, 16, 16, 16, 16, 64),
          ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
-         (15, 31, 47, 63, 79, 95, 111, 127, 575)),
+         (15, 31, 47, 63, 79, 95, 111, 127, 191)),
     )
     offsets = set()
     for mode, dec_m, delay, exp_start, exp_gaps, exp_phases, exp_terms in vectors:
@@ -833,10 +862,66 @@ def _assert_unpack_schedule_reference_vectors():
         assert tuple(actual_terms) == exp_terms
         offsets.update(term & 0x7 for term in exp_terms)
     assert offsets == set(range(8))
+    # Maximum-prefix and long-gap width checks remain reference-only so the
+    # public DUT matrix does not spend most of its runtime transmitting gaps.
+    assert UnpackScheduleScoreboard.configuration(1, 253, 2) == (
+        2553, 15, (16, 16, 16, 4000), ("R",))
+    assert UnpackScheduleScoreboard.configuration(1, 255, 2) == (
+        2573, 15, (16, 16, 16, 4032), ("R",))
 
+    legal_count = 0
+    max_prefix = 0
+    max_gap = 0
+    exhaustive_offsets = set()
+    for mode, first_n in ((1, 1), (2, 2)):
+        for n in range(first_n, 64):
+            for frac in range(4):
+                dec_m = (n << 2) | frac
+                for delay in range(3):
+                    legal_count += 1
+                    start, first, gaps, phases = UnpackScheduleScoreboard.configuration(
+                        mode, dec_m, delay)
+                    prefix_base = (2 * n + 23, 8 * n + 25,
+                                   4 * n + 25, 8 * n + 29)[frac]
+                    expected_start = prefix_base + (0, 4 * dec_m, 8 * dec_m)[delay]
+                    if mode == 1:
+                        expected_gaps = (
+                            (16 * n, 16 * n),
+                            (16, 16, 16, 64 * n - 32),
+                            (16, 32 * n + 1, 16, 32 * n + 1),
+                            (16, 16, 16, 64 * n),
+                        )[frac]
+                        expected_phases = ("R",)
+                        expected_period = (32 * n, 64 * n + 16,
+                                           64 * n + 34, 64 * n + 48)[frac]
+                    else:
+                        expected_gaps = (
+                            (16, 16 * n - 16),
+                            (16, 16, 16, 16, 16, 16, 16, 64 * n - 96),
+                            (16, 16, 16, 16, 16, 16, 16, 32 * n - 32),
+                            (16, 16, 16, 16, 16, 16, 16, 64 * n - 64),
+                        )[frac]
+                        expected_phases = (("I", "Q") if frac == 0 else
+                                           ("I", "Q", "I", "Q",
+                                            "I", "Q", "I", "Q"))
+                        expected_period = (16 * n, 64 * n + 16,
+                                           32 * n + 80, 64 * n + 48)[frac]
 
+                    assert start == expected_start and first == 15
+                    assert gaps == expected_gaps and phases == expected_phases
+                    assert sum(gaps) == expected_period
+                    assert start < (1 << 12) and max(gaps) < (1 << 12)
+                    terms = UnpackScheduleScoreboard.terminals(first, gaps, 64)
+                    assert all(0 <= term < (1 << 64) for term in terms)
+                    exhaustive_offsets.update(term & 0x7 for term in terms)
+                    max_prefix = max(max_prefix, start)
+                    max_gap = max(max_gap, max(gaps))
+
+    assert legal_count == 1500
+    assert max_prefix == 2573 and max_gap == 4032
+    assert exhaustive_offsets == set(range(8))
 async def _unpack_schedule_matrix(dut):
-    """Drive one black-box packet for every v1.2 scheduler equivalence branch."""
+    """Drive one black-box packet for every v1.9 scheduler equivalence branch."""
     _assert_unpack_schedule_reference_vectors()
     await _setup(dut)
     dut.afe0_pll_lock.value = 1
@@ -845,15 +930,16 @@ async def _unpack_schedule_matrix(dut):
     dut.m_axis_afe0_tready.value = 0
 
     representatives = (
-        ("pure",   0,  0, 0),
-        ("dec_r0", 1, 32, 0),
-        ("dec_r1", 1, 33, 1),
-        ("dec_r2", 1, 34, 2),
-        ("dec_r3", 1, 35, 0),
-        ("ddc_r0", 2, 32, 1),
-        ("ddc_r1", 2, 33, 2),
-        ("ddc_r2", 2, 34, 0),
-        ("ddc_r3", 2, 35, 1),
+        ("pure",              0,   0, 0),
+        ("single_n1_f0_d0",  1,   4, 0),
+        ("single_n1_f1_d0",  1,   5, 0),
+        ("single_n1_f2_d1",  1,   6, 1),
+        ("single_n1_f3_d2",  1,   7, 2),
+        ("single_n63_f3_d2", 1, 255, 2),
+        ("ddc_n2_f0_d1",     2,   8, 1),
+        ("ddc_n2_f1_d2",     2,   9, 2),
+        ("ddc_n2_f2_d0",     2,  10, 0),
+        ("ddc_n2_f3_d1",     2,  11, 1),
     )
     end_offsets = set()
 
@@ -869,6 +955,7 @@ async def _unpack_schedule_matrix(dut):
 
         frame_cfg = (dec_del_mode << 8) | dec_m if mode else 0
         adc_ctl = 0x80000000 | (mode << 26)
+        _assert_software_static_config(adc_ctl, frame_cfg)
         await _axi_write(dut, 0x0008, frame_cfg, 0xF)
         await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
         for _ in range(2100):
@@ -891,6 +978,7 @@ async def _unpack_schedule_matrix(dut):
         await _drive_afe0_scheduler_payload(dut, terminals)
         expected = [_scheduler_expected_payload(term) for term in terminals]
         await _wait_afe0_complete_packet(dut, expected, mode, 14, dec_m)
+        await _assert_static_config_stable(dut, adc_ctl | 0x1, frame_cfg)
         dut._log.info(
             "STIMULUS_MARKER scheduler_%s_d%d_offsets_%s_pass",
             label, dec_del_mode, sorted({term & 0x7 for term in terminals}))
@@ -898,6 +986,58 @@ async def _unpack_schedule_matrix(dut):
     assert end_offsets == set(range(8)), (
         f"DUT scheduler representatives did not cover every terminal offset: {end_offsets}"
     )
+
+
+async def _pure_adc_fixed_prefix(dut):
+    """Pure ADC captures only after its fixed legal 16-AFE-beat prefix."""
+    await _setup(dut)
+    adc_ctl = 0x00000000
+    frame_cfg = 0x000
+    await _enable_afe0_and_link(dut, adc_ctl, frame_cfg)
+    await FallingEdge(dut.adc_clk)
+    dut.m_axis_afe0_tready.value = 0
+    expected = await _drive_afe0_ac9810_pure_adc_epoch(dut, block_count=320, base=1)
+    await _wait_afe0_complete_packet(dut, [expected] * 256, 0, 10, frame_cfg)
+    await _assert_static_config_stable(dut, adc_ctl | 0x1, frame_cfg)
+    dut._log.info("STIMULUS_MARKER pure_adc_fixed_16_beat_prefix_pass")
+
+
+async def _static_cfg_non_idle_only_gate(dut):
+    """AFE_EN=0 is insufficient while one public packet remains active."""
+    await _setup(dut)
+    await _enable_afe0_and_link(dut, 0x00000000, frame_cfg=0x155)
+    await FallingEdge(dut.adc_clk)
+    dut.m_axis_afe0_tready.value = 0
+    expected = await _drive_afe0_ac9810_pure_adc_epoch(dut, block_count=320, base=1)
+
+    for _ in range(2400):
+        await RisingEdge(dut.adc_clk)
+        await ReadOnly()
+        if int(dut.m_axis_afe0_tvalid.value):
+            break
+    assert int(dut.m_axis_afe0_tvalid.value), "active packet did not reach stalled header"
+
+    await _axi_write(dut, 0x0000, 0x00000000, 0xF)
+    assert await _axi_read(dut, 0x0000) & 0xFF == 0
+    await _poll_register(dut, 0x000C, 1 << 24, 0, attempts=160)
+    idle_status = await _axi_read(dut, 0x000C)
+    assert ((idle_status >> 24) & 0xFF) == 0xFE
+
+    pd_before_unsafe = await _axi_read(dut, 0x0010)
+    await _axi_write(dut, 0x0000, 0x88000000, 0x0)
+    await _axi_write(dut, 0x0008, 0x000002FF, 0x5)
+    assert await _axi_read(dut, 0x0000) == 0x00000000
+    assert await _axi_read(dut, 0x0008) == 0x155
+    assert await _axi_read(dut, 0x0010) == pd_before_unsafe
+
+    await _wait_afe0_complete_packet(dut, [expected] * 256, 0, 10, 0x55)
+    await _poll_register(dut, 0x000C, 0xFF000000, 0xFF000000, attempts=240)
+
+    await _axi_write(dut, 0x0000, 0x88000000, 0x6)
+    await _axi_write(dut, 0x0008, 0x000002FF, 0x2)
+    assert await _axi_read(dut, 0x0000) == 0x88000000
+    assert await _axi_read(dut, 0x0008) == 0x2FF
+    dut._log.info("STIMULUS_MARKER static_cfg_non_idle_only_gate_pass")
 
 
 async def _reset_and_top_level_defaults(dut):
@@ -921,44 +1061,56 @@ async def _reset_and_top_level_defaults(dut):
 async def _register_and_mode_matrix(dut):
     await _setup(dut)
     model = RegisterScoreboard()
+    await _poll_register(dut, 0x000C, 0xFF000000, 0xFF000000, attempts=160)
 
-    # All-one writes prove reserved bits read zero. Split AW/W proves the
-    # channels are independently accepted.
-    await _axi_write(dut, 0x0000, 0xFFFFFFFF, 0xF, split=True)
-    model.write_adc_ctl(0xFFFFFFFF, 0xF)
-    assert await _axi_read(dut, 0x0000) == model.adc_ctl == ADC_CTL_MASK
-
-    # Every accepted write is a complete 32-bit replacement. Reserved bits
-    # remain read-as-zero after each overwrite.
-    await _axi_write(dut, 0x0000, 0x00000000, 0xF, split=True,
-                     split_order="w_then_aw", b_hold_cycles=5)
-    model.write_adc_ctl(0x00000000, 0xF)
-    assert await _axi_read(dut, 0x0000) == model.adc_ctl
-
-    # The public contract rejects partial writes at the testbench boundary;
-    # no unsupported WSTRB value is ever driven into the DUT.
-    try:
-        await _axi_write(dut, 0x0000, 0xDEADBEEF, 0x7)
-    except AssertionError as error:
-        assert "full-word writes only" in str(error)
-    else:
-        raise AssertionError("partial WSTRB unexpectedly escaped the testbench contract")
-    assert await _axi_read(dut, 0x0000) == model.adc_ctl
-
-    # Three frozen normal configurations: pure ADC, decimation, DDC.
-    configurations = (
-        ("pure_adc_10b", 0x00000000, 0x000),
-        ("decimation_12b", 0x46000000, 0x120),
-        ("ddc_14b", 0x88000000, 0x260),
+    # WSTRB is accepted but has no byte-enable meaning.  Every handshake
+    # consumes the complete WDATA value, including WSTRB=0.
+    strobe_vectors = (
+        (0x0, 0x001), (0x1, 0x102), (0x5, 0x203),
+        (0xA, 0x304), (0x7, 0x155), (0xF, 0xFFFFFFFF),
     )
-    for name, adc_ctl, frame_cfg in configurations:
-        await _axi_write(dut, 0x0000, adc_ctl, 0xF)
-        model.write_adc_ctl(adc_ctl, 0xF)
-        await _axi_write(dut, 0x0008, frame_cfg, 0xF)
-        model.write_frame_cfg(frame_cfg, 0xF)
-        assert await _axi_read(dut, 0x0000) == model.adc_ctl
+    for index, (strobe, value) in enumerate(strobe_vectors):
+        await _axi_write(
+            dut, 0x0008, value, strobe,
+            split=index in (0, 1),
+            split_order="aw_then_w" if index == 0 else "w_then_aw",
+            b_hold_cycles=5 if index == 1 else 0)
+        model.write_frame_cfg(value, True)
         assert await _axi_read(dut, 0x0008) == model.frame_cfg
-        dut._log.info("STIMULUS_MARKER config_%s_pass", name)
+
+    # One safe ADC_CTL write updates static fields and simultaneously enables
+    # AFE0.  Once active, the global static-write gate must close.
+    safe_launch = 0x76000001
+    await _axi_write(dut, 0x0000, safe_launch, 0x3)
+    model.write_adc_ctl(safe_launch, True)
+    assert await _axi_read(dut, 0x0000) == model.adc_ctl == 0x46000001
+    await _poll_register(dut, 0x000C, 1 << 24, 0, attempts=160)
+
+    held_frame_cfg = model.frame_cfg
+    await _axi_write(dut, 0x0008, 0x000002FF, 0xC)
+    model.write_frame_cfg(0x000002FF, False)
+    assert await _axi_read(dut, 0x0008) == held_frame_cfg == model.frame_cfg
+
+    # Unsafe ADC_CTL still replaces dynamic AFE_EN/FIFO_CLR while preserving
+    # the previous static fields, irrespective of WSTRB.
+    unsafe_ctl = 0x88000202
+    await _axi_write(dut, 0x0000, unsafe_ctl, 0x0)
+    model.write_adc_ctl(unsafe_ctl, False)
+    assert await _axi_read(dut, 0x0000) == model.adc_ctl == 0x46000202
+    assert await _axi_read(dut, 0x0010) == 0
+
+    await _axi_write(dut, 0x0000, 0x00000000, 0x9)
+    model.write_adc_ctl(0x00000000, False)
+    assert await _axi_read(dut, 0x0000) == model.adc_ctl == 0x46000000
+    await _poll_register(dut, 0x000C, 0xFF000000, 0xFF000000, attempts=240)
+
+    # After every AFE is disabled and idle, static writes succeed again.
+    await _axi_write(dut, 0x0000, 0x88000000, 0x6)
+    model.write_adc_ctl(0x88000000, True)
+    await _axi_write(dut, 0x0008, 0x000002FF, 0x2)
+    model.write_frame_cfg(0x000002FF, True)
+    assert await _axi_read(dut, 0x0000) == model.adc_ctl == 0x88000000
+    assert await _axi_read(dut, 0x0008) == model.frame_cfg == 0x2FF
 
     await _axi_write(dut, 0x0030, 0xDEADBEEF, 0xF)
     assert await _axi_read(dut, 0x0030) == 0
@@ -1291,16 +1443,18 @@ async def _decimation_data_scoreboard_and_empty_guard(dut):
     # SMP_PREC=12, SMP_MODE=decimation, FRAME_FMT=left aligned.  DEC_M=32 is
     # the smallest legal decimation setting and DEC_DEL_MODE=0.
     adc_ctl = 0x46000000
-    await _enable_afe0_and_link(dut, adc_ctl, frame_cfg=0x20)
+    dut.afe0_pll_lock.value = 1
+    dut.afe0_rx_reset_done.value = 1
+    dut.afe0_byte_aligned.value = 0x3
+    dut.m_axis_afe0_tready.value = 1
+    _assert_software_static_config(adc_ctl, 0x20)
+    await _axi_write(dut, 0x0008, 0x20, 0xF)
+    await _axi_write(dut, 0x0000, adc_ctl, 0xF)
+    await _poll_register(dut, 0x000C, 0xFF000000, 0xFF000000, attempts=240)
 
     channels, expected = _packed_sample_pattern(12, True, phase=1)
 
-    # The documented CGS/ILAS helper finishes with a small legal data prefix.
-    # Clear it through the public software register, then leave the link live,
-    # FIFO reset/empty, and TREADY high.  No header or payload is permitted
-    # while the empty FWFT FIFO is held in reset.
-    await _axi_write(dut, 0x0000, adc_ctl | 0x00000101, 0xF)
-    await _poll_register(dut, 0x000C, 1 << 8, 1 << 8)
+    await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
     for _ in range(96):
         await RisingEdge(dut.adc_clk)
         await ReadOnly()
@@ -1308,23 +1462,25 @@ async def _decimation_data_scoreboard_and_empty_guard(dut):
             "empty FWFT FIFO started an AXIS header/payload while TREADY was high"
         )
 
-    # A signed and channel-distinct pattern follows zero padding.  The
-    # reference is independent of the DUT mapping and checks left-aligned
-    # 12-bit extraction, sign extension, AC9810 channel order, and that zero
-    # padding does not become payload.  The count provides >256 decimated
-    # beats while the sink is stalled.
-    lane0, lane1 = _channel_cml_words(channels)
+    await FallingEdge(dut.sys_clk)
+    dut.jesd_rst_n.value = 0xFE
+    for _ in range(16):
+        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    dut.jesd_rst_n.value = 0xFF
     await FallingEdge(dut.adc_clk)
     dut.m_axis_afe0_tready.value = 0
-    # Establish the first known source beat before releasing FIFO_CLR; the
-    # continuously clocked PHY has no valid qualifier, so this avoids an old
-    # held PHY word becoming the first post-clear FIFO write.
-    dut.afe0_rx_data.value = _phy_word(_pack_two_words(lane0[0:2]),
-                                       _pack_two_words(lane1[0:2]))
-    dut.afe0_rx_charisk.value = 0
     await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
+    for _ in range(2100):
+        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+
+    prefix_words = 39 * 8
+    await _drive_afe0_raw_word_stream(
+        dut, [0x1357] * 32 + [0x0000] * (prefix_words - 32),
+        [0x2468] * 32 + [0x0000] * (prefix_words - 32))
     await _drive_afe0_channel_blocks(dut, channels, block_count=4400)
     await _wait_afe0_header_and_payload(dut, (expected, expected), 1, 12, 32)
+    await _assert_static_config_stable(dut, adc_ctl | 0x1, 0x20)
     dut._log.info("STIMULUS_MARKER decimation12_empty_guard_scoreboard_pass")
 
 
@@ -1342,6 +1498,7 @@ async def _ddc_data_scoreboard(dut):
     # _setup leaves the public FIFO empty.  Configure while disabled, then
     # enable once and keep TREADY low while the entire public PHY sequence is
     # streamed without an AXI/FIFO_CLR gap in the DATA epoch.
+    _assert_software_static_config(adc_ctl, 0x20)
     await _axi_write(dut, 0x0008, 0x20, 0xF)
     await FallingEdge(dut.adc_clk)
     dut.m_axis_afe0_tready.value = 0
@@ -1352,7 +1509,7 @@ async def _ddc_data_scoreboard(dut):
 
     # Begin the first non-control PHY beat immediately after /A/.  The DDC
     # prefix and I/Q payload form one continuous public DATA stream.
-    # ADC_RXD's DDC configuration declares payload_start_word=32+280=312.
+    # DDC E=32,N=8,f=0,d=0 has ddc_num=2N+23=39 AFE beats = 312 words.
     # Supply that complete physical framing prefix after the first DATA word:
     # 32 synchronizing words followed by 280 zero-padding words per lane.
     # The subsequent I/Q CML stream then begins exactly at the public epoch's
@@ -1369,6 +1526,7 @@ async def _ddc_data_scoreboard(dut):
     await _poll_register(dut, 0x0010, 1 << 8, 1 << 8, attempts=400)
     await _wait_afe0_header_and_payload(
         dut, (expected_i, expected_q, expected_i, expected_q), 2, 14, 32)
+    await _assert_static_config_stable(dut, adc_ctl | 0x1, 0x20)
     dut._log.info("STIMULUS_MARKER ddc14_iq_pair_scoreboard_pass")
 
 
@@ -1416,6 +1574,7 @@ async def _ddc_abort_requires_fifo_clear_recovery(dut):
     i_channels, expected_i = _packed_sample_pattern(14, False, phase=7)
     q_channels, expected_q = _packed_sample_pattern(14, False, phase=47)
 
+    _assert_software_static_config(adc_ctl, frame_cfg)
     await _axi_write(dut, 0x0008, frame_cfg, 0xF)
     await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
     for _ in range(2100):
@@ -1437,6 +1596,7 @@ async def _ddc_abort_requires_fifo_clear_recovery(dut):
     await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
 
     # Establish a fresh DDC epoch, then remove public PHY reset-done.
+    _assert_software_static_config(adc_ctl, frame_cfg)
     await _axi_write(dut, 0x0008, frame_cfg, 0xF)
     await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
     for _ in range(2100):
@@ -1483,6 +1643,7 @@ async def _ddc_abort_requires_fifo_clear_recovery(dut):
     await _poll_register(dut, 0x000C, 1 << 24, 1 << 24, attempts=240)
     await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
 
+    _assert_software_static_config(adc_ctl, frame_cfg)
     await _axi_write(dut, 0x0008, frame_cfg, 0xF)
     await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
     for _ in range(2100):
@@ -1495,6 +1656,7 @@ async def _ddc_abort_requires_fifo_clear_recovery(dut):
     await _poll_register(dut, 0x000C, (1 << 0) | (1 << 8), 1 << 0, attempts=240)
     await _wait_afe0_header_and_payload(
         dut, (expected_i, expected_q, expected_i, expected_q), 2, 14, 32)
+    await _assert_static_config_stable(dut, adc_ctl | 0x1, frame_cfg)
     dut._log.info("STIMULUS_MARKER ddc_abort_fifo_clear_recovery_pass")
 
 
@@ -1635,8 +1797,18 @@ async def reset_and_top_level_defaults(dut):
 
 
 @cocotb.test()
-async def unpack_schedule_v12_legal_matrix(dut):
-    await with_timeout(_unpack_schedule_matrix(dut), 5, "ms")
+async def unpack_schedule_v19_legal_matrix(dut):
+    await with_timeout(_unpack_schedule_matrix(dut), 15, "ms")
+
+
+@cocotb.test()
+async def pure_adc_fixed_prefix(dut):
+    await with_timeout(_pure_adc_fixed_prefix(dut), 500, "us")
+
+
+@cocotb.test()
+async def static_cfg_non_idle_only_gate(dut):
+    await with_timeout(_static_cfg_non_idle_only_gate(dut), 500, "us")
 
 
 @cocotb.test()

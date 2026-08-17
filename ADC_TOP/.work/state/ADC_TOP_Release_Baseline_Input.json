@@ -1,14 +1,14 @@
 {
-  "schema": "RTL_RELEASE_BASELINE_INPUT_V1",
-  "module": "ADC_TOP",
-  "module_work_root": "D:\\Codex\\RTL_Temp\\ADC_TOP",
-  "verification_input_fingerprint": "9c175c81d9ab3b4835f1f75f8c7208fba73988aecdf0ecfa3f4aafcad01f2d71",
-  "verification_toolchain_fingerprint": "979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c",
-  "components": [
+  "schema":"RTL_RELEASE_BASELINE_INPUT_V1",
+  "module":"ADC_TOP",
+  "module_work_root":"D:\\Codex\\RTL_Temp\\ADC_TOP",
+  "verification_input_fingerprint":"b3c0cd58ffeaae731102a41cfa4ecca08d220b07670394b676f5728bd8ac7b74",
+  "verification_toolchain_fingerprint":"979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c",
+  "components":[
     {"role":"design","path_or_id":"D:\\Codex\\Vault\\Archive\\Modules\\ADC\\ADC_Design\\ADC_TOP_Design.md","file":"D:\\Codex\\Vault\\Archive\\Modules\\ADC\\ADC_Design\\ADC_TOP_Design.md"},
-    {"role":"verification_input","path_or_id":"VERIFICATION_INPUT_FINGERPRINT","value":"9c175c81d9ab3b4835f1f75f8c7208fba73988aecdf0ecfa3f4aafcad01f2d71"},
+    {"role":"verification_input","path_or_id":"VERIFICATION_INPUT_FINGERPRINT","value":"b3c0cd58ffeaae731102a41cfa4ecca08d220b07670394b676f5728bd8ac7b74"},
     {"role":"verification_toolchain","path_or_id":"VERIFICATION_TOOLCHAIN_FINGERPRINT","value":"979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c"},
-    {"role":"verification_run","path_or_id":"RTL_VMWARE_RUN_ID","value":"ADC_TOP_74278b329f3e4e32a0a25fbddac56f2f"},
+    {"role":"verification_run","path_or_id":"RTL_VMWARE_RUN_ID","value":"ADC_TOP_a068bcae19f94e85b1f32373b9e126f9"},
     {"role":"run_status","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_run_status.json","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_run_status.json"},
     {"role":"structured_evidence","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_evidence.json","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_evidence.json"},
     {"role":"evidence_summary","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_summary.md","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_summary.md"},
@@ -25,11 +25,11 @@
     {"role":"raw_evidence","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_vmware_transport.log","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_vmware_transport.log"},
     {"role":"orchestration_timing","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_vmware_timing.json","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_vmware_timing.json"},
     {"role":"constraint_review","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_Constraint_Review.md","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_Constraint_Review.md"},
-    {"role":"xdc_or_na","path_or_id":"XDC_DEFERRED_TO_TOP","value":"DEFERRED_TO_TOP"},
+    {"role":"xdc_or_na","path_or_id":"XDC_DEFERRED_TO_TOP","value":"DEFERRED_TO_TOP_EXTERNAL_ONLY"},
     {"role":"provenance_or_na","path_or_id":"PROVENANCE_RECORDED_IN_DESIGN","value":"MODIFIED_THIRD_PARTY_RTL"},
     {"role":"role_roster","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Role_Roster.json","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Role_Roster.json"},
     {"role":"review_pending_draft","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md"},
-    {"role":"review_pending_draft","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-14_RTL_handoff_03.md","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-14_RTL_handoff_03.md"},
+    {"role":"review_pending_draft","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-17_RTL_handoff_04.md","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-17_RTL_handoff_04.md"},
     {"role":"review_pending_draft","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md"},
     {"role":"finalization_patch","path_or_id":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json","file":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json"}
   ]

@@ -2,7 +2,7 @@
   "schema": "RTL_VMWARE_TEST_PLAN_V1",
   "module": "ADC_TOP",
   "test_module": "test_ADC_TOP",
-  "seed": 20260814,
+  "seed": 20260818,
   "timeout_seconds": 600,
   "all_legal_configurations": false,
   "reset_cases": [
@@ -15,30 +15,42 @@
   ],
   "normal_configurations": [
     "pure ADC 10-bit right-aligned mapping and fixed packet",
-    "decimation 12-bit left-aligned DEC_M=32 mapping",
-    "decimation plus DDC 14-bit right-aligned DEC_M=32 I/Q mapping"
+    "decimation 12-bit left-aligned E=32 N=8 f=0 mapping",
+    "decimation plus DDC 14-bit right-aligned E=32 N=8 f=0 I/Q mapping"
   ],
   "boundary_cases": [
-    "AXI AW and W independent arrival with full-word WSTRB contract",
+    "AXI AW and W independent arrival with full-word write contract",
+    "every accepted WSTRB pattern consumes complete WDATA with no byte-update semantics",
     "reserved and unimplemented registers read zero",
-    "static configuration remains stable while active",
+    "software static configuration precondition is legal and stable while active",
+    "global static write gate accepts same ADC_CTL write containing static fields and AFE_EN",
+    "unsafe ADC_CTL write preserves static fields while applying AFE_EN and FIFO_CLR",
+    "unsafe FRAME_CFG write preserves the complete prior register value",
+    "all AFE_EN clear with one active packet remains unsafe until every AFE_IDLE bit is set",
+    "disable all and wait all AFE_IDLE reopens the global static write gate",
     "FIFO_CLR empty status and stopped ADC clock",
     "FWFT WC=0 full write request gives native overflow without normal-mode data-drop",
     "empty FIFO no-underflow guard",
     "fixed SOMF bit0 epoch alignment with non-bit0 marker excluded from recovery",
     "legal zero-valued payload is preserved positionally",
     "SOMF-bearing DATA stream uses the complete positive prefix count on every selected scheduler branch representative",
-    "DUT scheduler table covers pure plus decimation and DDC remainder branches with delay modes zero one and two",
-    "public payload scoreboard exercises the union of legal mid-beat terminal offsets zero through seven",
+    "DUT v1.9 E equals four N plus f scheduler covers every single and DDC f branch and delay mode",
+    "reference layer exhaustively enumerates all 1500 legal single and DDC N f d configurations",
+    "reference layer checks exact prefix gaps phases periods offsets and 12-bit maxima against hard-coded anchors",
+    "single N=1 DDC N=2 and maximum N=63 boundaries are exercised on the public DUT",
+    "single f=1 uses corrected long gap 64N-32 and cycle length 64N+16",
+    "single f=2 public payload scoreboard exercises terminal offsets zero through seven",
     "scheduler representative pure ADC uses positive prefix and fixed sixteen-word gap",
-    "scheduler representative decimation remainder zero delay zero",
-    "scheduler representative decimation remainder one delay one",
-    "scheduler representative decimation remainder two delay two",
-    "scheduler representative decimation remainder three delay zero",
-    "scheduler representative DDC remainder zero delay one",
-    "scheduler representative DDC remainder one delay two",
-    "scheduler representative DDC remainder two delay zero",
-    "scheduler representative DDC remainder three delay one",
+    "scheduler representative single N=1 f=0 delay zero",
+    "scheduler representative single N=1 f=1 delay zero",
+    "scheduler representative single N=1 f=2 delay one",
+    "scheduler representative single N=1 f=3 delay two",
+    "scheduler representative single N=63 f=3 delay two exercises maximum prefix and gap",
+    "scheduler representative DDC N=2 f=0 delay one",
+    "scheduler representative DDC N=2 f=1 delay two",
+    "scheduler representative DDC N=2 f=2 delay zero",
+    "scheduler representative DDC N=2 f=3 delay one",
+    "pure ADC uses the fixed legal adc_num=(16+96+16)/8=16-beat prefix",
     "no encoded JESD_STATE readback is required; LINK_READY is the public link decision",
     "DDC wlevel two-slot reservation rejects 0/1 free slots without an orphan",
     "DDC startup and first-SOMF wait do not false-abort",
@@ -57,8 +69,7 @@
     "TGC mask-zero target error and busy reentry W1C",
     "public ADI SYSREF alignment error sticky and software recovery",
     "FIFO native overflow sticky reporting",
-    "DDC data-drop sticky reporting",
-    "unsupported partial WSTRB is rejected before DUT drive"
+    "DDC data-drop sticky reporting"
   ],
   "backpressure_cases": [
     "AXI B response stability while BREADY is low",
@@ -70,9 +81,13 @@
       "reset:reset defaults and domain release recovery"
     ],
     "axi_register_contract_and_modes": [
-      "boundary:AXI AW and W independent arrival with full-word WSTRB contract",
+      "boundary:AXI AW and W independent arrival with full-word write contract",
+      "boundary:every accepted WSTRB pattern consumes complete WDATA with no byte-update semantics",
       "boundary:reserved and unimplemented registers read zero",
-      "error:unsupported partial WSTRB is rejected before DUT drive",
+      "boundary:global static write gate accepts same ADC_CTL write containing static fields and AFE_EN",
+      "boundary:unsafe ADC_CTL write preserves static fields while applying AFE_EN and FIFO_CLR",
+      "boundary:unsafe FRAME_CFG write preserves the complete prior register value",
+      "boundary:disable all and wait all AFE_IDLE reopens the global static write gate",
       "backpressure:AXI B response stability while BREADY is low"
     ],
     "fifo_clear_and_adc_clock_stop": [
@@ -98,12 +113,12 @@
       "backpressure:AXIS header and payload stability with started-packet completion under backpressure"
     ],
     "decimation12_end_to_end_scoreboard_and_empty_fifo_guard": [
-      "normal:decimation 12-bit left-aligned DEC_M=32 mapping",
+      "normal:decimation 12-bit left-aligned E=32 N=8 f=0 mapping",
       "boundary:decimation zero-padding removal and 12-bit signed sample mapping",
       "boundary:empty FIFO no-underflow guard"
     ],
     "ddc14_end_to_end_scoreboard": [
-      "normal:decimation plus DDC 14-bit right-aligned DEC_M=32 I/Q mapping",
+      "normal:decimation plus DDC 14-bit right-aligned E=32 N=8 f=0 I/Q mapping",
       "boundary:DDC zero-padding removal and 14-bit signed I/Q mapping",
       "boundary:DDC wlevel two-slot reservation rejects 0/1 free slots without an orphan",
       "error:DDC data-drop sticky reporting"
@@ -112,19 +127,30 @@
       "boundary:fixed SOMF bit0 epoch alignment with non-bit0 marker excluded from recovery",
       "boundary:legal zero-valued payload is preserved positionally"
     ],
-    "unpack_schedule_v12_legal_matrix": [
+    "unpack_schedule_v19_legal_matrix": [
       "boundary:SOMF-bearing DATA stream uses the complete positive prefix count on every selected scheduler branch representative",
-      "boundary:DUT scheduler table covers pure plus decimation and DDC remainder branches with delay modes zero one and two",
-      "boundary:public payload scoreboard exercises the union of legal mid-beat terminal offsets zero through seven",
+      "boundary:DUT v1.9 E equals four N plus f scheduler covers every single and DDC f branch and delay mode",
+      "boundary:reference layer exhaustively enumerates all 1500 legal single and DDC N f d configurations",
+      "boundary:reference layer checks exact prefix gaps phases periods offsets and 12-bit maxima against hard-coded anchors",
+      "boundary:single N=1 DDC N=2 and maximum N=63 boundaries are exercised on the public DUT",
+      "boundary:single f=1 uses corrected long gap 64N-32 and cycle length 64N+16",
+      "boundary:single f=2 public payload scoreboard exercises terminal offsets zero through seven",
       "boundary:scheduler representative pure ADC uses positive prefix and fixed sixteen-word gap",
-      "boundary:scheduler representative decimation remainder zero delay zero",
-      "boundary:scheduler representative decimation remainder one delay one",
-      "boundary:scheduler representative decimation remainder two delay two",
-      "boundary:scheduler representative decimation remainder three delay zero",
-      "boundary:scheduler representative DDC remainder zero delay one",
-      "boundary:scheduler representative DDC remainder one delay two",
-      "boundary:scheduler representative DDC remainder two delay zero",
-      "boundary:scheduler representative DDC remainder three delay one"
+      "boundary:scheduler representative single N=1 f=0 delay zero",
+      "boundary:scheduler representative single N=1 f=1 delay zero",
+      "boundary:scheduler representative single N=1 f=2 delay one",
+      "boundary:scheduler representative single N=1 f=3 delay two",
+      "boundary:scheduler representative single N=63 f=3 delay two exercises maximum prefix and gap",
+      "boundary:scheduler representative DDC N=2 f=0 delay one",
+      "boundary:scheduler representative DDC N=2 f=1 delay two",
+      "boundary:scheduler representative DDC N=2 f=2 delay zero",
+      "boundary:scheduler representative DDC N=2 f=3 delay one"
+    ],
+    "pure_adc_fixed_prefix": [
+      "boundary:pure ADC uses the fixed legal adc_num=(16+96+16)/8=16-beat prefix"
+    ],
+    "static_cfg_non_idle_only_gate": [
+      "boundary:all AFE_EN clear with one active packet remains unsafe until every AFE_IDLE bit is set"
     ],
     "ddc_abort_blocks_admission_until_fifo_clear_recovery": [
       "boundary:DDC startup and first-SOMF wait do not false-abort",
@@ -139,7 +165,7 @@
       "boundary:reset-domain whole-FIFO discard and clean relink payload scoreboard"
     ],
     "link_drop_incomplete_block_discard": [
-      "boundary:static configuration remains stable while active",
+      "boundary:software static configuration precondition is legal and stable while active",
       "boundary:link drop discards an incomplete AC9810 block"
     ]
   }

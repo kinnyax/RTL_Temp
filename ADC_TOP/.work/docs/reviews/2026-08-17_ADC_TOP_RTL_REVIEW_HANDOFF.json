@@ -1,0 +1,43 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "REJECTED",
+  "agent_id": "/root/adc_unpack_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_unpack_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_unpack_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_unpack_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_unpack_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_unpack_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "552dafc0e882bdfe7211eafb600f82119ad8ad6111ed3cfe1b20e071329909d4",
+  "release_baseline_fingerprint": "9f06a29e2ef09e4635467333c7fc24e566dd7baf154a21b927efd47fdd00a0af",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "65c797291f7d14e89a58f8d274e05b0ab9c8bf222896f9476ce2e67891ace495",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "669ab15d32d06d97797565c4999f43628af291154d330943b5fe323252161c8a"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-17_RTL_handoff_02.md", "sha256": "b12feabe0cbc89f7f92031835d8fe6412bc9e23b81c99583dbf5fa00c3167903"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "5bad7f3875a29adbdd911364e56bc4b17f65f18311bced11c011446654ff23e1"}
+  ],
+  "findings": [
+    {
+      "severity": "P1",
+      "location": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\tb\\test_adc_top.py:863",
+      "detail": "The v1.6 public-DUT scheduler test executes only nine representatives. It does not satisfy ADC_TOP_Design.md:891-893, which requires traversal of single N=1..63 and DDC N=2..63 across f=0..3 and d=0..2, plus invalid DDC N=0, mode3, precision3, d=3, and pure-ADC E/d-ignore behavior. The maximum N=63 f1/f3 prefix and 12-bit long-gap checks are reference-only assertions rather than observed DUT behavior. The invalid-factor test at test_adc_top.py:935 covers only single N=0 and DDC N=1. A VMware 14/14 PASS therefore does not close the frozen v1.6 scheduler and invalid-map acceptance matrix."
+    },
+    {
+      "severity": "P1",
+      "location": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\tb\\test_adc_top.py:1012",
+      "detail": "The cfg_wr_safe test closes the gate with an enabled channel but never creates the distinct pre-write state AFE_EN==0 and AFE_IDLE!=8'hff. ADC_TOP_Design.md:894 requires both enabled and non-idle-only unsafe cases before reopening at all-disabled/all-idle. Consequently the global shared-static update gate is not fully proven at the packet-drain boundary even though the RTL expression itself is structurally correct."
+    }
+  ],
+  "residual_risks": [
+    "Release-baseline verification, role separation, hashes, source ownership, lint integration and finalization-patch simulation all pass, but the two semantic-coverage blockers prevent acceptance and the patch must not be finalized.",
+    "Static RTL audit found the v1.6 E={N,f} legality, 12-bit payload/gap formulas, corrected single f1 64N-32 gap, unsigned 64-bit terminal accumulation, three-state RXD FSM, eight explicit history slices, cfg_wr_safe register behavior, reset/CDC ownership and DDC/FIFO semantics consistent with the finalized design.",
+    "The ADI modified-third-party provenance and hash-matched PUB FWFT/CDC boundary are intact; validate_rtl_style.py returns the expected RTL_STYLE_DELTA_REVIEW_REQUIRED for MODIFIED_THIRD_PARTY_RTL and no owned-RTL style blocker was found.",
+    "PPA remains HYPOTHESIS and MODEL_EQUIVALENCE remains NON_VENDOR_EQUIVALENT. VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream and board validation remain NOT_RUN."
+  ]
+}
