@@ -207,7 +207,6 @@ wire [7:0]                                  link_ready_adc                      
 wire [7:0]                                  fifo_empty_adc                              ;
 wire [7:0]                                  fifo_full_adc                               ;
 wire [7:0]                                  afe_idle_adc                                ;
-wire [15:0]                                 jesd_state_adc                              ;
 wire [7:0]                                  pll_lock_adc                                ;
 wire [7:0]                                  rx_reset_done_adc                           ;
 wire [15:0]                                 lane_ready_adc                              ;
@@ -224,7 +223,6 @@ wire [7:0]                                  link_ready_sys                      
 wire [7:0]                                  fifo_empty_sys                              ;
 wire [7:0]                                  fifo_full_sys                               ;
 wire [7:0]                                  afe_idle_sys                                ;
-wire [15:0]                                 jesd_state_sys                              ;
 wire [7:0]                                  pll_lock_sys                                ;
 wire [7:0]                                  rx_reset_done_sys                           ;
 wire [15:0]                                 lane_ready_sys                              ;
@@ -295,7 +293,6 @@ ADC_REG adc_reg(
     .fifo_empty                         (fifo_empty_sys                              ),
     .fifo_full                          (fifo_full_sys                               ),
     .afe_idle                           (afe_idle_sys                                ),
-    .jesd_state                         (jesd_state_sys                              ),
     .pll_lock                           (pll_lock_sys                                ),
     .rx_reset_done                      (rx_reset_done_sys                           ),
     .lane_ready                         (lane_ready_sys                              ),
@@ -342,7 +339,6 @@ ADC_SYNC adc_sync(
     .fifo_empty_adc                     (fifo_empty_adc                              ),
     .fifo_full_adc                      (fifo_full_adc                               ),
     .afe_idle_adc                       (afe_idle_adc                                ),
-    .jesd_state_adc                     (jesd_state_adc                              ),
     .pll_lock_adc                       (pll_lock_adc                                ),
     .rx_reset_done_adc                  (rx_reset_done_adc                           ),
     .lane_ready_adc                     (lane_ready_adc                              ),
@@ -366,7 +362,6 @@ ADC_SYNC adc_sync(
     .fifo_empty_sys                     (fifo_empty_sys                              ),
     .fifo_full_sys                      (fifo_full_sys                               ),
     .afe_idle_sys                       (afe_idle_sys                                ),
-    .jesd_state_sys                     (jesd_state_sys                              ),
     .pll_lock_sys                       (pll_lock_sys                                ),
     .rx_reset_done_sys                  (rx_reset_done_sys                           ),
     .lane_ready_sys                     (lane_ready_sys                              ),
@@ -433,7 +428,6 @@ ADC_CHN adc_chn0(
     .fifo_empty_adc                     (fifo_empty_adc[0]                            ),
     .fifo_full_adc                      (fifo_full_adc[0]                             ),
     .afe_idle_adc                       (afe_idle_adc[0]                              ),
-    .jesd_state_adc                     (jesd_state_adc[1:0]                          ),
     .pll_lock_adc                       (pll_lock_adc[0]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[0]                         ),
     .lane_ready_adc                     (lane_ready_adc[1:0]                          ),
@@ -481,7 +475,6 @@ ADC_CHN adc_chn1(
     .fifo_empty_adc                     (fifo_empty_adc[1]                            ),
     .fifo_full_adc                      (fifo_full_adc[1]                             ),
     .afe_idle_adc                       (afe_idle_adc[1]                              ),
-    .jesd_state_adc                     (jesd_state_adc[3:2]                          ),
     .pll_lock_adc                       (pll_lock_adc[1]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[1]                         ),
     .lane_ready_adc                     (lane_ready_adc[3:2]                          ),
@@ -529,7 +522,6 @@ ADC_CHN adc_chn2(
     .fifo_empty_adc                     (fifo_empty_adc[2]                            ),
     .fifo_full_adc                      (fifo_full_adc[2]                             ),
     .afe_idle_adc                       (afe_idle_adc[2]                              ),
-    .jesd_state_adc                     (jesd_state_adc[5:4]                          ),
     .pll_lock_adc                       (pll_lock_adc[2]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[2]                         ),
     .lane_ready_adc                     (lane_ready_adc[5:4]                          ),
@@ -577,7 +569,6 @@ ADC_CHN adc_chn3(
     .fifo_empty_adc                     (fifo_empty_adc[3]                            ),
     .fifo_full_adc                      (fifo_full_adc[3]                             ),
     .afe_idle_adc                       (afe_idle_adc[3]                              ),
-    .jesd_state_adc                     (jesd_state_adc[7:6]                          ),
     .pll_lock_adc                       (pll_lock_adc[3]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[3]                         ),
     .lane_ready_adc                     (lane_ready_adc[7:6]                          ),
@@ -625,7 +616,6 @@ ADC_CHN adc_chn4(
     .fifo_empty_adc                     (fifo_empty_adc[4]                            ),
     .fifo_full_adc                      (fifo_full_adc[4]                             ),
     .afe_idle_adc                       (afe_idle_adc[4]                              ),
-    .jesd_state_adc                     (jesd_state_adc[9:8]                          ),
     .pll_lock_adc                       (pll_lock_adc[4]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[4]                         ),
     .lane_ready_adc                     (lane_ready_adc[9:8]                          ),
@@ -673,7 +663,6 @@ ADC_CHN adc_chn5(
     .fifo_empty_adc                     (fifo_empty_adc[5]                            ),
     .fifo_full_adc                      (fifo_full_adc[5]                             ),
     .afe_idle_adc                       (afe_idle_adc[5]                              ),
-    .jesd_state_adc                     (jesd_state_adc[11:10]                        ),
     .pll_lock_adc                       (pll_lock_adc[5]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[5]                         ),
     .lane_ready_adc                     (lane_ready_adc[11:10]                        ),
@@ -721,7 +710,6 @@ ADC_CHN adc_chn6(
     .fifo_empty_adc                     (fifo_empty_adc[6]                            ),
     .fifo_full_adc                      (fifo_full_adc[6]                             ),
     .afe_idle_adc                       (afe_idle_adc[6]                              ),
-    .jesd_state_adc                     (jesd_state_adc[13:12]                        ),
     .pll_lock_adc                       (pll_lock_adc[6]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[6]                         ),
     .lane_ready_adc                     (lane_ready_adc[13:12]                        ),
@@ -769,7 +757,6 @@ ADC_CHN adc_chn7(
     .fifo_empty_adc                     (fifo_empty_adc[7]                            ),
     .fifo_full_adc                      (fifo_full_adc[7]                             ),
     .afe_idle_adc                       (afe_idle_adc[7]                              ),
-    .jesd_state_adc                     (jesd_state_adc[15:14]                        ),
     .pll_lock_adc                       (pll_lock_adc[7]                              ),
     .rx_reset_done_adc                  (rx_reset_done_adc[7]                         ),
     .lane_ready_adc                     (lane_ready_adc[15:14]                        ),

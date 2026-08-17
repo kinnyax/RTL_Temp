@@ -1,0 +1,35 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_unpack_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_unpack_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_unpack_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_unpack_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_unpack_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_unpack_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "39e5971a9e1d3543167bda15b960b560e6444a11fe230ef1501696aa55c1c258",
+  "release_baseline_fingerprint": "abd75b2caafcc9cbc78d2eff47b49e90f1652fb9a08d32aa5edff82dbd434195",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "cd57c0ecfba693c823715bef31de74b7802256dc0334a250b9d52fa57578adf7",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "56c915e34947ade02c6631a6d042a5ef320a58c62c2a2d39d1a108c6af2eb23d"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-14_RTL_handoff_02.md", "sha256": "6046ca3bc0762769b48af6289ff26a32d07be188d9e515572f137a6b57f1b573"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "274ed5aed29e9e11a36fef78f9ebe42c6958bf0986b15947972225a194900e80"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "The prior _08 REJECTED review is stale history and was not reused. The v1.3 release baseline independently verifies with 27 components and fingerprint abd75b2caafcc9cbc78d2eff47b49e90f1652fb9a08d32aa5edff82dbd434195.",
+    "The prior scheduler-coverage blocker is closed non-vacuously: unpack_schedule_v12_legal_matrix drives the public DUT for nine pure/decimation/DDC branch representatives, runs 967158 ns, checks each complete header plus 256 payload beats before the accepting FWFT edge, emits nine branch PASS markers, and covers the union of terminal offsets 0 through 7. The full legal arithmetic table remains independently reference-checked; representative selection, not exhaustive DUT execution of every DEC_M value, is the accepted equivalence strategy.",
+    "The v1.3 marker-inclusive contract and RTL agree: the valid SOMF-bearing DATA beat establishes epoch/prefix beat 0, and a later beat satisfying (prefix_beat_r + 1) == payload_start_beat is captured as the first payload beat. The nine public-DUT scoreboards exercise prefix continuity for pure ADC and every decimation/DDC remainder branch with delay modes 0, 1, and 2.",
+    "Encoded adi_status_state remains local to jesd_clk; only decoded single-bit link_ready crosses JESD to AFE through the single-line level_sync instance. ADC-facing crossings remain in CHN_SYNC with the documented three-domain reset ownership. No stale JESD_STATE readback, multi-bit encoded state synchronization, multiple driver, latch, or unauthorized self-written generate/function structure was found.",
+    "The protected ADI source and hash-matched PUB FWFT/CDC dependencies remain within their recorded boundaries. validate_rtl_style.py returns the expected RTL_STYLE_DELTA_REVIEW_REQUIRED for MODIFIED_THIRD_PARTY_RTL; owned formatting follows the user's declaration-only punctuation alignment rule.",
+    "PPA remains HYPOTHESIS. The 64-bit positive absolute counters deliberately match the finalized design and avoid rebase/wrap logic, but synthesis area/timing was not measured.",
+    "MODEL_EQUIVALENCE=NON_VENDOR_EQUIVALENT. Official Vivado FIFO/JESD PHY behavior, VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream, and board validation remain NOT_RUN."
+  ]
+}

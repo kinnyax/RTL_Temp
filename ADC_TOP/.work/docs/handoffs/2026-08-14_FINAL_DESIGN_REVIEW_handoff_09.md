@@ -1,0 +1,23 @@
+<DESIGN_REVIEW_HANDOFF>
+  <AGENT_ID>/root/adc_upk_design_review2</AGENT_ID>
+  <HANDOFF_PATH>D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_FINAL_DESIGN_REVIEW_handoff_09.md</HANDOFF_PATH>
+  <STATUS>ACCEPTED</STATUS>
+  <PRE_REVIEW_CONTRIBUTOR_SET>
+    <ITEM>Lead: /root</ITEM>
+    <ITEM>Evidence Researcher: /root/adc_upk_evidence, D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-13_EVIDENCE_RESEARCH_handoff.md, SHA256 233e6b4f6dc83cd672646280440e99e3e4d55348b434ff83d1af1ef0aee5c8bb</ITEM>
+    <ITEM>Architecture Analyst: /root/adc_upk_arch, D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_ARCHITECTURE_handoff_05.md, SHA256 418f3017fec788f30520591646115a54c77d174c5e30c452ae8608c9de95e4a6</ITEM>
+    <ITEM>Design Author: /root/adc_upk_design_author2, D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-14_DESIGN_AUTHOR_handoff_09.md, SHA256 2de1fc99281b7647abd0b0e3a5db1831828c2c9276545c12326aeb6b7f7f2f17</ITEM>
+  </PRE_REVIEW_CONTRIBUTOR_SET>
+  <ROLE_SEPARATION_AUDIT>PASS: Review agent /root/adc_upk_design_review2 is distinct from Lead, Evidence Researcher, Architecture Analyst and Design Author. All supplied handoff hashes were independently recomputed and match.</ROLE_SEPARATION_AUDIT>
+  <REVIEW_STAGE>FINAL_DESIGN</REVIEW_STAGE>
+  <REVIEWED_DESIGN_PATH>D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md</REVIEWED_DESIGN_PATH>
+  <REVIEWED_DESIGN_BASELINE_FINGERPRINT>a47503e9b734c219549cb3953204a5bb89cd75f3a6a0eba96f31300d7b8d9016</REVIEWED_DESIGN_BASELINE_FINGERPRINT>
+  <DESIGN_CONTRACT_PRECHECK>PASS: independently ran validate_design_contract.py against the exact reviewed bytes; DESIGN_CONTRACT_PRECHECK_PASS and SHA256 equals a47503e9b734c219549cb3953204a5bb89cd75f3a6a0eba96f31300d7b8d9016.</DESIGN_CONTRACT_PRECHECK>
+  <EXTERNAL_BASELINE_PROVENANCE_AUDIT>NOT_APPLICABLE: reviewed bytes are a Design Author behavior-equivalent implementation revision.</EXTERNAL_BASELINE_PROVENANCE_AUDIT>
+  <BLOCKING_FINDINGS>NONE</BLOCKING_FINDINGS>
+  <EVIDENCE_AND_OPTION_AUDIT>PASS. The packed lookup is completely frozen: one 55-bit value contains five ordered unsigned 11-bit fields {gap_dec1,gap_ddc0,gap_ddc1,gap_ddc2,gap_ddc3}; all dec_n=8 through 24 constants equal the formulas 64*n-48, 16*n-16, 64*n-96, 32*n-32 and 64*n-64 and fit 11 bits. The term_gap phase selection recreates each v1.3 frozen sequence and period. Direct payload beat formulas are exact algebraic reductions of the prior word formulas: r0 2*n+23, r1 8*n+25, r2 4*n+25, r3 8*n+29, plus B(d)=0/4*DEC_M/8*DEC_M. No narrowing or rounding is introduced.</EVIDENCE_AND_OPTION_AUDIT>
+  <MODULE_SCHEMA_AUDIT>PASS. v1.4 is consistently the unique finalized downstream input. Because word_pos_r begins at 8 and advances only by 8, its low three bits remain zero. Every legal gap is at least 16, so the next terminal cannot become stale behind the current beat and no beat can contain two terminals. Therefore equality of word_pos_r[63:3] and next_term_r[63:3] is exactly equivalent to one of the prior eight absolute-position hits; next_term_r[2:0] is the unique offset. The first terminal remains offset 7. The 384-bit history and eight explicit offset slices remain, so mid-beat reconstruction and X/default behavior are not changed. The practical no-wrap lifetime contract is unchanged.</MODULE_SCHEMA_AUDIT>
+  <USER_DECISION_FIDELITY>PASS. v1.4 is a bounded behavior-equivalent readability/PPA rewrite: it removes wide redundant comparisons, word-unit prefix intermediates and unused local ADI diagnostics, while retaining fixed marker-inclusive +1 semantics, all legal configurations, compact *_r naming, interfaces, clocks/resets/CDC, LINK/status/error sources, FIFO behavior, DDC pair/abort and software-owned recovery. Only genuinely unused ADI SOF/EOF/EOMF, ILAS and statistics outputs may be named-open; required SOMF, data/valid, source-state decode, lane, SYSREF and error paths remain connected.</USER_DECISION_FIDELITY>
+  <RESIDUAL_RISKS>PPA improvement remains HYPOTHESIS until synthesis; synthesis may already share some comparator logic. rtl-vibe must exhaustively compare old/new payload formulas and lookup values across all legal DEC_M/DEC_DEL_MODE/SMP_MODE combinations, cover offsets 0 through 7 and first offset 7, then run the existing nine scheduler representatives and full suite. Any future gap below 16, counter-width reduction, explicit rebase, indexed slice, new legal configuration or restored ADI diagnostic use requires a new design review. No RTL/TB/XDC edit or verification was performed by this review.</RESIDUAL_RISKS>
+  <NEXT_OWNER>LEAD_AGENT</NEXT_OWNER>
+</DESIGN_REVIEW_HANDOFF>

@@ -27,7 +27,6 @@ module ADC_REG(
     input  wire [7:0]                       fifo_empty                                  ,
     input  wire [7:0]                       fifo_full                                   ,
     input  wire [7:0]                       afe_idle                                    ,
-    input  wire [15:0]                      jesd_state                                  ,
     input  wire [7:0]                       pll_lock                                    ,
     input  wire [7:0]                       rx_reset_done                               ,
     input  wire [15:0]                      lane_ready                                  ,
@@ -343,7 +342,7 @@ assign reg_0004 = adc_tgc;
 assign reg_0008 = frame_cfg;
 assign reg_000c = {afe_idle,fifo_full,fifo_empty,link_ready};
 assign reg_0010 = {6'd0,adc_pd};
-assign reg_0014 = {rx_reset_done,pll_lock,jesd_state};
+assign reg_0014 = {rx_reset_done,pll_lock,8'd0,link_ready};
 assign reg_0018 = {sysref_cnt,7'd0,sysref_level,sysref_pd};
 assign reg_001c = {byte_aligned,lane_ready};
 assign reg_0020 = {16'd0,comma_detected};

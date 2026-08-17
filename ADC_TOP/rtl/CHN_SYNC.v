@@ -11,7 +11,6 @@ module CHN_SYNC(
     input  wire                             jesd_clk                                    ,
     input  wire                             jesd_rst_n                                  ,
     input  wire                             en_adc                                      ,
-    input  wire [1:0]                       jesd_state                                  ,
     input  wire                             link_ready                                  ,
     input  wire [1:0]                       lane_ready                                  ,
     input  wire [1:0]                       byte_aligned                                ,
@@ -28,8 +27,6 @@ module CHN_SYNC(
     input  wire                             ddc_admit_ok_afe                            ,
     output wire                             en_afe                                      ,
     output wire                             en_jesd                                     ,
-    output wire                             link_ready_afe                              ,
-    output wire [1:0]                       jesd_state_adc                              ,
     output wire                             link_ready_adc                              ,
     output wire [1:0]                       lane_ready_adc                              ,
     output wire [1:0]                       byte_aligned_adc                            ,
@@ -52,9 +49,6 @@ assign link_error_evt_adc = link_error_evt_adc_jesd | sysref_error_evt_adc_afe;
 
 level_sync en_to_afe(.clk(afe_clk), .rst_n(afe_rst_n), .in(en_adc), .out(en_afe));
 level_sync en_to_jesd(.clk(jesd_clk), .rst_n(jesd_rst_n), .in(en_adc), .out(en_jesd));
-level_sync link_ready_to_afe(.clk(afe_clk), .rst_n(afe_rst_n), .in(link_ready), .out(link_ready_afe));
-
-levels_sync #(.DS(2)) jesd_state_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(jesd_state), .out(jesd_state_adc));
 level_sync link_ready_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(link_ready), .out(link_ready_adc));
 levels_sync #(.DS(2)) lane_ready_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(lane_ready), .out(lane_ready_adc));
 levels_sync #(.DS(2)) byte_aligned_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(byte_aligned), .out(byte_aligned_adc));

@@ -3,10 +3,10 @@
   "module": "ADC_TOP",
   "lead_agent_id": "/root",
   "contributors": [
-    {"role":"RTL_DESIGNER","agent_id":"/root/adc_upk_rtl"},
-    {"role":"SIMULATION_WORKER","agent_id":"/root/adc_upk_sim"},
-    {"role":"CONSTRAINT_WORKER","agent_id":"/root/adc_upk_constraint"},
-    {"role":"VERIFICATION_RUNNER","agent_id":"/root/adc_upk_verify"},
-    {"role":"DOCS_WORKER","agent_id":"/root/adc_upk_release_docs"}
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_unpack_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_unpack_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_unpack_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_unpack_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_unpack_docs"}
   ]
 }

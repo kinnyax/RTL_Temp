@@ -2,8 +2,8 @@
 type: module_constraint_review
 module_name: ADC_TOP
 date: 2026-08-14
-reviewer: /root/adc_upk_constraint
-design_baseline_fingerprint: ca40cd68dcc207c2a7f876075bdc3f92198a6e43814cb3774508bb07002016f9
+reviewer: /root/adc_unpack_constraint
+design_sha256: a3a1f7d9ec91236f1d73e9164fc12161d4b6fc1ff1b11fab05aa229d9a784622
 classification: DEFERRED_TO_TOP
 dependency_scope: EXTERNAL_ONLY
 vivado_resolution_status: VIVADO_RESOLUTION_NOT_RUN
@@ -14,36 +14,38 @@ vivado_resolution_status: VIVADO_RESOLUTION_NOT_RUN
 ## Decision
 
 - Classification: `DEFERRED_TO_TOP`.
-- Deferred owner: Detector_v1 system-integration owner, using `D:\Codex\Item\Detector\Detector\Detector_v1\constraints\Detector_v1.xdc` with CMU/RMU, JESD PHY, selected FIFO, and vendor-IP XDC owners.
-- XDC path: `NONE`. ADC_TOP owns no physical pins, clock source/buffer, generated-clock generator, real clock period, I/O delay, or integrated exception endpoint.
-- Static XDC review: `NOT_APPLICABLE`; no module XDC exists for this external-only classification.
-- Vivado object/scope/processing-order/vendor-XDC resolution: `VIVADO_RESOLUTION_NOT_RUN`.
+- Deferred owner: Detector_v1 system-integration owner. The integration XDC must resolve CMU/RMU clocks and resets, JESD PHY/GTH generated clocks, selected FIFO IP constraints, board I/O, AXI timing, SYSREF capture timing, and vendor-XDC order.
+- XDC path: `NONE`. This module has no physical pin, clock generator/buffer, real clock period, I/O delay, or resolvable module-owned timing-exception endpoint.
+- Static XDC review: `NOT_APPLICABLE` for this external-only module classification.
+- Vivado resolution: `VIVADO_RESOLUTION_NOT_RUN`.
 
-## Reviewed Baseline
+## Audited Baseline
 
-- Design: `D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md`, SHA256 `ca40cd68dcc207c2a7f876075bdc3f92198a6e43814cb3774508bb07002016f9`, `RTL_MODULE_CONTRACT_V1`, v1.1.
+- Design: `D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md`, SHA256 `a3a1f7d9ec91236f1d73e9164fc12161d4b6fc1ff1b11fab05aa229d9a784622`.
 - Source order: `D:\Codex\RTL_Temp\ADC_TOP\rtl\filelist.f`, SHA256 `76aa2d06650dc14aae941c422ef6a2d183be3cd0076386c84d8085aa44a0f648`.
-- Complete dependency record: `D:\Codex\RTL_Temp\ADC_TOP\.work\docs\ADC_TOP_Constraint_Dependency_Manifest.tsv`; scope `EXTERNAL_ONLY`.
+- Dependency manifest: `D:\Codex\RTL_Temp\ADC_TOP\.work\docs\ADC_TOP_Constraint_Dependency_Manifest.tsv`; scope `EXTERNAL_ONLY`; SHA256 recorded after document finalization.
 
 ## Clock, Reset, and CDC Audit
 
-`sys_clk`, `adc_clk`, and `afe_clk` are externally supplied register clocks. Their real source, period, duty cycle, start/stop policy, and relationships belong to integrated CMU/RMU. `jesd_clk[n]` are externally supplied recovered PHY clocks; their actual parent/generated-clock relation, phase, GT placement, and vendor interaction require integrated JESD PHY evidence. `sysref_in` is a sampled external event, not a generated clock. ADC_TOP creates, forwards, and buffers none of these clocks.
+`sys_clk`, `adc_clk`, and `afe_clk` are external register clocks. `jesd_clk[7:0]` are external recovered PHY clocks. Their sources, periods, duty cycles, start/stop behavior, parent relations, and generated-clock definitions are not visible at this standalone boundary and remain integration-owned. `sysref_in` is an externally sampled JESD event, not a module-generated clock.
 
-RMU owns asynchronous assertion and domain-safe synchronous release for `sys_rst_n/sys_clk`, `adc_rst_n/adc_clk`, `afe_rst_n/afe_clk`, and `jesd_rst_n[n]/jesd_clk[n]`. The module neither contains an RMU nor a reset-release synchronizer. `ADC_RXD` link logic uses `jesd_rst_n`; its device and unpack logic use `afe_rst_n`. `ADC_PKT` and ADC-side CDC endpoints use `adc_rst_n`; AFE-side CDC endpoints use `afe_rst_n`.
+RMU owns asynchronous reset assertion and per-domain synchronous release. `sys_rst_n` is consumed in SYS logic; `adc_rst_n` in ADC logic; `afe_rst_n` in AFE logic; each `jesd_rst_n[n]` in its matching JESD link logic. `ADC_RXD` correctly keeps ADI/JESD reset (`jesd_core_reset`) in the JESD reset ownership chain, while device/unpack reset (`device_core_reset`) and its unpack state use `afe_rst_n`.
 
-Each channel directly instantiates the PUB FWFT asynchronous FIFO with `afe_clk` write and `adc_clk` read. `fifo_rst_n = afe_rst_n & adc_rst_n & ~fifo_clr`; either domain reset or software clear resets the complete FIFO. The selected PUB FIFO and the future official Vivado FIFO must be separately proven for clear assertion/recovery and stable `FIFO_EMPTY`; both clocks must stay running during the software recovery sequence.
+The former encoded two-bit JESD-state transfer is absent. `ADC_RXD` decodes `link_ready` in the JESD domain and transfers that single level locally through `level_sync link_ready_to_afe` with destination `afe_clk/afe_rst_n`. This is a valid single-bit status CDC and does not create an XDC endpoint at standalone module scope.
 
-The v1.1 fail-closed path forms `ddc_admit_ok_afe = ~ddc_abort_afe` in `ADC_CHN`, then transfers that single AFE-domain level through `CHN_SYNC` by `level_sync ddc_admit_ok_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(ddc_admit_ok_afe), .out(ddc_admit_ok_adc))`. The source state is created and reset in the `afe_clk/afe_rst_n` domain; the destination synchronizer and `ADC_PKT` admission gate use `adc_clk/adc_rst_n`. Because the destination synchronizer resets low, ADC reset assertion and release remain fail-closed until the healthy source level is sampled. The level is not a clock, generated clock, asynchronous data bus, timing-exception endpoint, or external port. It gates only new `packet_start`; it does not interrupt an admitted packet. No module-level XDC is justified by this CDC primitive; synchronizer recognition and any precise exception must be based on resolved integrated objects.
+`CHN_SYNC` retains ADC-facing CDC: JESD/AFE-to-ADC status levels use `level_sync`/`levels_sync` with destination `adc_clk/adc_rst_n`; source event pulses use `pulse_sync2` with their source-domain reset and `adc_rst_n` destination reset. `ADC_SYNC` similarly uses PUB primitives with the reset associated with each source and destination clock endpoint. The observed reset ownership is consistent with the three-clock-domain contract.
 
-No module-owned broad asynchronous clock group, false path, internal pin/cell, generated-clock anchor, or precise exception endpoint is justified. CDC architecture uses declared PUB synchronizer primitives and FIFO. Actual clock groups, synchronizer recognition, FIFO/IP timing, and any precise exception must be constrained only after CMU/RMU/PHY/FIFO topology is resolved at Detector_v1 integration.
+Each channel directly instantiates the PUB FWFT asynchronous FIFO with `afe_clk` write and `adc_clk` read. `fifo_rst_n = afe_rst_n & adc_rst_n & ~fifo_clr`; either AFE or ADC reset and software clear reset the entire FIFO. The integration must constrain and verify the selected FIFO implementation, keep both clocks running for software recovery, and prove required clear assertion/recovery cycles plus stable `FIFO_EMPTY`.
 
-## External Ports and Vendor Obligations
+No broad asynchronous clock groups, false paths, or internal `set_*` exceptions are emitted here. PUB synchronizer/FIFO architecture is not a substitute for resolved project constraints. If integration exposes concrete synchronizer cells or FIFO/PHY endpoints, the Detector_v1 constraint owner must use exact resolved objects and topology rather than copying a module-level wildcard exception.
 
-All ADC_TOP ports remain externally integrated: AXI4-Lite under `sys_clk`; eight PHY/JESD interfaces under individual `jesd_clk[n]`; eight AXIS outputs under `adc_clk`; eight TGC groups under `afe_clk`; clock, reset, and SYSREF inputs. Board/package locations, IOSTANDARD/drive/slew, I/O delays, SYSREF capture relation, CMU/RMU clock definition, JESD PHY generated clocks, selected FIFO constraints, and vendor-XDC precedence belong to Detector_v1 integration. Project fileset processing order and vendor-XDC interaction must be reviewed there.
+## Public Ports and Vendor Interaction
+
+All public interfaces remain external: AXI4-Lite (`sys_clk`), eight JESD PHY connections (`jesd_clk[n]`), eight AXIS outputs (`adc_clk`), and eight TGC groups (`afe_clk`). Board locations, IOSTANDARD/drive/slew, I/O delays, JESD PHY/GTH generated clocks, SYSREF relationship, selected FIFO XCI constraints, and vendor-XDC precedence are delegated to Detector_v1 integration and its IP owners.
 
 ## Residual Risks
 
-- No Vivado run resolved a port, cell, generated clock, or exception endpoint.
-- PUB FWFT and replacement official FIFO clear/recovery behavior must be proved by their implementation documentation and integrated verification.
-- Actual CMU/RMU/PHY topology may establish related or asynchronous clocks differently from this module-only view.
-- `ddc_admit_ok` relies on the resolved integrated level synchronizer implementation; fail-closed admission does not replace software FIFO clear/relink recovery.
+- No Vivado run resolved ports, cells, clocks, or exception endpoints.
+- Actual CMU/RMU/PHY topology can establish related or asynchronous clock relationships differently from this module-only audit.
+- PUB FWFT and the replacement official FIFO must be verified for clear/recovery and status timing in integrated flow.
+- The new internal `link_ready` CDC is structurally reviewed only; CDC recognition and any targeted timing exception require resolved integrated objects.

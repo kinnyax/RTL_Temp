@@ -21,7 +21,6 @@ module ADC_SYNC(
     input  wire [7:0]                       fifo_empty_adc                              ,
     input  wire [7:0]                       fifo_full_adc                               ,
     input  wire [7:0]                       afe_idle_adc                                ,
-    input  wire [15:0]                      jesd_state_adc                              ,
     input  wire [7:0]                       pll_lock_adc                                ,
     input  wire [7:0]                       rx_reset_done_adc                           ,
     input  wire [15:0]                      lane_ready_adc                              ,
@@ -45,7 +44,6 @@ module ADC_SYNC(
     output wire [7:0]                       fifo_empty_sys                              ,
     output wire [7:0]                       fifo_full_sys                               ,
     output wire [7:0]                       afe_idle_sys                                ,
-    output wire [15:0]                      jesd_state_sys                              ,
     output wire [7:0]                       pll_lock_sys                                ,
     output wire [7:0]                       rx_reset_done_sys                           ,
     output wire [15:0]                      lane_ready_sys                              ,
@@ -77,7 +75,6 @@ levels_sync #(.DS(8)) link_ready_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(li
 levels_sync #(.DS(8)) fifo_empty_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(fifo_empty_adc), .out(fifo_empty_sys));
 levels_sync #(.DS(8)) fifo_full_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(fifo_full_adc), .out(fifo_full_sys));
 levels_sync #(.DS(8)) afe_idle_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(afe_idle_adc), .out(afe_idle_sys));
-levels_sync #(.DS(16)) jesd_state_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(jesd_state_adc), .out(jesd_state_sys));
 levels_sync #(.DS(8)) pll_lock_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(pll_lock_adc), .out(pll_lock_sys));
 levels_sync #(.DS(8)) rx_reset_done_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(rx_reset_done_adc), .out(rx_reset_done_sys));
 levels_sync #(.DS(16)) lane_ready_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(lane_ready_adc), .out(lane_ready_sys));

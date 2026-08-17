@@ -478,6 +478,72 @@ async def _drive_afe0_raw_word_stream(dut, lane0_words, lane1_words):
             _pack_two_words(lane1_words[index:index + 2]))
 
 
+def _scheduler_lane_word(lane, position):
+    """Deterministic positive 14-bit container for one payload lane position."""
+    return (1 + lane * 0x0800 + position * 37 + (position >> 4) * 19) & 0x1FFF
+
+
+def _scheduler_expected_payload(terminal):
+    """Map the 16 lane words ending at terminal into one public 512-bit beat."""
+    order = (0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15)
+    lane0 = [_scheduler_lane_word(0, terminal - 15 + index) for index in range(16)]
+    lane1 = [_scheduler_lane_word(1, terminal - 15 + index) for index in range(16)]
+    mapped = [lane0[index] for index in order] + [lane1[index] for index in order]
+    return sum(word << (16 * index) for index, word in enumerate(mapped))
+
+
+async def _drive_afe0_scheduler_payload(dut, terminals):
+    """Drive enough public lane words to complete exactly the modeled terminals."""
+    word_count = terminals[-1] + 1
+    if word_count & 1:
+        word_count += 1
+    lane0 = [_scheduler_lane_word(0, position) for position in range(word_count)]
+    lane1 = [_scheduler_lane_word(1, position) for position in range(word_count)]
+    await _drive_afe0_raw_word_stream(dut, lane0, lane1)
+
+
+async def _wait_afe0_complete_packet(dut, expected_payloads, mode, precision, dec_m):
+    """Score every public beat of one fixed packet, including framing controls."""
+    assert len(expected_payloads) == 256
+    for _ in range(2400):
+        await RisingEdge(dut.adc_clk)
+        await ReadOnly()
+        if int(dut.m_axis_afe0_tvalid.value):
+            break
+    assert int(dut.m_axis_afe0_tvalid.value), "scheduler matrix packet header timed out"
+    header = _header_bytes(int(dut.m_axis_afe0_tdata.value))
+    assert header[8] == 0 and header[9] == mode and header[10] == precision
+    assert header[16:18] == [0, 1] and header[28:30] == [0, 64]
+    assert header[32] == dec_m
+    assert int(dut.m_axis_afe0_tkeep.value) == (1 << 64) - 1
+    assert int(dut.m_axis_afe0_tlast.value) == 0
+
+    await FallingEdge(dut.adc_clk)
+    dut.m_axis_afe0_tready.value = 1
+    await RisingEdge(dut.adc_clk)
+    await Timer(2, unit="ns")
+    accepted = 0
+    while accepted < 256:
+        await FallingEdge(dut.adc_clk)
+        await ReadOnly()
+        valid = int(dut.m_axis_afe0_tvalid.value)
+        actual = int(dut.m_axis_afe0_tdata.value)
+        keep = int(dut.m_axis_afe0_tkeep.value)
+        last = int(dut.m_axis_afe0_tlast.value)
+        await RisingEdge(dut.adc_clk)
+        if valid:
+            assert actual == expected_payloads[accepted], (
+                f"scheduler payload mismatch at beat {accepted}: "
+                f"actual={_axis_words_all(actual)} "
+                f"expected={_axis_words_all(expected_payloads[accepted])}"
+            )
+            assert keep == (1 << 64) - 1
+            assert last == int(accepted == 255)
+            accepted += 1
+    await FallingEdge(dut.adc_clk)
+    dut.m_axis_afe0_tready.value = 0
+
+
 async def _wait_afe0_header_and_payload(dut, expected_payloads, mode, precision, dec_m,
                                         mismatch_signatures=None):
     """Scoreboard one public header followed by the requested payload prefix."""
@@ -678,6 +744,160 @@ class RegisterScoreboard:
     def write_frame_cfg(self, data, strobe):
         assert strobe == 0xF
         self.frame_cfg = data & 0x3FF
+
+
+class UnpackScheduleScoreboard:
+    """Independent v1.2 positive-coordinate AC9810 unpack schedule model."""
+
+    @staticmethod
+    def configuration(mode, dec_m, dec_del_mode):
+        assert mode in (0, 1, 2), f"unsupported formal sample mode {mode}"
+        assert dec_del_mode in (0, 1, 2), f"unsupported DEC_DEL_MODE {dec_del_mode}"
+        if mode == 0:
+            return 16, 15, (16,), ("R",)
+
+        assert 32 <= dec_m <= 96, f"DEC_M out of legal range: {dec_m}"
+        n = dec_m >> 2
+        rem = dec_m & 0x3
+        delay_words = (0, 32 * dec_m, 64 * dec_m)[dec_del_mode]
+        if rem == 0:
+            start_word = 16 * n + 184 + delay_words
+            gaps = (16, 16 * n - 16) if mode == 2 else (16 * n, 16 * n)
+            phases = ("I", "Q") if mode == 2 else ("R",)
+        elif rem == 1:
+            start_word = 64 * n + 200 + delay_words
+            gaps = ((16,) * 7 + (64 * n - 96,)) if mode == 2 else (16, 16, 16, 64 * n - 48)
+            phases = ("I", "Q") * 4 if mode == 2 else ("R",)
+        elif rem == 2:
+            start_word = 32 * n + 200 + delay_words
+            gaps = ((16,) * 7 + (32 * n - 32,)) if mode == 2 else (16, 32 * n + 1, 16, 32 * n + 1)
+            phases = ("I", "Q") * 4 if mode == 2 else ("R",)
+        else:
+            start_word = 64 * n + 232 + delay_words
+            gaps = ((16,) * 7 + (64 * n - 64,)) if mode == 2 else (16, 16, 16, 64 * n)
+            phases = ("I", "Q") * 4 if mode == 2 else ("R",)
+
+        assert start_word % 8 == 0, f"payload start is not beat aligned: {start_word}"
+        assert all(gap >= 16 for gap in gaps), f"illegal multi-block beat gap: {gaps}"
+        return start_word >> 3, 15, gaps, phases
+
+    @staticmethod
+    def terminals(first_term, gaps, count):
+        term = first_term
+        values = []
+        for index in range(count):
+            values.append(term)
+            term += gaps[index % len(gaps)]
+        return values
+
+
+def _assert_unpack_schedule_reference_vectors():
+    """Compare each frozen n=8 branch with independent absolute vectors."""
+    vectors = (
+        (0,  0, 0,  16, (16,),                 ("R",),
+         (15, 31, 47, 63, 79, 95, 111, 127, 143)),
+        (1, 32, 0,  39, (128, 128),             ("R",),
+         (15, 143, 271, 399, 527, 655, 783, 911, 1039)),
+        (1, 33, 1, 221, (16, 16, 16, 464),      ("R",),
+         (15, 31, 47, 63, 527, 543, 559, 575, 1039)),
+        (1, 34, 2, 329, (16, 257, 16, 257),     ("R",),
+         (15, 31, 288, 304, 561, 577, 834, 850,
+          1107, 1123, 1380, 1396, 1653, 1669, 1926, 1942)),
+        (1, 35, 0,  93, (16, 16, 16, 512),      ("R",),
+         (15, 31, 47, 63, 575, 591, 607, 623, 1135)),
+        (2, 32, 1, 167, (16, 112),              ("I", "Q"),
+         (15, 31, 143, 159, 271, 287, 399, 415, 527)),
+        (2, 33, 2, 353, (16, 16, 16, 16, 16, 16, 16, 416),
+         ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
+         (15, 31, 47, 63, 79, 95, 111, 127, 543)),
+        (2, 34, 0,  57, (16, 16, 16, 16, 16, 16, 16, 224),
+         ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
+         (15, 31, 47, 63, 79, 95, 111, 127, 351)),
+        (2, 35, 1, 233, (16, 16, 16, 16, 16, 16, 16, 448),
+         ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
+         (15, 31, 47, 63, 79, 95, 111, 127, 575)),
+    )
+    offsets = set()
+    for mode, dec_m, delay, exp_start, exp_gaps, exp_phases, exp_terms in vectors:
+        start, first, gaps, phases = UnpackScheduleScoreboard.configuration(
+            mode, dec_m, delay)
+        assert start == exp_start
+        assert first == 15
+        assert gaps == exp_gaps
+        assert phases == exp_phases
+        actual_terms = []
+        terminal = first
+        for index in range(len(exp_terms)):
+            actual_terms.append(terminal)
+            terminal += gaps[index % len(gaps)]
+        assert tuple(actual_terms) == exp_terms
+        offsets.update(term & 0x7 for term in exp_terms)
+    assert offsets == set(range(8))
+
+
+async def _unpack_schedule_matrix(dut):
+    """Drive one black-box packet for every v1.2 scheduler equivalence branch."""
+    _assert_unpack_schedule_reference_vectors()
+    await _setup(dut)
+    dut.afe0_pll_lock.value = 1
+    dut.afe0_rx_reset_done.value = 1
+    dut.afe0_byte_aligned.value = 0x3
+    dut.m_axis_afe0_tready.value = 0
+
+    representatives = (
+        ("pure",   0,  0, 0),
+        ("dec_r0", 1, 32, 0),
+        ("dec_r1", 1, 33, 1),
+        ("dec_r2", 1, 34, 2),
+        ("dec_r3", 1, 35, 0),
+        ("ddc_r0", 2, 32, 1),
+        ("ddc_r1", 2, 33, 2),
+        ("ddc_r2", 2, 34, 0),
+        ("ddc_r3", 2, 35, 1),
+    )
+    end_offsets = set()
+
+    for label, mode, dec_m, dec_del_mode in representatives:
+        await _axi_write(dut, 0x0000, 0x00000000, 0xF)
+        await _poll_register(dut, 0x000C, 1 << 24, 1 << 24, attempts=320)
+        await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
+
+        dut.jesd_rst_n.value = 0xFE
+        for _ in range(16):
+            await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+        dut.jesd_rst_n.value = 0xFF
+
+        frame_cfg = (dec_del_mode << 8) | dec_m if mode else 0
+        adc_ctl = 0x80000000 | (mode << 26)
+        await _axi_write(dut, 0x0008, frame_cfg, 0xF)
+        await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
+        for _ in range(2100):
+            await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+        await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+
+        start_beat, first_term, gaps, phases = UnpackScheduleScoreboard.configuration(
+            mode, dec_m, dec_del_mode)
+        terminals = UnpackScheduleScoreboard.terminals(first_term, gaps, 256)
+        assert start_beat >= 0 and all(right > left for left, right in zip(terminals, terminals[1:]))
+        if mode == 2:
+            assert len(phases) == len(gaps)
+            assert all(phases[index] != phases[(index + 1) % len(phases)]
+                       for index in range(len(phases)))
+        end_offsets.update(term & 0x7 for term in terminals)
+
+        prefix_words = start_beat * 8
+        await _drive_afe0_raw_word_stream(
+            dut, [0x3A5A] * prefix_words, [0x15A5] * prefix_words)
+        await _drive_afe0_scheduler_payload(dut, terminals)
+        expected = [_scheduler_expected_payload(term) for term in terminals]
+        await _wait_afe0_complete_packet(dut, expected, mode, 14, dec_m)
+        dut._log.info(
+            "STIMULUS_MARKER scheduler_%s_d%d_offsets_%s_pass",
+            label, dec_del_mode, sorted({term & 0x7 for term in terminals}))
+
+    assert end_offsets == set(range(8)), (
+        f"DUT scheduler representatives did not cover every terminal offset: {end_offsets}"
+    )
 
 
 async def _reset_and_top_level_defaults(dut):
@@ -1412,6 +1632,11 @@ async def _link_drop_discards_incomplete_block(dut):
 @cocotb.test()
 async def reset_and_top_level_defaults(dut):
     await with_timeout(_reset_and_top_level_defaults(dut), TEST_TIMEOUT_US, "us")
+
+
+@cocotb.test()
+async def unpack_schedule_v12_legal_matrix(dut):
+    await with_timeout(_unpack_schedule_matrix(dut), 5, "ms")
 
 
 @cocotb.test()

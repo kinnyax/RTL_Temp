@@ -1,0 +1,34 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_unpack_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_unpack_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_unpack_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_unpack_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_unpack_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_unpack_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "8f30f4db7c1cb0b43bf2782191b64187e1e9b09b2366ef0fe2bd648ed89cff47",
+  "release_baseline_fingerprint": "54ade45bafc90dacc999d7bf2b1b5eb412f6f54c914d6d196ba8cc65ffa16eb3",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "3743d78350d154185ed433e292b576d70934f6cf9c02d9600541dfc05c0da704",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "4cabcf9a63dfd5943b023554c74b58db868a534e30833e15b1ebfc701d274d6c"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-14_RTL_handoff_03.md", "sha256": "9466ff4d009643ade3308bad6c468e94f3263c00326147790189336d7265cf25"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "e51cce3926eb64e3d03a1b415f2f2a944cf51b18c0146fa1c2151936f8fdcfd8"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "The prior v1.3 _09 ACCEPTED review is stale history and was not reused. The v1.4 sidecar independently verifies with 27 components and fingerprint 54ade45bafc90dacc999d7bf2b1b5eb412f6f54c914d6d196ba8cc65ffa16eb3.",
+    "The compact scheduler is contract-equivalent for every legal configuration: the 55-bit lookup contains five exact 11-bit gaps, all legal gap values fit unsigned 11 bits, and the direct 64-bit payload_start_beat formula matches the frozen r/d table. word_pos_r remains eight-word aligned, every legal gap is at least sixteen words, and the single upper-coordinate equality therefore cannot false-hit or miss a reachable terminal; natural 64-bit wrap is explicitly outside realistic continuous-run duration in the finalized design.",
+    "All eight block_end_offset history slices remain explicit and cover offsets zero through seven. The fresh public-DUT VMware matrix executes nine branch representatives, checks a complete header plus 256 payload handshakes for each using pre-handshake FWFT sampling and independent DDC/reference tables, emits nine branch PASS markers, and covers the union of offsets zero through seven. The unchanged TB and manifest are therefore directly applicable to the v1.4 internal refactor.",
+    "Only unused ADI outputs are open; functional rx_data/rx_valid/rx_somf, link-state, lane-ready, error, SYSREF, sync and PHY-control connections remain wired. Encoded adi_status_state remains local to jesd_clk and only decoded single-bit link_ready crosses into afe_clk through the single-line level_sync instance. No interface, reset ownership, CDC, DDC admission, FIFO or public register-map change was found.",
+    "The reused constraint result remains DEFERRED_TO_TOP with EXTERNAL_ONLY dependency scope and no module XDC. Its retained historical design/source hashes describe the earlier audit, but v1.4 changes only internal AFE scheduler combinational structure and unused ADI output wiring; public ports, clock/reset topology, CDC instances and every external-only constraint anchor remain unchanged, so no constraint endpoint or XDC intent is invalidated.",
+    "The protected ADI source and hash-matched PUB FWFT/CDC dependencies remain within their recorded boundaries. validate_rtl_style.py returns the expected RTL_STYLE_DELTA_REVIEW_REQUIRED for MODIFIED_THIRD_PARTY_RTL; owned RTL naming/formatting and the authorized ADC_REG procedural clear loops remain compliant. PPA remains HYPOTHESIS, MODEL_EQUIVALENCE=NON_VENDOR_EQUIVALENT, and VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream and board validation remain NOT_RUN."
+  ]
+}

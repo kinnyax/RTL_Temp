@@ -8,7 +8,6 @@ module ADC_RXD(
     input  wire                             sysref                                       ,
     input  wire                             chn_en_jesd                                  ,
     input  wire                             chn_en_afe                                   ,
-    input  wire                             link_ready_afe                               ,
     input  wire [1:0]                       smp_prec                                     ,
     input  wire [1:0]                       smp_mode                                     ,
     input  wire                             frame_fmt                                    ,
@@ -26,7 +25,6 @@ module ADC_RXD(
     output wire                             phy_sync_n                                   ,
     output reg [511:0]                      fifo_wr_data                                 ,
     output reg                              fifo_wr_valid                                ,
-    output wire [1:0]                       jesd_state                                   ,
     output wire                             link_ready                                   ,
     output wire [1:0]                       lane_ready                                   ,
     output wire [1:0]                       comma_detected                               ,
@@ -38,65 +36,39 @@ module ADC_RXD(
     output reg                              data_drop_evt                                ,
     output reg                              ddc_abort_afe
 );
-reg [255:0]                                 lane0_history_r                               ;
-reg [255:0]                                 lane1_history_r                               ;
-reg [15:0]                                  word_epoch_r                                  ;
-reg                                         epoch_valid_r                                 ;
-reg                                         payload_active_r                              ;
-reg [15:0]                                  payload_pos_r                                 ;
-reg                                         ddc_i_accepted_r                              ;
-reg [511:0]                                 mapped_raw                                    ;
-wire [511:0]                                mapped_data                                   ;
-wire [7:0]                                  dec_n                                         ;
-reg [15:0]                                  zero_words                                    ;
-reg [15:0]                                  payload_start_word                            ;
-reg [15:0]                                  period_words                                  ;
-reg [255:0]                                 lane0_block_raw                               ;
-reg [255:0]                                 lane1_block_raw                               ;
-reg [127:0]                                 terminal_words                                ;
-reg [127:0]                                 q_terminal_words                              ;
+reg [255:0]                                 lane0_history_r                              ;
+reg [255:0]                                 lane1_history_r                              ;
+reg [63:0]                                  prefix_beat_r                                ;
+reg [63:0]                                  word_pos_r                                   ;
+reg [63:0]                                  next_term_r                                  ;
+reg [2:0]                                   term_phase_r                                 ;
+reg                                         epoch_valid_r                                ;
+reg                                         payload_active_r                             ;
+reg                                         ddc_i_accepted_r                             ;
+reg [511:0]                                 mapped_raw                                   ;
+reg [255:0]                                 lane0_block_raw                              ;
+reg [255:0]                                 lane1_block_raw                              ;
 
+wire [511:0]                                mapped_data                                  ;
+wire [7:0]                                  dec_n                                        ;
+wire [54:0]                                 gap_lut                                      ;
+wire [10:0]                                 gap_dec1                                     ;
+wire [10:0]                                 gap_ddc0                                     ;
+wire [10:0]                                 gap_ddc1                                     ;
+wire [10:0]                                 gap_ddc2                                     ;
+wire [10:0]                                 gap_ddc3                                     ;
+wire [10:0]                                 term_gap                                     ;
+wire [2:0]                                  phase4_nx                                    ;
+wire [2:0]                                  phase8_nx                                    ;
+wire [2:0]                                  term_phase_next                              ;
 wire                                        marker_present                               ;
 wire                                        epoch_active                                 ;
-wire                                        map_config_valid                             ;
-wire                                        initial_payload_hit                          ;
-wire [15:0]                                 payload_pos_advance                          ;
-wire [15:0]                                 pos_w0                                       ;
-wire [15:0]                                 pos_w1                                       ;
-wire [15:0]                                 pos_w2                                       ;
-wire [15:0]                                 pos_w3                                       ;
-wire [15:0]                                 pos_w4                                       ;
-wire [15:0]                                 pos_w5                                       ;
-wire [15:0]                                 pos_w6                                       ;
-wire [15:0]                                 pos_w7                                       ;
-wire [15:0]                                 terminal_w0                                  ;
-wire [15:0]                                 terminal_w1                                  ;
-wire [15:0]                                 terminal_w2                                  ;
-wire [15:0]                                 terminal_w3                                  ;
-wire [15:0]                                 terminal_w4                                  ;
-wire [15:0]                                 terminal_w5                                  ;
-wire [15:0]                                 terminal_w6                                  ;
-wire [15:0]                                 terminal_w7                                  ;
-wire [15:0]                                 q_terminal_w0                                ;
-wire [15:0]                                 q_terminal_w1                                ;
-wire [15:0]                                 q_terminal_w2                                ;
-wire [15:0]                                 q_terminal_w3                                ;
-wire                                        end_match_w0                                 ;
-wire                                        end_match_w1                                 ;
-wire                                        end_match_w2                                 ;
-wire                                        end_match_w3                                 ;
-wire                                        end_match_w4                                 ;
-wire                                        end_match_w5                                 ;
-wire                                        end_match_w6                                 ;
-wire                                        end_match_w7                                 ;
-wire                                        q_match_w0                                   ;
-wire                                        q_match_w1                                   ;
-wire                                        q_match_w2                                   ;
-wire                                        q_match_w3                                   ;
-wire                                        q_match_w4                                   ;
-wire                                        q_match_w5                                   ;
-wire                                        q_match_w6                                   ;
-wire                                        q_match_w7                                   ;
+wire                                        prec_vld                                     ;
+wire                                        dec_vld                                      ;
+wire                                        map_vld                                      ;
+wire                                        upk_vld                                      ;
+wire [63:0]                                 payload_start_beat                           ;
+wire                                        payload_hit                                  ;
 wire                                        block_complete                               ;
 wire                                        block_is_q                                   ;
 wire                                        block_is_i                                   ;
@@ -110,28 +82,22 @@ wire                                        ddc_q_write_eligible                
 wire                                        fifo_write_eligible                          ;
 wire                                        ddc_epoch_live                               ;
 wire                                        ddc_abort_set_evt                            ;
+wire                                        link_ready_afe                               ;
 
 wire                                        jesd_core_reset                              ;
 wire                                        device_core_reset                            ;
 wire [255:0]                                adi_rx_data                                  ;
 wire                                        adi_rx_valid                                 ;
-wire [15:0]                                 adi_rx_sof                                   ;
-wire [15:0]                                 adi_rx_eof                                   ;
 wire [15:0]                                 adi_rx_somf                                  ;
-wire [15:0]                                 adi_rx_eomf                                  ;
 wire                                        adi_sync_n                                   ;
 wire                                        adi_encommalign                              ;
 wire [1:0]                                  adi_lane_ifs_ready                           ;
 wire [3:0]                                  adi_lane_cgs_state                           ;
-wire [1:0]                                  adi_ilas_valid                               ;
-wire [3:0]                                  adi_ilas_addr                                ;
-wire [63:0]                                 adi_ilas_data                                ;
 wire [1:0]                                  adi_status_state                             ;
 wire                                        adi_frame_error                              ;
 wire                                        adi_unexpected_lane_error                    ;
 wire                                        adi_sysref_error                             ;
 wire                                        adi_sysref_seen                              ;
-wire [63:0]                                 adi_err_statistics                           ;
 wire [1:0]                                  phy_disparity_level                          ;
 wire [1:0]                                  phy_notintable_level                         ;
 wire                                        link_error_level                             ;
@@ -142,9 +108,8 @@ reg                                         link_error_r                        
 // =====
 // 1. ADI JESD204 RX
 // =====
-assign jesd_core_reset      = ~jesd_rst_n | ~chn_en_jesd |
-                               ~phy_rx_reset_done | ~phy_pll_lock;
-assign device_core_reset    = ~afe_rst_n | ~chn_en_afe;
+assign jesd_core_reset    = ~jesd_rst_n | ~chn_en_jesd | ~phy_rx_reset_done | ~phy_pll_lock;
+assign device_core_reset  = ~afe_rst_n | ~chn_en_afe;
 
 jesd204_rx #(
     .NUM_LANES                          (2                                             ),
@@ -178,9 +143,9 @@ jesd204_rx #(
     .phy_en_char_align                  (adi_encommalign                               ),
     .rx_data                            (adi_rx_data                                   ),
     .rx_valid                           (adi_rx_valid                                  ),
-    .rx_eof                             (adi_rx_eof                                    ),
-    .rx_sof                             (adi_rx_sof                                    ),
-    .rx_eomf                            (adi_rx_eomf                                   ),
+    .rx_eof                             (                                              ),
+    .rx_sof                             (                                              ),
+    .rx_eomf                            (                                              ),
     .rx_somf                            (adi_rx_somf                                   ),
     .cfg_lanes_disable                  (2'b00                                         ),
     .cfg_links_disable                  (1'b0                                          ),
@@ -199,10 +164,10 @@ jesd204_rx #(
     .device_cfg_buffer_delay            (8'd0                                          ),
     .ctrl_err_statistics_reset          (1'b0                                          ),
     .ctrl_err_statistics_mask           (7'd0                                          ),
-    .status_err_statistics_cnt          (adi_err_statistics                            ),
-    .ilas_config_valid                  (adi_ilas_valid                                ),
-    .ilas_config_addr                   (adi_ilas_addr                                 ),
-    .ilas_config_data                   (adi_ilas_data                                 ),
+    .status_err_statistics_cnt          (                                              ),
+    .ilas_config_valid                  (                                              ),
+    .ilas_config_addr                   (                                              ),
+    .ilas_config_data                   (                                              ),
     .status_ctrl_state                  (adi_status_state                              ),
     .status_lane_cgs_state              (adi_lane_cgs_state                            ),
     .status_lane_ifs_ready              (adi_lane_ifs_ready                            ),
@@ -217,7 +182,6 @@ jesd204_rx #(
 // =====
 // 2. Relink / Link Status
 // =====
-assign jesd_state           = chn_en_jesd ? adi_status_state : 2'd0;
 assign link_ready           = chn_en_jesd && phy_rx_reset_done && phy_pll_lock &&
                               (adi_status_state == 2'd3) && (&adi_lane_ifs_ready);
 assign lane_ready           = adi_lane_ifs_ready;
@@ -235,6 +199,8 @@ assign notintable_evt       = {2{chn_en_jesd}} & phy_notintable_level &
                               ~phy_notintable_r;
 assign phy_rx_encommalign   = adi_encommalign;
 assign phy_sync_n           = adi_sync_n;
+
+level_sync link_ready_to_afe(.clk(afe_clk), .rst_n(afe_rst_n), .in(link_ready), .out(link_ready_afe));
 
 always @(posedge jesd_clk or negedge jesd_rst_n) begin
     if (!jesd_rst_n) begin
@@ -255,241 +221,112 @@ end
 // =====
 // 3. Payload Position / Block Decode
 // =====
-assign marker_present        = adi_rx_somf[0];
-assign epoch_active          = epoch_valid_r | marker_present;
-assign dec_n                 = {2'b00,dec_m[7:2]};
-assign map_config_valid      = (smp_prec != 2'd3) &&
-                               ((smp_mode == 2'd0) ||
-                                (((smp_mode == 2'd1) || (smp_mode == 2'd2)) &&
-                                 (dec_m >= 8'd32) && (dec_m <= 8'd96) &&
-                                 (dec_del_mode != 2'd3)));
+assign marker_present     = adi_rx_somf[0];
+assign dec_n              = {2'b00,dec_m[7:2]};
+assign prec_vld           = smp_prec != 2'd3;
+assign dec_vld            = (dec_m >= 8'd32) && (dec_m <= 8'd96) && (dec_del_mode != 2'd3);
+assign map_vld            = (smp_mode == 2'd0) ? prec_vld :
+                            ((smp_mode == 2'd1) || (smp_mode == 2'd2)) ? (prec_vld && dec_vld) : 1'b0;
+assign upk_vld            = chn_en_afe && link_ready_afe && adi_rx_valid;
+assign epoch_active       = epoch_valid_r || (marker_present && map_vld);
+assign payload_start_beat =
+    (smp_mode == 2'd0) ? 64'd16 :
+    (((dec_m[1:0] == 2'd0) ? (({56'd0,dec_n} << 1) + 64'd23) :
+      (dec_m[1:0] == 2'd1) ? (({56'd0,dec_n} << 3) + 64'd25) :
+      (dec_m[1:0] == 2'd2) ? (({56'd0,dec_n} << 2) + 64'd25) :
+                             (({56'd0,dec_n} << 3) + 64'd29)) +
+     ((dec_del_mode == 2'd1) ? ({56'd0,dec_m} << 2) :
+      (dec_del_mode == 2'd2) ? ({56'd0,dec_m} << 3) : 64'd0));
+assign payload_hit        = epoch_valid_r && !payload_active_r &&
+                            ((prefix_beat_r + 64'd1) == payload_start_beat);
+
+assign gap_lut = (dec_n == 8'd8 ) ? {11'd464,11'd112,11'd416,11'd224,11'd448 } :
+                 (dec_n == 8'd9 ) ? {11'd528,11'd128,11'd480,11'd256,11'd512 } :
+                 (dec_n == 8'd10) ? {11'd592,11'd144,11'd544,11'd288,11'd576 } :
+                 (dec_n == 8'd11) ? {11'd656,11'd160,11'd608,11'd320,11'd640 } :
+                 (dec_n == 8'd12) ? {11'd720,11'd176,11'd672,11'd352,11'd704 } :
+                 (dec_n == 8'd13) ? {11'd784,11'd192,11'd736,11'd384,11'd768 } :
+                 (dec_n == 8'd14) ? {11'd848,11'd208,11'd800,11'd416,11'd832 } :
+                 (dec_n == 8'd15) ? {11'd912,11'd224,11'd864,11'd448,11'd896 } :
+                 (dec_n == 8'd16) ? {11'd976,11'd240,11'd928,11'd480,11'd960 } :
+                 (dec_n == 8'd17) ? {11'd1040,11'd256,11'd992,11'd512,11'd1024} :
+                 (dec_n == 8'd18) ? {11'd1104,11'd272,11'd1056,11'd544,11'd1088} :
+                 (dec_n == 8'd19) ? {11'd1168,11'd288,11'd1120,11'd576,11'd1152} :
+                 (dec_n == 8'd20) ? {11'd1232,11'd304,11'd1184,11'd608,11'd1216} :
+                 (dec_n == 8'd21) ? {11'd1296,11'd320,11'd1248,11'd640,11'd1280} :
+                 (dec_n == 8'd22) ? {11'd1360,11'd336,11'd1312,11'd672,11'd1344} :
+                 (dec_n == 8'd23) ? {11'd1424,11'd352,11'd1376,11'd704,11'd1408} :
+                                    {11'd1488,11'd368,11'd1440,11'd736,11'd1472};
+
+assign {gap_dec1,gap_ddc0,gap_ddc1,gap_ddc2,gap_ddc3} = gap_lut;
+assign phase4_nx = (term_phase_r == 3'd3) ? 3'd0 : (term_phase_r + 3'd1);
+assign phase8_nx = (term_phase_r == 3'd7) ? 3'd0 : (term_phase_r + 3'd1);
+
+assign term_gap =
+    (smp_mode == 2'd1) ?
+        ((dec_m[1:0] == 2'd0) ? ({3'd0,dec_n} << 4) :
+         (dec_m[1:0] == 2'd1) ? ((term_phase_r == 3'd3) ? gap_dec1 : 11'd16) :
+         (dec_m[1:0] == 2'd2) ? (term_phase_r[0] ? (({3'd0,dec_n} << 5) + 11'd1) : 11'd16) :
+                                ((term_phase_r == 3'd3) ? ({3'd0,dec_n} << 6) : 11'd16)) :
+    (smp_mode == 2'd2) ?
+        ((dec_m[1:0] == 2'd0) ? (term_phase_r[0] ? gap_ddc0 : 11'd16) :
+         (dec_m[1:0] == 2'd1) ? ((term_phase_r == 3'd7) ? gap_ddc1 : 11'd16) :
+         (dec_m[1:0] == 2'd2) ? ((term_phase_r == 3'd7) ? gap_ddc2 : 11'd16) :
+                                ((term_phase_r == 3'd7) ? gap_ddc3 : 11'd16)) :
+    11'd16;
+
+assign term_phase_next =
+    (smp_mode == 2'd1) ? ((dec_m[1:0] == 2'd0) ? 3'd0 : phase4_nx) :
+    (smp_mode == 2'd2) ? ((dec_m[1:0] == 2'd0) ? (term_phase_r[0] ? 3'd0 : 3'd1) : phase8_nx) :
+    3'd0;
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n) begin
-        word_epoch_r  <= 16'd0;
-        epoch_valid_r <= 1'b0;
-    end else if (!chn_en_afe || !link_ready_afe || !adi_rx_valid) begin
-        word_epoch_r  <= 16'd0;
-        epoch_valid_r <= 1'b0;
-    end else if (adi_rx_valid && !epoch_valid_r && marker_present) begin
-        word_epoch_r  <= 16'd8;
-        epoch_valid_r <= 1'b1;
-    end else if (adi_rx_valid && epoch_valid_r) begin
-        word_epoch_r <= word_epoch_r + 16'd8;
+        epoch_valid_r    <= 1'b0;
+        prefix_beat_r    <= 64'd0;
+        payload_active_r <= 1'b0;
+    end else if (!upk_vld || !map_vld || fifo_clr) begin
+        epoch_valid_r    <= 1'b0;
+        prefix_beat_r    <= 64'd0;
+        payload_active_r <= 1'b0;
+    end else if (!epoch_valid_r && marker_present) begin
+        epoch_valid_r    <= 1'b1;
+        prefix_beat_r    <= 64'd0;
+        payload_active_r <= 1'b0;
+    end else if (epoch_valid_r && !payload_active_r) begin
+        prefix_beat_r <= prefix_beat_r + 64'd1;
+        if (payload_hit)
+            payload_active_r <= 1'b1;
     end
 end
-
-always @* begin
-    zero_words = 16'd0;
-    if (smp_mode == 2'd0) begin
-        zero_words = 16'd96;
-    end else begin
-        case (dec_m[1:0])
-            2'd0: zero_words = ({8'd0,dec_n} << 4) + 16'd152;
-            2'd1: zero_words = ({8'd0,dec_n} << 6) + 16'd168;
-            2'd2: zero_words = ({8'd0,dec_n} << 5) + 16'd168;
-            default: zero_words = ({8'd0,dec_n} << 6) + 16'd200;
-        endcase
-        case (dec_del_mode)
-            2'd1: zero_words = zero_words + ({8'd0,dec_m} << 5);
-            2'd2: zero_words = zero_words + ({8'd0,dec_m} << 6);
-            default: zero_words = zero_words;
-        endcase
-    end
-end
-
-always @* begin
-    payload_start_word = 16'd32 + zero_words;
-    period_words       = 16'd16;
-    case (smp_mode)
-        2'd1: begin
-            case (dec_m[1:0])
-                2'd0   : period_words = {8'd0,dec_n} << 5;
-                2'd1   : period_words = ({8'd0,dec_n} << 6) + 16'd16;
-                2'd2   : period_words = ({8'd0,dec_n} << 6) + 16'd34;
-                default: period_words = ({8'd0,dec_n} << 6) + 16'd48;
-            endcase
-        end
-        2'd2: begin
-            case (dec_m[1:0])
-                2'd0   : period_words = {8'd0,dec_n} << 4;
-                2'd1   : period_words = ({8'd0,dec_n} << 6) + 16'd16;
-                2'd2   : period_words = ({8'd0,dec_n} << 5) + 16'd80;
-                default: period_words = ({8'd0,dec_n} << 6) + 16'd48;
-            endcase
-        end
-        default: period_words = 16'd16;
-    endcase
-end
-
-assign initial_payload_hit    = adi_rx_valid && epoch_valid_r && !payload_active_r &&
-                                (word_epoch_r == payload_start_word);
-assign payload_pos_advance    = ((payload_pos_r + 16'd8) >= period_words) ?
-                                ((payload_pos_r + 16'd8) - period_words) :
-                                (payload_pos_r + 16'd8);
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n) begin
-        payload_active_r <= 1'b0;
-        payload_pos_r    <= 16'd0;
-    end else if (!chn_en_afe || !link_ready_afe || !adi_rx_valid) begin
-        payload_active_r <= 1'b0;
-        payload_pos_r    <= 16'd0;
-    end else if (adi_rx_valid && epoch_active && !payload_active_r &&
-                 initial_payload_hit && map_config_valid) begin
-        payload_active_r <= 1'b1;
-        payload_pos_r    <= 16'd8;
-    end else if (adi_rx_valid && epoch_active && payload_active_r) begin
-        payload_pos_r <= payload_pos_advance;
+        word_pos_r    <= 64'd0;
+        next_term_r   <= 64'd0;
+        term_phase_r  <= 3'd0;
+    end else if (!upk_vld || !map_vld || fifo_clr) begin
+        word_pos_r    <= 64'd0;
+        next_term_r   <= 64'd0;
+        term_phase_r  <= 3'd0;
+    end else if (payload_hit) begin
+        word_pos_r    <= 64'd8;
+        next_term_r   <= 64'd15;
+        term_phase_r  <= 3'd0;
+    end else if (payload_active_r) begin
+        word_pos_r <= word_pos_r + 64'd8;
+        if (block_complete) begin
+            next_term_r  <= next_term_r + term_gap;
+            term_phase_r <= term_phase_next;
+        end
     end
 end
 
-assign pos_w0 = payload_pos_r;
-assign pos_w1 = (pos_w0 == (period_words - 16'd1)) ? 16'd0 : (pos_w0 + 16'd1);
-assign pos_w2 = (pos_w1 == (period_words - 16'd1)) ? 16'd0 : (pos_w1 + 16'd1);
-assign pos_w3 = (pos_w2 == (period_words - 16'd1)) ? 16'd0 : (pos_w2 + 16'd1);
-assign pos_w4 = (pos_w3 == (period_words - 16'd1)) ? 16'd0 : (pos_w3 + 16'd1);
-assign pos_w5 = (pos_w4 == (period_words - 16'd1)) ? 16'd0 : (pos_w4 + 16'd1);
-assign pos_w6 = (pos_w5 == (period_words - 16'd1)) ? 16'd0 : (pos_w5 + 16'd1);
-assign pos_w7 = (pos_w6 == (period_words - 16'd1)) ? 16'd0 : (pos_w6 + 16'd1);
-
-always @* begin
-    terminal_words   = {8{16'hffff}};
-    q_terminal_words = {8{16'hffff}};
-    case (smp_mode)
-        2'd0: begin
-            terminal_words[15:0] = 16'd15;
-        end
-        2'd1: begin
-            case (dec_m[1:0])
-                2'd0: begin
-                    terminal_words[15:0]  = 16'd15;
-                    terminal_words[31:16] = ({8'd0,dec_n} << 4) + 16'd15;
-                end
-                2'd1: begin
-                    terminal_words[15:0]   = 16'd15;
-                    terminal_words[31:16]  = 16'd31;
-                    terminal_words[47:32]  = 16'd47;
-                    terminal_words[63:48]  = 16'd63;
-                end
-                2'd2: begin
-                    terminal_words[15:0]   = 16'd15;
-                    terminal_words[31:16]  = 16'd31;
-                    terminal_words[47:32]  = ({8'd0,dec_n} << 5) + 16'd32;
-                    terminal_words[63:48]  = ({8'd0,dec_n} << 5) + 16'd48;
-                end
-                default: begin
-                    terminal_words[15:0]   = 16'd15;
-                    terminal_words[31:16]  = 16'd31;
-                    terminal_words[47:32]  = 16'd47;
-                    terminal_words[63:48]  = 16'd63;
-                end
-            endcase
-        end
-        2'd2: begin
-            terminal_words[15:0]  = 16'd15;
-            terminal_words[31:16] = 16'd31;
-            q_terminal_words[15:0] = 16'd31;
-            if (dec_m[1:0] != 2'd0) begin
-                terminal_words[47:32]   = 16'd47;
-                terminal_words[63:48]   = 16'd63;
-                terminal_words[79:64]   = 16'd79;
-                terminal_words[95:80]   = 16'd95;
-                terminal_words[111:96]  = 16'd111;
-                terminal_words[127:112] = 16'd127;
-                q_terminal_words[31:16] = 16'd63;
-                q_terminal_words[47:32] = 16'd95;
-                q_terminal_words[63:48] = 16'd127;
-            end
-        end
-        default: begin
-            terminal_words   = {8{16'hffff}};
-            q_terminal_words = {8{16'hffff}};
-        end
-    endcase
-end
-
-assign terminal_w0   = terminal_words[15:0];
-assign terminal_w1   = terminal_words[31:16];
-assign terminal_w2   = terminal_words[47:32];
-assign terminal_w3   = terminal_words[63:48];
-assign terminal_w4   = terminal_words[79:64];
-assign terminal_w5   = terminal_words[95:80];
-assign terminal_w6   = terminal_words[111:96];
-assign terminal_w7   = terminal_words[127:112];
-assign q_terminal_w0 = q_terminal_words[15:0];
-assign q_terminal_w1 = q_terminal_words[31:16];
-assign q_terminal_w2 = q_terminal_words[47:32];
-assign q_terminal_w3 = q_terminal_words[63:48];
-
-assign end_match_w0 = map_config_valid && payload_active_r &&
-                      ((pos_w0 == terminal_w0) || (pos_w0 == terminal_w1) ||
-                       (pos_w0 == terminal_w2) || (pos_w0 == terminal_w3) ||
-                       (pos_w0 == terminal_w4) || (pos_w0 == terminal_w5) ||
-                       (pos_w0 == terminal_w6) || (pos_w0 == terminal_w7));
-assign end_match_w1 = map_config_valid && payload_active_r &&
-                      ((pos_w1 == terminal_w0) || (pos_w1 == terminal_w1) ||
-                       (pos_w1 == terminal_w2) || (pos_w1 == terminal_w3) ||
-                       (pos_w1 == terminal_w4) || (pos_w1 == terminal_w5) ||
-                       (pos_w1 == terminal_w6) || (pos_w1 == terminal_w7));
-assign end_match_w2 = map_config_valid && payload_active_r &&
-                      ((pos_w2 == terminal_w0) || (pos_w2 == terminal_w1) ||
-                       (pos_w2 == terminal_w2) || (pos_w2 == terminal_w3) ||
-                       (pos_w2 == terminal_w4) || (pos_w2 == terminal_w5) ||
-                       (pos_w2 == terminal_w6) || (pos_w2 == terminal_w7));
-assign end_match_w3 = map_config_valid && payload_active_r &&
-                      ((pos_w3 == terminal_w0) || (pos_w3 == terminal_w1) ||
-                       (pos_w3 == terminal_w2) || (pos_w3 == terminal_w3) ||
-                       (pos_w3 == terminal_w4) || (pos_w3 == terminal_w5) ||
-                       (pos_w3 == terminal_w6) || (pos_w3 == terminal_w7));
-assign end_match_w4 = map_config_valid && payload_active_r &&
-                      ((pos_w4 == terminal_w0) || (pos_w4 == terminal_w1) ||
-                       (pos_w4 == terminal_w2) || (pos_w4 == terminal_w3) ||
-                       (pos_w4 == terminal_w4) || (pos_w4 == terminal_w5) ||
-                       (pos_w4 == terminal_w6) || (pos_w4 == terminal_w7));
-assign end_match_w5 = map_config_valid && payload_active_r &&
-                      ((pos_w5 == terminal_w0) || (pos_w5 == terminal_w1) ||
-                       (pos_w5 == terminal_w2) || (pos_w5 == terminal_w3) ||
-                       (pos_w5 == terminal_w4) || (pos_w5 == terminal_w5) ||
-                       (pos_w5 == terminal_w6) || (pos_w5 == terminal_w7));
-assign end_match_w6 = map_config_valid && payload_active_r &&
-                      ((pos_w6 == terminal_w0) || (pos_w6 == terminal_w1) ||
-                       (pos_w6 == terminal_w2) || (pos_w6 == terminal_w3) ||
-                       (pos_w6 == terminal_w4) || (pos_w6 == terminal_w5) ||
-                       (pos_w6 == terminal_w6) || (pos_w6 == terminal_w7));
-assign end_match_w7 = map_config_valid && payload_active_r &&
-                      ((pos_w7 == terminal_w0) || (pos_w7 == terminal_w1) ||
-                       (pos_w7 == terminal_w2) || (pos_w7 == terminal_w3) ||
-                       (pos_w7 == terminal_w4) || (pos_w7 == terminal_w5) ||
-                       (pos_w7 == terminal_w6) || (pos_w7 == terminal_w7));
-
-assign q_match_w0 = (pos_w0 == q_terminal_w0) || (pos_w0 == q_terminal_w1) ||
-                    (pos_w0 == q_terminal_w2) || (pos_w0 == q_terminal_w3);
-assign q_match_w1 = (pos_w1 == q_terminal_w0) || (pos_w1 == q_terminal_w1) ||
-                    (pos_w1 == q_terminal_w2) || (pos_w1 == q_terminal_w3);
-assign q_match_w2 = (pos_w2 == q_terminal_w0) || (pos_w2 == q_terminal_w1) ||
-                    (pos_w2 == q_terminal_w2) || (pos_w2 == q_terminal_w3);
-assign q_match_w3 = (pos_w3 == q_terminal_w0) || (pos_w3 == q_terminal_w1) ||
-                    (pos_w3 == q_terminal_w2) || (pos_w3 == q_terminal_w3);
-assign q_match_w4 = (pos_w4 == q_terminal_w0) || (pos_w4 == q_terminal_w1) ||
-                    (pos_w4 == q_terminal_w2) || (pos_w4 == q_terminal_w3);
-assign q_match_w5 = (pos_w5 == q_terminal_w0) || (pos_w5 == q_terminal_w1) ||
-                    (pos_w5 == q_terminal_w2) || (pos_w5 == q_terminal_w3);
-assign q_match_w6 = (pos_w6 == q_terminal_w0) || (pos_w6 == q_terminal_w1) ||
-                    (pos_w6 == q_terminal_w2) || (pos_w6 == q_terminal_w3);
-assign q_match_w7 = (pos_w7 == q_terminal_w0) || (pos_w7 == q_terminal_w1) ||
-                    (pos_w7 == q_terminal_w2) || (pos_w7 == q_terminal_w3);
-
-assign block_complete   = end_match_w0 || end_match_w1 || end_match_w2 || end_match_w3 ||
-                         end_match_w4 || end_match_w5 || end_match_w6 || end_match_w7;
-assign block_is_q       = block_complete &&
-                         (q_match_w0 || q_match_w1 || q_match_w2 || q_match_w3 ||
-                          q_match_w4 || q_match_w5 || q_match_w6 || q_match_w7);
-assign block_is_i       = block_complete && (smp_mode == 2'd2) && !block_is_q;
-assign block_end_offset = end_match_w0 ? 3'd0 : end_match_w1 ? 3'd1 :
-                          end_match_w2 ? 3'd2 : end_match_w3 ? 3'd3 :
-                          end_match_w4 ? 3'd4 : end_match_w5 ? 3'd5 :
-                          end_match_w6 ? 3'd6 : 3'd7;
+assign block_complete = map_vld && payload_active_r &&
+                        (word_pos_r[63:3] == next_term_r[63:3]);
+assign block_is_q = block_complete && (smp_mode == 2'd2) && term_phase_r[0];
+assign block_is_i = block_complete && (smp_mode == 2'd2) && !term_phase_r[0];
+assign block_end_offset = next_term_r[2:0];
 
 // =====
 // 4. ADC_UPK
@@ -540,10 +377,10 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n) begin
         lane0_history_r <= 256'd0;
         lane1_history_r <= 256'd0;
-    end else if (!chn_en_afe || !link_ready_afe || !adi_rx_valid) begin
+    end else if (!upk_vld || !map_vld || fifo_clr) begin
         lane0_history_r <= 256'd0;
         lane1_history_r <= 256'd0;
-    end else if (adi_rx_valid && epoch_active) begin
+    end else if (epoch_active) begin
         lane0_history_r <= {adi_rx_data[127:0],lane0_history_r[255:128]};
         lane1_history_r <= {adi_rx_data[255:128],lane1_history_r[255:128]};
     end
@@ -840,15 +677,14 @@ assign fifo_write_eligible   = normal_write_eligible || ddc_i_write_eligible ||
                                ddc_q_write_eligible;
 assign ddc_epoch_live        = (smp_mode == 2'd2) && chn_en_afe && epoch_valid_r;
 assign ddc_abort_set_evt     = !ddc_abort_afe && ddc_epoch_live &&
-                               (!link_ready_afe || !adi_rx_valid);
+                               !upk_vld;
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n) begin
         ddc_i_accepted_r <= 1'b0;
-    end else if (fifo_clr || !chn_en_afe || !link_ready_afe || !adi_rx_valid ||
-                 !epoch_valid_r) begin
+    end else if (fifo_clr || !upk_vld || !map_vld || !epoch_valid_r) begin
         ddc_i_accepted_r <= 1'b0;
-    end else if (adi_rx_valid && block_complete && (smp_mode == 2'd2)) begin
+    end else if (block_complete && (smp_mode == 2'd2)) begin
         if (block_is_q) begin
             ddc_i_accepted_r <= 1'b0;
         end else if (fifo_has_two_space) begin
@@ -876,7 +712,7 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
         fifo_wr_valid <= 1'b0;
     end else begin
         fifo_wr_valid <= 1'b0;
-        if (chn_en_afe && link_ready_afe && adi_rx_valid && fifo_write_eligible) begin
+        if (upk_vld && fifo_write_eligible) begin
             fifo_wr_data  <= mapped_data;
             fifo_wr_valid <= 1'b1;
         end
@@ -890,7 +726,7 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
         data_drop_evt <= 1'b0;
     end else if (ddc_abort_set_evt) begin
         data_drop_evt <= 1'b1;
-    end else if (adi_rx_valid && block_is_i && !fifo_has_two_space) begin
+    end else if (upk_vld && block_is_i && !fifo_has_two_space) begin
         data_drop_evt <= 1'b1;
     end else begin
         data_drop_evt <= 1'b0;

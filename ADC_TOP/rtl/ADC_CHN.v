@@ -37,7 +37,6 @@ module ADC_CHN(
     output wire                             fifo_empty_adc                              ,
     output wire                             fifo_full_adc                               ,
     output wire                             afe_idle_adc                                ,
-    output wire [1:0]                       jesd_state_adc                              ,
     output wire                             pll_lock_adc                                ,
     output wire                             rx_reset_done_adc                           ,
     output wire [1:0]                       lane_ready_adc                              ,
@@ -68,9 +67,7 @@ wire [63:0]                                 axis_tkeep                          
 wire                                        axis_tvalid                                 ;
 wire                                        axis_tlast                                  ;
 wire                                        axis_tready                                 ;
-wire [1:0]                                  jesd_state_jesd                             ;
 wire                                        link_ready_jesd                             ;
-wire                                        link_ready_afe                              ;
 wire [1:0]                                  lane_ready_jesd                             ;
 wire [1:0]                                  comma_detected_jesd                         ;
 wire                                        link_error_evt_jesd                         ;
@@ -122,7 +119,6 @@ CHN_SYNC chn_sync(
     .jesd_clk                           (jesd_clk                                    ),
     .jesd_rst_n                         (jesd_rst_n                                  ),
     .en_adc                             (chn_en_eff                                  ),
-    .jesd_state                         (jesd_state_jesd                             ),
     .link_ready                         (link_ready_jesd                             ),
     .lane_ready                         (lane_ready_jesd                             ),
     .byte_aligned                       (phy_byte_aligned                            ),
@@ -139,8 +135,6 @@ CHN_SYNC chn_sync(
     .ddc_admit_ok_afe                   (ddc_admit_ok_afe                            ),
     .en_afe                             (chn_en_afe                                  ),
     .en_jesd                            (chn_en_jesd                                 ),
-    .link_ready_afe                     (link_ready_afe                              ),
-    .jesd_state_adc                     (jesd_state_adc                              ),
     .link_ready_adc                     (link_ready_adc                              ),
     .lane_ready_adc                     (lane_ready_adc                              ),
     .byte_aligned_adc                   (byte_aligned_adc                            ),
@@ -164,7 +158,6 @@ ADC_RXD adc_rxd(
     .sysref                             (sysref                                      ),
     .chn_en_jesd                        (chn_en_jesd                                 ),
     .chn_en_afe                         (chn_en_afe                                  ),
-    .link_ready_afe                     (link_ready_afe                              ),
     .smp_prec                           (smp_prec                                    ),
     .smp_mode                           (smp_mode                                    ),
     .frame_fmt                          (frame_fmt                                   ),
@@ -182,7 +175,6 @@ ADC_RXD adc_rxd(
     .phy_sync_n                         (phy_sync_n                                  ),
     .fifo_wr_data                       (fifo_wr_data                                ),
     .fifo_wr_valid                      (fifo_wr_valid                               ),
-    .jesd_state                         (jesd_state_jesd                             ),
     .link_ready                         (link_ready_jesd                             ),
     .lane_ready                         (lane_ready_jesd                             ),
     .comma_detected                     (comma_detected_jesd                         ),
