@@ -36,38 +36,46 @@ module ADC_RXD(
     output reg                              data_drop_evt                                ,
     output reg                              ddc_abort_afe
 );
+parameter                                   UDLY                                         = 1;
+
+localparam [1:0]                            RXD_WAIT_SOMF                                = 2'd0;
+localparam [1:0]                            RXD_SKIP_PREFIX                              = 2'd1;
+localparam [1:0]                            RXD_PAYLOAD                                  = 2'd2;
+
 reg [255:0]                                 lane0_history_r                              ;
 reg [255:0]                                 lane1_history_r                              ;
-reg [63:0]                                  prefix_beat_r                                ;
+reg [11:0]                                  prefix_beat_r                                ;
 reg [63:0]                                  word_pos_r                                   ;
 reg [63:0]                                  next_term_r                                  ;
 reg [2:0]                                   term_phase_r                                 ;
-reg                                         epoch_valid_r                                ;
-reg                                         payload_active_r                             ;
+reg [1:0]                                   rxd_fsm                                      ;
+reg [1:0]                                   rxd_fsm_nx                                   ;
 reg                                         ddc_i_accepted_r                             ;
 reg [511:0]                                 mapped_raw                                   ;
 reg [255:0]                                 lane0_block_raw                              ;
 reg [255:0]                                 lane1_block_raw                              ;
 
 wire [511:0]                                mapped_data                                  ;
-wire [7:0]                                  dec_n                                        ;
-wire [54:0]                                 gap_lut                                      ;
-wire [10:0]                                 gap_dec1                                     ;
-wire [10:0]                                 gap_ddc0                                     ;
-wire [10:0]                                 gap_ddc1                                     ;
-wire [10:0]                                 gap_ddc2                                     ;
-wire [10:0]                                 gap_ddc3                                     ;
-wire [10:0]                                 term_gap                                     ;
+wire [5:0]                                  dec_int                                      ;
+wire [1:0]                                  dec_frac                                     ;
+wire [11:0]                                 gap_base16                                   ;
+wire [11:0]                                 gap_base32                                   ;
+wire [11:0]                                 gap_base64                                   ;
+wire [11:0]                                 gap_dec1                                     ;
+wire [11:0]                                 gap_ddc0                                     ;
+wire [11:0]                                 gap_ddc1                                     ;
+wire [11:0]                                 gap_ddc2                                     ;
+wire [11:0]                                 gap_ddc3                                     ;
+wire [11:0]                                 term_gap                                     ;
 wire [2:0]                                  phase4_nx                                    ;
 wire [2:0]                                  phase8_nx                                    ;
 wire [2:0]                                  term_phase_next                              ;
 wire                                        marker_present                               ;
-wire                                        epoch_active                                 ;
 wire                                        prec_vld                                     ;
 wire                                        dec_vld                                      ;
 wire                                        map_vld                                      ;
 wire                                        upk_vld                                      ;
-wire [63:0]                                 payload_start_beat                           ;
+wire [11:0]                                 payload_start_beat                           ;
 wire                                        payload_hit                                  ;
 wire                                        block_complete                               ;
 wire                                        block_is_q                                   ;
@@ -222,108 +230,122 @@ end
 // 3. Payload Position / Block Decode
 // =====
 assign marker_present     = adi_rx_somf[0];
-assign dec_n              = {2'b00,dec_m[7:2]};
+assign dec_int            = dec_m[7:2];
+assign dec_frac           = dec_m[1:0];
 assign prec_vld           = smp_prec != 2'd3;
-assign dec_vld            = (dec_m >= 8'd32) && (dec_m <= 8'd96) && (dec_del_mode != 2'd3);
+assign dec_vld            = (dec_del_mode != 2'd3) &&
+                            (((smp_mode == 2'd1) && (dec_int != 6'd0)) ||
+                             ((smp_mode == 2'd2) && (dec_int >= 6'd2)));
 assign map_vld            = (smp_mode == 2'd0) ? prec_vld :
                             ((smp_mode == 2'd1) || (smp_mode == 2'd2)) ? (prec_vld && dec_vld) : 1'b0;
 assign upk_vld            = chn_en_afe && link_ready_afe && adi_rx_valid;
-assign epoch_active       = epoch_valid_r || (marker_present && map_vld);
 assign payload_start_beat =
-    (smp_mode == 2'd0) ? 64'd16 :
-    (((dec_m[1:0] == 2'd0) ? (({56'd0,dec_n} << 1) + 64'd23) :
-      (dec_m[1:0] == 2'd1) ? (({56'd0,dec_n} << 3) + 64'd25) :
-      (dec_m[1:0] == 2'd2) ? (({56'd0,dec_n} << 2) + 64'd25) :
-                             (({56'd0,dec_n} << 3) + 64'd29)) +
-     ((dec_del_mode == 2'd1) ? ({56'd0,dec_m} << 2) :
-      (dec_del_mode == 2'd2) ? ({56'd0,dec_m} << 3) : 64'd0));
-assign payload_hit        = epoch_valid_r && !payload_active_r &&
-                            ((prefix_beat_r + 64'd1) == payload_start_beat);
+                            (smp_mode == 2'd0) ? 12'd16 :
+                            (((dec_frac == 2'd0) ? (({6'd0,dec_int} << 1) + 12'd23) :
+                              (dec_frac == 2'd1) ? (({6'd0,dec_int} << 3) + 12'd25) :
+                              (dec_frac == 2'd2) ? (({6'd0,dec_int} << 2) + 12'd25) :
+                                                  (({6'd0,dec_int} << 3) + 12'd29)) +
+                             ((dec_del_mode == 2'd1) ? ({4'd0,dec_m} << 2) :
+                              (dec_del_mode == 2'd2) ? ({4'd0,dec_m} << 3) : 12'd0));
+assign payload_hit        = (rxd_fsm == RXD_SKIP_PREFIX) &&
+                            ((prefix_beat_r + 12'd1) == payload_start_beat);
 
-assign gap_lut = (dec_n == 8'd8 ) ? {11'd464,11'd112,11'd416,11'd224,11'd448 } :
-                 (dec_n == 8'd9 ) ? {11'd528,11'd128,11'd480,11'd256,11'd512 } :
-                 (dec_n == 8'd10) ? {11'd592,11'd144,11'd544,11'd288,11'd576 } :
-                 (dec_n == 8'd11) ? {11'd656,11'd160,11'd608,11'd320,11'd640 } :
-                 (dec_n == 8'd12) ? {11'd720,11'd176,11'd672,11'd352,11'd704 } :
-                 (dec_n == 8'd13) ? {11'd784,11'd192,11'd736,11'd384,11'd768 } :
-                 (dec_n == 8'd14) ? {11'd848,11'd208,11'd800,11'd416,11'd832 } :
-                 (dec_n == 8'd15) ? {11'd912,11'd224,11'd864,11'd448,11'd896 } :
-                 (dec_n == 8'd16) ? {11'd976,11'd240,11'd928,11'd480,11'd960 } :
-                 (dec_n == 8'd17) ? {11'd1040,11'd256,11'd992,11'd512,11'd1024} :
-                 (dec_n == 8'd18) ? {11'd1104,11'd272,11'd1056,11'd544,11'd1088} :
-                 (dec_n == 8'd19) ? {11'd1168,11'd288,11'd1120,11'd576,11'd1152} :
-                 (dec_n == 8'd20) ? {11'd1232,11'd304,11'd1184,11'd608,11'd1216} :
-                 (dec_n == 8'd21) ? {11'd1296,11'd320,11'd1248,11'd640,11'd1280} :
-                 (dec_n == 8'd22) ? {11'd1360,11'd336,11'd1312,11'd672,11'd1344} :
-                 (dec_n == 8'd23) ? {11'd1424,11'd352,11'd1376,11'd704,11'd1408} :
-                                    {11'd1488,11'd368,11'd1440,11'd736,11'd1472};
-
-assign {gap_dec1,gap_ddc0,gap_ddc1,gap_ddc2,gap_ddc3} = gap_lut;
+assign gap_base16 = ({6'd0,dec_int} << 4);
+assign gap_base32 = ({6'd0,dec_int} << 5);
+assign gap_base64 = ({6'd0,dec_int} << 6);
+assign gap_dec1   = gap_base64 - 12'd32;
+assign gap_ddc0   = gap_base16 - 12'd16;
+assign gap_ddc1   = gap_base64 - 12'd96;
+assign gap_ddc2   = gap_base32 - 12'd32;
+assign gap_ddc3   = gap_base64 - 12'd64;
 assign phase4_nx = (term_phase_r == 3'd3) ? 3'd0 : (term_phase_r + 3'd1);
 assign phase8_nx = (term_phase_r == 3'd7) ? 3'd0 : (term_phase_r + 3'd1);
 
 assign term_gap =
     (smp_mode == 2'd1) ?
-        ((dec_m[1:0] == 2'd0) ? ({3'd0,dec_n} << 4) :
-         (dec_m[1:0] == 2'd1) ? ((term_phase_r == 3'd3) ? gap_dec1 : 11'd16) :
-         (dec_m[1:0] == 2'd2) ? (term_phase_r[0] ? (({3'd0,dec_n} << 5) + 11'd1) : 11'd16) :
-                                ((term_phase_r == 3'd3) ? ({3'd0,dec_n} << 6) : 11'd16)) :
+        ((dec_frac == 2'd0) ? gap_base16 :
+         (dec_frac == 2'd1) ? ((term_phase_r == 3'd3) ? gap_dec1 : 12'd16) :
+         (dec_frac == 2'd2) ? (term_phase_r[0] ? (gap_base32 + 12'd1) : 12'd16) :
+                              ((term_phase_r == 3'd3) ? gap_base64 : 12'd16)) :
     (smp_mode == 2'd2) ?
-        ((dec_m[1:0] == 2'd0) ? (term_phase_r[0] ? gap_ddc0 : 11'd16) :
-         (dec_m[1:0] == 2'd1) ? ((term_phase_r == 3'd7) ? gap_ddc1 : 11'd16) :
-         (dec_m[1:0] == 2'd2) ? ((term_phase_r == 3'd7) ? gap_ddc2 : 11'd16) :
-                                ((term_phase_r == 3'd7) ? gap_ddc3 : 11'd16)) :
-    11'd16;
+        ((dec_frac == 2'd0) ? (term_phase_r[0] ? gap_ddc0 : 12'd16) :
+         (dec_frac == 2'd1) ? ((term_phase_r == 3'd7) ? gap_ddc1 : 12'd16) :
+         (dec_frac == 2'd2) ? ((term_phase_r == 3'd7) ? gap_ddc2 : 12'd16) :
+                              ((term_phase_r == 3'd7) ? gap_ddc3 : 12'd16)) :
+    12'd16;
 
 assign term_phase_next =
-    (smp_mode == 2'd1) ? ((dec_m[1:0] == 2'd0) ? 3'd0 : phase4_nx) :
-    (smp_mode == 2'd2) ? ((dec_m[1:0] == 2'd0) ? (term_phase_r[0] ? 3'd0 : 3'd1) : phase8_nx) :
+    (smp_mode == 2'd1) ? ((dec_frac == 2'd0) ? 3'd0 : phase4_nx) :
+    (smp_mode == 2'd2) ? ((dec_frac == 2'd0) ? (term_phase_r[0] ? 3'd0 : 3'd1) : phase8_nx) :
     3'd0;
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if (!afe_rst_n) begin
-        epoch_valid_r    <= 1'b0;
-        prefix_beat_r    <= 64'd0;
-        payload_active_r <= 1'b0;
-    end else if (!upk_vld || !map_vld || fifo_clr) begin
-        epoch_valid_r    <= 1'b0;
-        prefix_beat_r    <= 64'd0;
-        payload_active_r <= 1'b0;
-    end else if (!epoch_valid_r && marker_present) begin
-        epoch_valid_r    <= 1'b1;
-        prefix_beat_r    <= 64'd0;
-        payload_active_r <= 1'b0;
-    end else if (epoch_valid_r && !payload_active_r) begin
-        prefix_beat_r <= prefix_beat_r + 64'd1;
-        if (payload_hit)
-            payload_active_r <= 1'b1;
+    if (!afe_rst_n)
+        rxd_fsm <= #UDLY RXD_WAIT_SOMF;
+    else
+        rxd_fsm <= #UDLY rxd_fsm_nx;
+end
+
+always @* begin
+    rxd_fsm_nx = rxd_fsm;
+    if (!upk_vld || !map_vld || fifo_clr) begin
+        rxd_fsm_nx = RXD_WAIT_SOMF;
+    end else begin
+        case (rxd_fsm)
+            RXD_WAIT_SOMF  : if (marker_present) rxd_fsm_nx = RXD_SKIP_PREFIX;
+            RXD_SKIP_PREFIX: if (payload_hit)     rxd_fsm_nx = RXD_PAYLOAD;
+            RXD_PAYLOAD    :                      rxd_fsm_nx = RXD_PAYLOAD;
+            default        :                      rxd_fsm_nx = RXD_WAIT_SOMF;
+        endcase
     end
 end
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n) begin
+        prefix_beat_r <= 12'd0;
         word_pos_r    <= 64'd0;
         next_term_r   <= 64'd0;
         term_phase_r  <= 3'd0;
     end else if (!upk_vld || !map_vld || fifo_clr) begin
+        prefix_beat_r <= 12'd0;
         word_pos_r    <= 64'd0;
         next_term_r   <= 64'd0;
         term_phase_r  <= 3'd0;
-    end else if (payload_hit) begin
-        word_pos_r    <= 64'd8;
-        next_term_r   <= 64'd15;
-        term_phase_r  <= 3'd0;
-    end else if (payload_active_r) begin
-        word_pos_r <= word_pos_r + 64'd8;
-        if (block_complete) begin
-            next_term_r  <= next_term_r + term_gap;
-            term_phase_r <= term_phase_next;
-        end
+    end else begin
+        case (rxd_fsm)
+            RXD_WAIT_SOMF: begin
+                prefix_beat_r <= 12'd0;
+                word_pos_r    <= 64'd0;
+                next_term_r   <= 64'd0;
+                term_phase_r  <= 3'd0;
+            end
+            RXD_SKIP_PREFIX: begin
+                prefix_beat_r <= prefix_beat_r + 12'd1;
+                if (payload_hit) begin
+                    word_pos_r   <= 64'd8;
+                    next_term_r  <= 64'd15;
+                    term_phase_r <= 3'd0;
+                end
+            end
+            RXD_PAYLOAD: begin
+                word_pos_r <= word_pos_r + 64'd8;
+                if (block_complete) begin
+                    next_term_r  <= next_term_r + term_gap;
+                    term_phase_r <= term_phase_next;
+                end
+            end
+            default: begin
+                prefix_beat_r <= 12'd0;
+                word_pos_r    <= 64'd0;
+                next_term_r   <= 64'd0;
+                term_phase_r  <= 3'd0;
+            end
+        endcase
     end
 end
 
-assign block_complete = map_vld && payload_active_r &&
-                        (word_pos_r[63:3] == next_term_r[63:3]);
+assign block_complete = map_vld && (rxd_fsm == RXD_PAYLOAD) &&
+                         (word_pos_r[63:3] == next_term_r[63:3]);
 assign block_is_q = block_complete && (smp_mode == 2'd2) && term_phase_r[0];
 assign block_is_i = block_complete && (smp_mode == 2'd2) && !term_phase_r[0];
 assign block_end_offset = next_term_r[2:0];
@@ -380,9 +402,12 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
     end else if (!upk_vld || !map_vld || fifo_clr) begin
         lane0_history_r <= 256'd0;
         lane1_history_r <= 256'd0;
-    end else if (epoch_active) begin
+    end else if ((rxd_fsm == RXD_SKIP_PREFIX) || (rxd_fsm == RXD_PAYLOAD)) begin
         lane0_history_r <= {adi_rx_data[127:0],lane0_history_r[255:128]};
         lane1_history_r <= {adi_rx_data[255:128],lane1_history_r[255:128]};
+    end else begin
+        lane0_history_r <= 256'd0;
+        lane1_history_r <= 256'd0;
     end
 end
 
@@ -675,14 +700,16 @@ assign ddc_i_write_eligible  = block_is_i && fifo_has_two_space;
 assign ddc_q_write_eligible  = block_is_q && ddc_i_accepted_r;
 assign fifo_write_eligible   = normal_write_eligible || ddc_i_write_eligible ||
                                ddc_q_write_eligible;
-assign ddc_epoch_live        = (smp_mode == 2'd2) && chn_en_afe && epoch_valid_r;
+assign ddc_epoch_live        = (smp_mode == 2'd2) && chn_en_afe &&
+                               ((rxd_fsm == RXD_SKIP_PREFIX) || (rxd_fsm == RXD_PAYLOAD));
 assign ddc_abort_set_evt     = !ddc_abort_afe && ddc_epoch_live &&
-                               !upk_vld;
+                               (!link_ready_afe || !adi_rx_valid);
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n) begin
         ddc_i_accepted_r <= 1'b0;
-    end else if (fifo_clr || !upk_vld || !map_vld || !epoch_valid_r) begin
+    end else if (fifo_clr || !upk_vld || !map_vld ||
+                 ((rxd_fsm != RXD_SKIP_PREFIX) && (rxd_fsm != RXD_PAYLOAD))) begin
         ddc_i_accepted_r <= 1'b0;
     end else if (block_complete && (smp_mode == 2'd2)) begin
         if (block_is_q) begin

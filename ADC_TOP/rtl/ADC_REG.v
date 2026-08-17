@@ -92,6 +92,7 @@ wire                                        reg_0024_rd                         
 wire                                        sysref_rise                                 ;
 wire                                        tgc_target_err                              ;
 wire                                        tgc_reentry_err                             ;
+wire                                        cfg_wr_safe                                 ;
 wire [31:0]                                 reg_0000                                    ;
 wire [31:0]                                 reg_0004                                    ;
 wire [31:0]                                 reg_0008                                    ;
@@ -196,15 +197,19 @@ assign dec_del_mode    = frame_cfg[9:8];
 assign sysref_rise     = sysref_level && !sysref_r;
 assign tgc_target_err  = reg_0004_wr && axi_wdata_r[0] && (axi_wdata_r[8:1] == 8'd0);
 assign tgc_reentry_err = reg_0004_wr && axi_wdata_r[0] && (adc_tgc[0] || tgc_busy);
+assign cfg_wr_safe     = (adc_ctl[7:0] == 8'h00) && (afe_idle == 8'hff);
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if (!sys_rst_n) begin
         adc_ctl   <= #UDLY 32'd0;
         frame_cfg <= #UDLY 32'd0;
     end else begin
-        if (reg_0000_wr)
-            adc_ctl <= #UDLY axi_wdata_r & ADC_CTL_MASK;
-        if (reg_0008_wr)
+        if (reg_0000_wr) begin
+            adc_ctl[15:0] <= #UDLY axi_wdata_r[15:0];
+            if (cfg_wr_safe)
+                adc_ctl[31:16] <= #UDLY axi_wdata_r[31:16] & ADC_CTL_MASK[31:16];
+        end
+        if (reg_0008_wr && cfg_wr_safe)
             frame_cfg <= #UDLY axi_wdata_r & 32'h0000_03ff;
     end
 end
