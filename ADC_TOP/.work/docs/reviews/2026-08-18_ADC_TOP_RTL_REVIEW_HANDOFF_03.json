@@ -1,0 +1,34 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_unpack_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_style_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_unpack_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_unpack_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_unpack_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_unpack_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "0e7c7b785c5fdc46bbafc89421d2e6de2b85cd9b54baf157dc7c4cfec39f6c62",
+  "release_baseline_fingerprint": "a4e34d348cf82942dd526b3158bcc56269df6ae71dd74e3ac23f00b64e731ed3",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "313fdd5ea8e83b7ec707f7515d388fb903f92fa374433525112553118a5b5c93",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "8679f2d08504db1e029fab39f2ec3e401bee26caf4bcaa78244c74f813afdb81"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-18_RTL_handoff_02.md", "sha256": "a71284f826c91883672440262d2814d12aedc1d785f515d886022d861e874d28"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "34f02e729b8ee51c97b13d776f56a41b02bc558edf2e2f654af08726568ab041"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "All earlier Review handoffs are stale history and were not reused. The exact 27-component sidecar independently verifies at release fingerprint a4e34d348cf82942dd526b3158bcc56269df6ae71dd74e3ac23f00b64e731ed3 and binds VIF 3fb3f3029656bddd3893d0e506b789738effa87f679402d3b61e8e37437717f1 to run ADC_TOP_33bc74bdf97d4f17a739919f36ea22d7.",
+    "The prior constraint blocker is closed. The DEFERRED_TO_TOP/EXTERNAL_ONLY review and deterministic manifest bind v1.10 design SHA256 afd18901724ba292162e6bc500b70de00ced69002e315e5ca38b4b314f1401f8, ADC_RXD SHA256 416855dfa9c7abfe3482e32597531e2a68a41f54572255521e3edb540502d4a8, RXD_IDLE/RXD_PREF/RXD_PAYL, the split sequential owners and the unchanged JESD-to-AFE CDC/FIFO boundaries. Vivado object resolution remains integration-owned and NOT_RUN.",
+    "The prior state-coverage blocker is closed non-vacuously. rxd_three_state_directed_recovery observes reset/IDLE, IDLE and PREF FIFO_CLR, IDLE-to-PREF, PREF miss/hit, PREF upk_vld loss, PAYL complete/incomplete, PAYL FIFO_CLR and upk_vld loss, then forces the illegal encoding, confirms the force, releases it and observes the next-edge recovery of rxd_fsm, prefix_beat_r, word_pos_r, next_term_r and term_phase_r to zero. The JUnit records a distinct 82139 ns PASS and the raw log records its PASS marker.",
+    "Static RTL review remains clean for the unchanged ADC_RXD hash. User-selected names and formatting are preserved; pref_fra/pref_del/pref_num and terminal formulas remain width-controlled ternary assigns; prefix_beat_r and word_pos_r each have one sequential owner; next_term_r/term_phase_r share one two-target owner; resets, CDC, DDC/FIFO admission and public interfaces remain consistent. No latch, multiple-driver, forbidden generate/function, encoded multi-bit CDC or state-prefix blocker was found.",
+    "The fresh VMware evidence is coherent with lint/simulation 0/0 and 16/16 non-skipped PASS, three distinct normal configurations, scoreboards, scheduler/formula boundaries, reset, FIFO/DDC recovery and AXI/AXIS backpressure. Source ownership passes. The ADI modified-third-party provenance and hash-matched eight-file PUB FWFT/CDC boundary remain intact; validate_rtl_style.py returns the expected RTL_STYLE_DELTA_REVIEW_REQUIRED for MODIFIED_THIRD_PARTY_RTL.",
+    "The three-target finalization patch matches the reviewed draft hashes and was simulated mechanically with no REVIEW_PENDING or accepting-review placeholders. PPA remains HYPOTHESIS and MODEL_EQUIVALENCE remains NON_VENDOR_EQUIVALENT; VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream and board validation remain NOT_RUN."
+  ]
+}

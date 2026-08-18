@@ -1,34 +1,4 @@
-{
-  "schema": "RTL_FINALIZATION_PATCH_V1",
-  "module": "ADC_TOP",
-  "baseline_stage": "REVIEW_PENDING",
-  "targets": [
-    {
-      "path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md",
-      "reviewed_sha256": "59067918bee08da71e9763af17a51cd142b54830426ee7af6a8063e19958029c",
-      "replacements": [
-        {"old": "verification_status: REVIEW_PENDING", "new": "verification_status: READY_FOR_VCS", "count": 1},
-        {"old": "ACCEPTING_REVIEW_AGENT_ID", "new": "{{REVIEW_AGENT_ID}}", "count": 1},
-        {"old": "ACCEPTING_REVIEW_HANDOFF_SHA256", "new": "{{REVIEW_HANDOFF_SHA256}}", "count": 1}
-      ]
-    },
-    {
-      "path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-17_RTL_handoff_04.md",
-      "reviewed_sha256": "5903e8e745cf9f8b98a52afadebaf58193901e5eea65702aae6dd2a0f7cc1694",
-      "replacements": [
-        {"old": "verification_status: REVIEW_PENDING", "new": "verification_status: READY_FOR_VCS", "count": 1},
-        {"old": "ACCEPTING_REVIEW_AGENT_ID", "new": "{{REVIEW_AGENT_ID}}", "count": 1},
-        {"old": "ACCEPTING_REVIEW_HANDOFF_SHA256", "new": "{{REVIEW_HANDOFF_SHA256}}", "count": 1}
-      ]
-    },
-    {
-      "path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md",
-      "reviewed_sha256": "b37aa12f06f6ba10d7804b31dd6ca366854c710583e1ed1b64cbbf1a4eb768c3",
-      "replacements": [
-        {"old": "verification_status: REVIEW_PENDING", "new": "verification_status: READY_FOR_VCS", "count": 1},
-        {"old": "ACCEPTING_REVIEW_AGENT_ID", "new": "{{REVIEW_AGENT_ID}}", "count": 1},
-        {"old": "ACCEPTING_REVIEW_HANDOFF_SHA256", "new": "{{REVIEW_HANDOFF_SHA256}}", "count": 1}
-      ]
-    }
-  ]
-}
+{"schema":"RTL_FINALIZATION_PATCH_V1","module":"ADC_TOP","baseline_stage":"REVIEW_PENDING","targets":[
+{"path":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md","reviewed_sha256":"8679f2d08504db1e029fab39f2ec3e401bee26caf4bcaa78244c74f813afdb81","replacements":[{"old":"verification_status: REVIEW_PENDING","new":"verification_status: READY_FOR_VCS","count":1},{"old":"ACCEPTING_REVIEW_AGENT_ID","new":"{{REVIEW_AGENT_ID}}","count":1},{"old":"ACCEPTING_REVIEW_HANDOFF_SHA256","new":"{{REVIEW_HANDOFF_SHA256}}","count":1}]},
+{"path":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-18_RTL_handoff_02.md","reviewed_sha256":"a71284f826c91883672440262d2814d12aedc1d785f515d886022d861e874d28","replacements":[{"old":"verification_status: REVIEW_PENDING","new":"verification_status: READY_FOR_VCS","count":1},{"old":"ACCEPTING_REVIEW_AGENT_ID","new":"{{REVIEW_AGENT_ID}}","count":1},{"old":"ACCEPTING_REVIEW_HANDOFF_SHA256","new":"{{REVIEW_HANDOFF_SHA256}}","count":1}]},
+{"path":"D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md","reviewed_sha256":"34f02e729b8ee51c97b13d776f56a41b02bc558edf2e2f654af08726568ab041","replacements":[{"old":"verification_status: REVIEW_PENDING","new":"verification_status: READY_FOR_VCS","count":1},{"old":"ACCEPTING_REVIEW_AGENT_ID","new":"{{REVIEW_AGENT_ID}}","count":1},{"old":"ACCEPTING_REVIEW_HANDOFF_SHA256","new":"{{REVIEW_HANDOFF_SHA256}}","count":1}]}]}

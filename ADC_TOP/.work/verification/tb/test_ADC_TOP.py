@@ -7,6 +7,7 @@ contracts without reaching into private implementation signals.
 
 import cocotb
 from cocotb.clock import Clock
+from cocotb.handle import Force, Release
 from cocotb.triggers import FallingEdge, ReadOnly, RisingEdge, Timer, ValueChange, with_timeout
 
 
@@ -323,6 +324,17 @@ async def _jesd_bus_bit0_rising(dut):
         await ValueChange(dut.jesd_clk)
         current = int(dut.jesd_clk.value) & 1
         if not previous and current:
+            return
+        previous = current
+
+
+async def _jesd_bus_bit0_falling(dut):
+    """Wait for bit 0 of the public packed JESD clock bus to fall."""
+    previous = int(dut.jesd_clk.value) & 1
+    while True:
+        await ValueChange(dut.jesd_clk)
+        current = int(dut.jesd_clk.value) & 1
+        if previous and not current:
             return
         previous = current
 
@@ -713,6 +725,93 @@ async def _fifo_clear_cycle_protocol(dut, selected_mask=0x01):
     await _axi_write(dut, 0x0000, 0x00000000, 0xF)
     await _assert_fifo_empty_stable(dut, tuple(channel for channel in range(8)
                                                 if selected_mask & (1 << channel)))
+
+
+def _rxd0(dut):
+    """The v1.10 rxd_three_state contract explicitly permits this scope."""
+    channel = getattr(dut, "adc_chn0", None)
+    assert channel is not None, "rxd_three_state: ADC_CHN0 hierarchy is absent"
+    unpack = getattr(channel, "adc_rxd", None)
+    assert unpack is not None, "rxd_three_state: ADC_RXD hierarchy is absent"
+    return unpack
+
+
+def _rxd_context(rxd):
+    return (
+        int(rxd.rxd_fsm.value), int(rxd.prefix_beat_r.value),
+        int(rxd.word_pos_r.value), int(rxd.next_term_r.value),
+        int(rxd.term_phase_r.value),
+    )
+
+
+async def _rxd_start_epoch_source(dut):
+    """Build one public link then launch the first AFE-domain DATA beat."""
+    await FallingEdge(dut.afe_clk)
+    dut.afe0_pll_lock.value = 1
+    dut.afe0_rx_reset_done.value = 1
+    dut.afe0_byte_aligned.value = 0x3
+    await _axi_write(dut, 0x0000, 0x00000001, 0xF)
+    for _ in range(2100):
+        await _rxd_drive_afe0_jesd_beat(dut)
+    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+    await _rxd_drive_afe_beat(dut)
+
+
+async def _rxd_drive_afe0_jesd_beat(dut):
+    """Leave ReadOnly before changing the PHY inputs for this directed test."""
+    await _jesd_bus_bit0_falling(dut)
+    await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+
+
+async def _rxd_drive_afe_beat(dut):
+    """Drive one held PHY value and advance exactly one AFE owner edge."""
+    await _rxd_drive_afe0_jesd_beat(dut)
+    await RisingEdge(dut.afe_clk)
+
+
+async def _rxd_drive_afe_beats(dut, count):
+    for _ in range(count):
+        await _rxd_drive_afe_beat(dut)
+
+
+async def _rxd_monitor(dut, label, predicate, attempts=1024):
+    """Pre-armed monitor: capture the first stable AFE context that matches."""
+    rxd = _rxd0(dut)
+    for _ in range(attempts):
+        await RisingEdge(dut.afe_clk)
+        # ADC_RXD uses #UDLY=1ns nonblocking state updates.  This is after
+        # that declared delay and still far before the 28ns AFE period ends.
+        await Timer(2, unit="ns")
+        await ReadOnly()
+        context = _rxd_context(rxd)
+        if predicate(context):
+            return context
+    raise AssertionError(f"rxd_three_state: {label} monitor timed out: {_rxd_context(rxd)}")
+
+
+async def _rxd_observe(dut, label, predicate, source):
+    """Arm before the source drive; cleanly stop the monitor on source failure."""
+    monitor = cocotb.start_soon(_rxd_monitor(dut, label, predicate))
+    try:
+        await source
+        return await with_timeout(monitor, 100, "us")
+    finally:
+        if not monitor.done():
+            monitor.kill()
+
+
+async def _rxd_fifo_clear_source(dut):
+    """Selected FIFO_CLR source; observation is owned by the armed monitor."""
+    await _axi_write(dut, 0x0000, 0x00000100, 0xF)
+    for _ in range(8):
+        await RisingEdge(dut.afe_clk)
+    await _axi_write(dut, 0x0000, 0x00000000, 0xF)
+    await _assert_fifo_empty_stable(dut, (0,))
+
+
+async def _rxd_rx_reset_done_source(dut, value):
+    await FallingEdge(dut.afe_clk)
+    dut.afe0_rx_reset_done.value = value
 
 
 async def _wait_clean_afe0_packet(dut, expected_payload, expected_sequence=None):
@@ -1791,6 +1890,80 @@ async def _link_drop_discards_incomplete_block(dut):
     dut._log.info("STIMULUS_MARKER link_drop_incomplete_block_discard_pass")
 
 
+async def _rxd_three_state_directed(dut):
+    """v1.10 state/data-owner acceptance using only the permitted RXD scope."""
+    await _setup(dut)
+    rxd = _rxd0(dut)
+
+    assert _rxd_context(rxd) == (0, 0, 0, 0, 0), "rxd_three_state: reset is not IDLE/zero"
+    idle_clear = await _rxd_observe(
+        dut, "IDLE FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
+        _rxd_fifo_clear_source(dut))
+    assert idle_clear == (0, 0, 0, 0, 0)
+
+    pref0 = await _rxd_observe(
+        dut, "IDLE->PREF", lambda context: context == (1, 0, 0, 0, 0),
+        _rxd_start_epoch_source(dut))
+    assert pref0 == (1, 0, 0, 0, 0)
+    pref1 = await _rxd_observe(
+        dut, "PREF miss", lambda context: context == (1, 1, 0, 0, 0),
+        _rxd_drive_afe_beat(dut))
+    assert pref1 == (1, 1, 0, 0, 0)
+
+    pref_gap = await _rxd_observe(
+        dut, "PREF upk_vld gap", lambda context: context == (0, 0, 0, 0, 0),
+        _rxd_rx_reset_done_source(dut, 0))
+    assert pref_gap == (0, 0, 0, 0, 0)
+    await _rxd_rx_reset_done_source(dut, 1)
+    await _rxd_observe(
+        dut, "post-PREF-gap IDLE FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
+        _rxd_fifo_clear_source(dut))
+
+    await _rxd_observe(dut, "PREF rebuild", lambda context: context == (1, 0, 0, 0, 0),
+                       _rxd_start_epoch_source(dut))
+    await _rxd_observe(dut, "PREF FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
+                       _rxd_fifo_clear_source(dut))
+    await _rxd_observe(dut, "PAYL rebuild PREF", lambda context: context == (1, 0, 0, 0, 0),
+                       _rxd_start_epoch_source(dut))
+    payl0 = await _rxd_observe(
+        dut, "PREF hit", lambda context: context == (2, 16, 8, 15, 0),
+        _rxd_drive_afe_beats(dut, 14))
+    assert payl0 == (2, 16, 8, 15, 0)
+    payl_complete = await _rxd_observe(
+        dut, "PAYL complete", lambda context: context == (2, 16, 16, 31, 0),
+        _rxd_drive_afe_beat(dut))
+    assert payl_complete == (2, 16, 16, 31, 0)
+    payl_hold = await _rxd_observe(
+        dut, "PAYL incomplete", lambda context: context == (2, 16, 24, 31, 0),
+        _rxd_drive_afe_beat(dut))
+    assert payl_hold == (2, 16, 24, 31, 0)
+
+    await _rxd_observe(dut, "PAYL FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
+                       _rxd_fifo_clear_source(dut))
+    await _rxd_observe(dut, "PAYL gap PREF", lambda context: context == (1, 0, 0, 0, 0),
+                       _rxd_start_epoch_source(dut))
+    await _rxd_observe(dut, "PAYL gap entry", lambda context: context == (2, 16, 8, 15, 0),
+                       _rxd_drive_afe_beats(dut, 14))
+    payl_gap = await _rxd_observe(
+        dut, "PAYL upk_vld gap", lambda context: context == (0, 0, 0, 0, 0),
+        _rxd_rx_reset_done_source(dut, 0))
+    assert payl_gap == (0, 0, 0, 0, 0)
+    await _rxd_rx_reset_done_source(dut, 1)
+
+    async def _rxd_illegal_source():
+        await FallingEdge(dut.afe_clk)
+        rxd.rxd_fsm.value = Force(3)
+        await Timer(1, unit="ns")
+        assert int(rxd.rxd_fsm.value) == 3, "rxd_three_state: illegal-state Force failed"
+        rxd.rxd_fsm.value = Release()
+
+    illegal_recovery = await _rxd_observe(
+        dut, "illegal-state recovery", lambda context: context == (0, 0, 0, 0, 0),
+        _rxd_illegal_source())
+    assert illegal_recovery == (0, 0, 0, 0, 0)
+    dut._log.info("STIMULUS_MARKER rxd_three_state_directed_pass")
+
+
 @cocotb.test()
 async def reset_and_top_level_defaults(dut):
     await with_timeout(_reset_and_top_level_defaults(dut), TEST_TIMEOUT_US, "us")
@@ -1864,3 +2037,8 @@ async def reset_domains_whole_fifo_and_relink(dut):
 @cocotb.test()
 async def link_drop_incomplete_block_discard(dut):
     await with_timeout(_link_drop_discards_incomplete_block(dut), 300, "us")
+
+
+@cocotb.test()
+async def rxd_three_state_directed_recovery(dut):
+    await with_timeout(_rxd_three_state_directed(dut), 2, "ms")

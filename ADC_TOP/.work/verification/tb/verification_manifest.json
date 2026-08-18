@@ -63,7 +63,8 @@
     "exact one header plus 256 payload packet with no tail packet",
     "TGC single and multi mask slope no-slope and unselected retention",
     "decimation zero-padding removal and 12-bit signed sample mapping",
-    "DDC zero-padding removal and 14-bit signed I/Q mapping"
+    "DDC zero-padding removal and 14-bit signed I/Q mapping",
+    "rxd_three_state: directed IDLE PREF PAYL ownership, clear, gap, and illegal-state recovery"
   ],
   "error_cases": [
     "TGC mask-zero target error and busy reentry W1C",
@@ -167,6 +168,9 @@
     "link_drop_incomplete_block_discard": [
       "boundary:software static configuration precondition is legal and stable while active",
       "boundary:link drop discards an incomplete AC9810 block"
+    ],
+    "rxd_three_state_directed_recovery": [
+      "boundary:rxd_three_state: directed IDLE PREF PAYL ownership, clear, gap, and illegal-state recovery"
     ]
   }
 }

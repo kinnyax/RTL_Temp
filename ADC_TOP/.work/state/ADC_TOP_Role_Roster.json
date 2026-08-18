@@ -1,12 +1,12 @@
 {
-  "schema": "RTL_ROLE_ROSTER_V1",
-  "module": "ADC_TOP",
-  "lead_agent_id": "/root",
-  "contributors": [
-    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_config_rtl"},
-    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_config_sim"},
-    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_config_constraint"},
-    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_config_verify"},
-    {"role": "DOCS_WORKER", "agent_id": "/root/adc_config_docs"}
+  "schema":"RTL_ROLE_ROSTER_V1",
+  "module":"ADC_TOP",
+  "lead_agent_id":"/root",
+  "contributors":[
+    {"role":"RTL_DESIGNER","agent_id":"/root/adc_style_rtl"},
+    {"role":"SIMULATION_WORKER","agent_id":"/root/adc_unpack_sim"},
+    {"role":"CONSTRAINT_WORKER","agent_id":"/root/adc_unpack_constraint"},
+    {"role":"VERIFICATION_RUNNER","agent_id":"/root/adc_unpack_verify"},
+    {"role":"DOCS_WORKER","agent_id":"/root/adc_unpack_docs"}
   ]
 }

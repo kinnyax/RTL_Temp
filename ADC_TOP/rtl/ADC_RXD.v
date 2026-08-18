@@ -38,12 +38,10 @@ module ADC_RXD(
 );
 parameter                                   UDLY                                         = 1;
 
-localparam [1:0]                            RXD_WAIT_SOMF                                = 2'd0;
-localparam [1:0]                            RXD_SKIP_PREFIX                              = 2'd1;
-localparam [1:0]                            RXD_PAYLOAD                                  = 2'd2;
-// Each lane contributes eight 16-bit words per AFE beat.
-// Pure ADC prefix: (16 sync + 96 zero + 16 sync) words / 8 words per beat.
-localparam [11:0]                           adc_num = (12'd16 + 12'd96 + 12'd16) / 12'd8;
+localparam [1:0]                            RXD_IDLE                                     = 2'd0;
+localparam [1:0]                            RXD_PREF                                     = 2'd1;
+localparam [1:0]                            RXD_PAYL                                     = 2'd2;
+localparam [11:0]                           adc_num                                      = (12'd16 + 12'd96 + 12'd16) / 12'd8;
 
 reg [255:0]                                 lane0_history_r                              ;
 reg [255:0]                                 lane1_history_r                              ;
@@ -60,7 +58,7 @@ reg [255:0]                                 lane1_block_raw                     
 
 wire [511:0]                                mapped_data                                  ;
 wire [5:0]                                  dec_int                                      ;
-wire [1:0]                                  dec_frac                                     ;
+wire [1:0]                                  dec_fra                                      ;
 wire [11:0]                                 gap_base16                                   ;
 wire [11:0]                                 gap_base32                                   ;
 wire [11:0]                                 gap_base64                                   ;
@@ -73,13 +71,21 @@ wire [11:0]                                 term_gap                            
 wire [2:0]                                  phase4_nx                                    ;
 wire [2:0]                                  phase8_nx                                    ;
 wire [2:0]                                  term_phase_next                              ;
-wire                                        marker_present                               ;
+wire                                        upk_trig                                     ;
 wire                                        upk_vld                                      ;
 wire                                        rxd_clr                                      ;
+wire [11:0]                                 pref_fra                                     ;
+wire [11:0]                                 pref_del                                     ;
+wire [11:0]                                 pref_num                                     ;
 wire [11:0]                                 dec_num                                      ;
 wire [11:0]                                 ddc_num                                      ;
 wire [11:0]                                 skip_num                                     ;
-wire                                        payload_hit                                  ;
+wire                                        payl_hit                                     ;
+wire                                        rxd_fsm_idle                                 ;
+wire                                        rxd_fsm_pref                                 ;
+wire                                        rxd_fsm_payl                                 ;
+wire [11:0]                                 term_dec                                     ;
+wire [11:0]                                 term_ddc                                     ;
 wire                                        block_complete                               ;
 wire                                        block_is_q                                   ;
 wire                                        block_is_i                                   ;
@@ -232,36 +238,29 @@ end
 // =====
 // 3. Payload Position / Block Decode
 // =====
-assign marker_present     = adi_rx_somf[0];
-assign dec_int            = dec_m[7:2];
-assign dec_frac           = dec_m[1:0];
-assign upk_vld            = chn_en_afe && link_ready_afe && adi_rx_valid;
-assign rxd_clr            = !upk_vld || fifo_clr;
+assign upk_trig = adi_rx_somf[0];
+assign dec_int  = dec_m[7:2];
+assign dec_fra  = dec_m[1:0];
+assign upk_vld  = chn_en_afe && link_ready_afe && adi_rx_valid;
+assign rxd_clr  = !upk_vld || fifo_clr;
 
-// B(d) is 0/4E/8E for DEC_DEL_MODE d=0/1/2, where E=dec_m.
-// SMP_MODE=1 prefix in AFE beats: 2N+23/8N+25/4N+25/8N+29 + B(d).
-assign dec_num =
-    ((dec_frac == 2'd0) ? (({6'd0,dec_int} << 1) + 12'd23) :
-     (dec_frac == 2'd1) ? (({6'd0,dec_int} << 3) + 12'd25) :
-     (dec_frac == 2'd2) ? (({6'd0,dec_int} << 2) + 12'd25) :
-                            (({6'd0,dec_int} << 3) + 12'd29)) +
-    ((dec_del_mode == 2'd1) ? ({4'd0,dec_m} << 2) :
-     (dec_del_mode == 2'd2) ? ({4'd0,dec_m} << 3) : 12'd0);
+assign pref_fra = (dec_fra == 2'd0) ? (({6'd0,dec_int} << 1) + 12'd23) :
+                  (dec_fra == 2'd1) ? (({6'd0,dec_int} << 3) + 12'd25) :
+                  (dec_fra == 2'd2) ? (({6'd0,dec_int} << 2) + 12'd25) :
+                                       (({6'd0,dec_int} << 3) + 12'd29);
 
-// SMP_MODE=2 prefix in AFE beats.  Keep its expression distinct from dec_num.
-assign ddc_num =
-    ((dec_frac == 2'd0) ? (({6'd0,dec_int} << 1) + 12'd23) :
-     (dec_frac == 2'd1) ? (({6'd0,dec_int} << 3) + 12'd25) :
-     (dec_frac == 2'd2) ? (({6'd0,dec_int} << 2) + 12'd25) :
-                            (({6'd0,dec_int} << 3) + 12'd29)) +
-    ((dec_del_mode == 2'd1) ? ({4'd0,dec_m} << 2) :
-     (dec_del_mode == 2'd2) ? ({4'd0,dec_m} << 3) : 12'd0);
+assign pref_del = (dec_del_mode == 2'd1) ? ({4'd0,dec_m} << 2) :
+                  (dec_del_mode == 2'd2) ? ({4'd0,dec_m} << 3) :
+                                               12'd0;
 
-// Legal software configuration selects the prefix for its current SMP mode.
+assign pref_num = pref_fra + pref_del;
+assign dec_num  = pref_num;
+assign ddc_num  = pref_num;
+
 assign skip_num = (smp_mode == 2'd0) ? adc_num :
                   (smp_mode == 2'd1) ? dec_num : ddc_num;
-assign payload_hit        = (rxd_fsm == RXD_SKIP_PREFIX) &&
-                            ((prefix_beat_r + 12'd1) == skip_num);
+
+assign payl_hit = rxd_fsm_pref && ((prefix_beat_r + 12'd1) == skip_num);
 
 assign gap_base16 = ({6'd0,dec_int} << 4);
 assign gap_base32 = ({6'd0,dec_int} << 5);
@@ -271,116 +270,117 @@ assign gap_ddc0   = gap_base16 - 12'd16;
 assign gap_ddc1   = gap_base64 - 12'd96;
 assign gap_ddc2   = gap_base32 - 12'd32;
 assign gap_ddc3   = gap_base64 - 12'd64;
+
 assign phase4_nx  = (term_phase_r == 3'd3) ? 3'd0 : (term_phase_r + 3'd1);
 assign phase8_nx  = (term_phase_r == 3'd7) ? 3'd0 : (term_phase_r + 3'd1);
 
-assign term_gap =
-    (smp_mode == 2'd1) ?
-        ((dec_frac == 2'd0) ? gap_base16 :
-         (dec_frac == 2'd1) ? ((term_phase_r == 3'd3) ? gap_dec1 : 12'd16) :
-         (dec_frac == 2'd2) ? (term_phase_r[0] ? (gap_base32 + 12'd1) : 12'd16) :
-                              ((term_phase_r == 3'd3) ? gap_base64 : 12'd16)) :
-    (smp_mode == 2'd2) ?
-        ((dec_frac == 2'd0) ? (term_phase_r[0] ? gap_ddc0 : 12'd16) :
-         (dec_frac == 2'd1) ? ((term_phase_r == 3'd7) ? gap_ddc1 : 12'd16) :
-         (dec_frac == 2'd2) ? ((term_phase_r == 3'd7) ? gap_ddc2 : 12'd16) :
-                              ((term_phase_r == 3'd7) ? gap_ddc3 : 12'd16)) :
-    12'd16;
+assign term_dec = (dec_fra == 2'd0) ? gap_base16 :
+                  (dec_fra == 2'd1) ? ((term_phase_r == 3'd3) ? gap_dec1 : 12'd16) :
+                  (dec_fra == 2'd2) ? (term_phase_r[0] ? (gap_base32 + 12'd1) : 12'd16) :
+                                       ((term_phase_r == 3'd3) ? gap_base64 : 12'd16);
 
-assign term_phase_next =
-    (smp_mode == 2'd1) ? ((dec_frac == 2'd0) ? 3'd0 : phase4_nx) :
-    (smp_mode == 2'd2) ? ((dec_frac == 2'd0) ? (term_phase_r[0] ? 3'd0 : 3'd1) : phase8_nx) :
-    3'd0;
+assign term_ddc = (dec_fra == 2'd0) ? (term_phase_r[0] ? gap_ddc0 : 12'd16) :
+                  (dec_fra == 2'd1) ? ((term_phase_r == 3'd7) ? gap_ddc1 : 12'd16) :
+                  (dec_fra == 2'd2) ? ((term_phase_r == 3'd7) ? gap_ddc2 : 12'd16) :
+                                       ((term_phase_r == 3'd7) ? gap_ddc3 : 12'd16);
+
+assign term_gap = (smp_mode == 2'd1) ? term_dec :
+                  (smp_mode == 2'd2) ? term_ddc : 12'd16;
+
+assign term_phase_next = (smp_mode == 2'd1) ? ((dec_fra == 2'd0) ? 3'd0 : phase4_nx) :
+                         (smp_mode == 2'd2) ? ((dec_fra == 2'd0) ?
+                                                (term_phase_r[0] ? 3'd0 : 3'd1) : phase8_nx) :
+                                              3'd0;
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n)
-        rxd_fsm <= #UDLY RXD_WAIT_SOMF;
+        rxd_fsm <= #UDLY RXD_IDLE;
     else if (rxd_clr)
-        rxd_fsm <= #UDLY RXD_WAIT_SOMF;
+        rxd_fsm <= #UDLY RXD_IDLE;
     else
         rxd_fsm <= #UDLY rxd_fsm_nx;
 end
 
 always @* begin
     case (rxd_fsm)
-        RXD_WAIT_SOMF: begin
-            if (marker_present) begin
-                rxd_fsm_nx = RXD_SKIP_PREFIX;
+        RXD_IDLE: begin
+            if (upk_trig) begin
+                rxd_fsm_nx = RXD_PREF;
             end else begin
-                rxd_fsm_nx = RXD_WAIT_SOMF;
+                rxd_fsm_nx = RXD_IDLE;
             end
         end
-        RXD_SKIP_PREFIX: begin
-            if (payload_hit) begin
-                rxd_fsm_nx = RXD_PAYLOAD;
+        RXD_PREF: begin
+            if (payl_hit) begin
+                rxd_fsm_nx = RXD_PAYL;
             end else begin
-                rxd_fsm_nx = RXD_SKIP_PREFIX;
+                rxd_fsm_nx = RXD_PREF;
             end
         end
-        RXD_PAYLOAD: begin
-            rxd_fsm_nx = RXD_PAYLOAD;
+        RXD_PAYL: begin
+            rxd_fsm_nx = RXD_PAYL;
         end
         default: begin
-            rxd_fsm_nx = RXD_WAIT_SOMF;
+            rxd_fsm_nx = RXD_IDLE;
         end
     endcase
 end
+
+assign rxd_fsm_idle = (rxd_fsm == RXD_IDLE);
+assign rxd_fsm_pref = (rxd_fsm == RXD_PREF);
+assign rxd_fsm_payl = (rxd_fsm == RXD_PAYL);
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n)
         prefix_beat_r <= 12'd0;
     else if (rxd_clr)
         prefix_beat_r <= 12'd0;
-    else if (rxd_fsm == RXD_WAIT_SOMF)
+    else if (rxd_fsm_idle)
         prefix_beat_r <= 12'd0;
-    else if (rxd_fsm == RXD_SKIP_PREFIX)
+    else if (rxd_fsm_pref)
         prefix_beat_r <= prefix_beat_r + 12'd1;
-    else if (rxd_fsm == RXD_PAYLOAD)
-        prefix_beat_r <= prefix_beat_r;
-    else
+    else if (!rxd_fsm_payl)
         prefix_beat_r <= 12'd0;
 end
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if (!afe_rst_n) begin
-        word_pos_r    <= 64'd0;
-        next_term_r   <= 64'd0;
-        term_phase_r  <= 3'd0;
-    end else if (rxd_clr) begin
-        word_pos_r    <= 64'd0;
-        next_term_r   <= 64'd0;
-        term_phase_r  <= 3'd0;
-    end else if (rxd_fsm == RXD_WAIT_SOMF) begin
-        word_pos_r    <= 64'd0;
-        next_term_r   <= 64'd0;
-        term_phase_r  <= 3'd0;
-    end else if (rxd_fsm == RXD_SKIP_PREFIX) begin
-        if (payload_hit) begin
-            word_pos_r   <= 64'd8;
-            next_term_r  <= 64'd15;
-            term_phase_r <= 3'd0;
-        end else begin
-            word_pos_r   <= word_pos_r;
-            next_term_r  <= next_term_r;
-            term_phase_r <= term_phase_r;
-        end
-    end else if (rxd_fsm == RXD_PAYLOAD) begin
+    if (!afe_rst_n)
+        word_pos_r <= 64'd0;
+    else if (rxd_clr)
+        word_pos_r <= 64'd0;
+    else if (rxd_fsm_idle)
+        word_pos_r <= 64'd0;
+    else if (rxd_fsm_pref && payl_hit)
+        word_pos_r <= 64'd8;
+    else if (rxd_fsm_payl)
         word_pos_r <= word_pos_r + 64'd8;
-        if (block_complete) begin
-            next_term_r  <= next_term_r + term_gap;
-            term_phase_r <= term_phase_next;
-        end else begin
-            next_term_r  <= next_term_r;
-            term_phase_r <= term_phase_r;
-        end
-    end else begin
-        word_pos_r    <= 64'd0;
-        next_term_r   <= 64'd0;
-        term_phase_r  <= 3'd0;
+    else if (!rxd_fsm_pref)
+        word_pos_r <= 64'd0;
+end
+
+always @(posedge afe_clk or negedge afe_rst_n) begin
+    if (!afe_rst_n) begin
+        next_term_r  <= 64'd0;
+        term_phase_r <= 3'd0;
+    end else if (rxd_clr) begin
+        next_term_r  <= 64'd0;
+        term_phase_r <= 3'd0;
+    end else if (rxd_fsm_idle) begin
+        next_term_r  <= 64'd0;
+        term_phase_r <= 3'd0;
+    end else if (rxd_fsm_pref && payl_hit) begin
+        next_term_r  <= 64'd15;
+        term_phase_r <= 3'd0;
+    end else if (rxd_fsm_payl && block_complete) begin
+        next_term_r  <= next_term_r + term_gap;
+        term_phase_r <= term_phase_next;
+    end else if (!rxd_fsm_pref && !rxd_fsm_payl) begin
+        next_term_r  <= 64'd0;
+        term_phase_r <= 3'd0;
     end
 end
 
-assign block_complete   = (rxd_fsm == RXD_PAYLOAD) &&
+assign block_complete   = (rxd_fsm == RXD_PAYL) &&
                           (word_pos_r[63:3] == next_term_r[63:3]);
 assign block_is_q       = block_complete && (smp_mode == 2'd2) && term_phase_r[0];
 assign block_is_i       = block_complete && (smp_mode == 2'd2) && !term_phase_r[0];
@@ -438,7 +438,7 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
     end else if (rxd_clr) begin
         lane0_history_r <= 256'd0;
         lane1_history_r <= 256'd0;
-    end else if ((rxd_fsm == RXD_SKIP_PREFIX) || (rxd_fsm == RXD_PAYLOAD)) begin
+    end else if ((rxd_fsm == RXD_PREF) || (rxd_fsm == RXD_PAYL)) begin
         lane0_history_r <= {adi_rx_data[127:0],lane0_history_r[255:128]};
         lane1_history_r <= {adi_rx_data[255:128],lane1_history_r[255:128]};
     end else begin
@@ -737,7 +737,7 @@ assign ddc_q_write_eligible  = block_is_q && ddc_i_accepted_r;
 assign fifo_write_eligible   = normal_write_eligible || ddc_i_write_eligible ||
                                ddc_q_write_eligible;
 assign ddc_epoch_live        = (smp_mode == 2'd2) && chn_en_afe &&
-                               ((rxd_fsm == RXD_SKIP_PREFIX) || (rxd_fsm == RXD_PAYLOAD));
+                               ((rxd_fsm == RXD_PREF) || (rxd_fsm == RXD_PAYL));
 assign ddc_abort_set_evt     = !ddc_abort_afe && ddc_epoch_live &&
                                (!link_ready_afe || !adi_rx_valid);
 
@@ -745,7 +745,7 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
     if (!afe_rst_n) begin
         ddc_i_accepted_r <= 1'b0;
     end else if (rxd_clr ||
-                 ((rxd_fsm != RXD_SKIP_PREFIX) && (rxd_fsm != RXD_PAYLOAD))) begin
+                 ((rxd_fsm != RXD_PREF) && (rxd_fsm != RXD_PAYL))) begin
         ddc_i_accepted_r <= 1'b0;
     end else if (block_complete && (smp_mode == 2'd2)) begin
         if (block_is_q) begin
@@ -797,4 +797,3 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
 end
 
 endmodule
-

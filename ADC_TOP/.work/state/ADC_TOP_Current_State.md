@@ -3,8 +3,8 @@ type: module_current_state
 module_name: ADC_TOP
 date: 2026-08-18
 verification_status: READY_FOR_VCS
-accepting_review_agent_id: /root/adc_config_review
-accepting_review_handoff_sha256: 00d32372a59918c9472327986313b18e61369b522dd334b2985716338a0f59bf
+accepting_review_agent_id: /root/adc_unpack_review
+accepting_review_handoff_sha256: 1cc90cb33603487bbfa3dc74c0fc85429d0a19e389867e284e065a7084a0d6e3
 tags: [FPGA/IP, Status]
 ---
 
@@ -12,22 +12,22 @@ tags: [FPGA/IP, Status]
 
 ## Current Baseline
 
-- Stage: `REVIEW_PENDING`; independent RTL Review has not yet accepted this exact release baseline.
-- Design v1.9: `D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md`, SHA256 `010556a566a6af24fa1dae3b7ab8ba2c487582487cd0760d3ee899a8f41f7ce2`; final design review `_11`, SHA256 `c45b5d795601ec05c2ef0c1ae653a9a659be3093d03ec1c02a4f6cae8d24c4df`; `RTL_MODULE_CONTRACT_V1`, `VERILOG_2001_EXPLICIT_V1`, `MODIFIED_THIRD_PARTY_RTL`.
-- RTL: updated `ADC_RXD.v` SHA256 `0f465fdadb38dc16acbb5816b4d1a6c27e596e31c0328e828586e02dd0627275`; remaining filelist SHA256 `76aa2d06650dc14aae941c422ef6a2d183be3cd0076386c84d8085aa44a0f648`.
-- Delta: static illegal-configuration gates are removed under the software legal/stable-config precondition. The payload scheduler now exposes `adc_num`, `dec_num`, `ddc_num`, `skip_num`, and `payload_hit`; pure ADC explicitly skips `(16+96+16)/8 = 16` AFE beats. `rxd_clr = !upk_vld || fifo_clr` is the common runtime clear, and state/event conditions separately enable prefix and payload bookkeeping.
-- VMware run `ADC_TOP_a068bcae19f94e85b1f32373b9e126f9`: VIF `b3c0cd58ffeaae731102a41cfa4ecca08d220b07670394b676f5728bd8ac7b74`; toolchain `979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c`; lint/simulation `0/0`; 15/15 PASS; seed `20260818`; timeout `600`; remote cleanup PASS. The initial failed batch caused by a TB expectation bug is retained as history, not release evidence.
-- VMware startup preflight: PASS; `D:\Codex\RTL_Temp\ADC_TOP\.work\verification\state\vmware_preflight_receipt.json`, SHA256 `38d2d6fa47bae5aa11100d9675c6b2c33e6cab9f89aa89ab3f2d71d6f40ce9ca`.
-- Constraint: `DEFERRED_TO_TOP` / `EXTERNAL_ONLY`; review SHA256 `55b1c8c4b3aff30bfbafb3f9dfaa38e8ac1bfbb060ca363cc205e02fd0355b25`; dependency manifest SHA256 `0a6ed286c4a575921822f65241f7c9f00c2442e8d88005a31dfcf02cbdc7c0e7`; `VIVADO_RESOLUTION_NOT_RUN`.
-- PPA: `HYPOTHESIS`; model boundary: `NON_VENDOR_EQUIVALENT`. VCS/Verdi, integrated XSIM, synthesis, implementation, timing closure, bitstream and board validation are `NOT_RUN`.
-- Release baseline manifest: `D:\Codex\RTL_Temp\ADC_TOP\.work\state\ADC_TOP_Release_Baseline.json` (REVIEW_PENDING). Finalization patch: `D:\Codex\RTL_Temp\ADC_TOP\.work\state\ADC_TOP_Finalization_Patch.json` (REVIEW_PENDING). Role roster: `D:\Codex\RTL_Temp\ADC_TOP\.work\state\ADC_TOP_Role_Roster.json`.
+- Intended post-acceptance stage: `READY_FOR_VCS`.
+- Design v1.10: `D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md`, SHA256 `afd18901724ba292162e6bc500b70de00ced69002e315e5ca38b4b314f1401f8`; Design Author handoff SHA256 `c68085c4a4356fedbfa2a030b65ec0ecf43488d76125e2fc903f347304fcb45f`; accepted Design Review SHA256 `5f8744e23c4c3615837d0aec07d6a0be5ac5d76fbd882428c9d3e4a15c2dff0c`.
+- Contract/profile/class: `RTL_MODULE_CONTRACT_V1` / `VERILOG_2001_EXPLICIT_V1` / `MODIFIED_THIRD_PARTY_RTL`. ADC_RXD is self-written, but the complete module includes modified license-permitted ADI source.
+- ADC_RXD SHA256 `416855dfa9c7abfe3482e32597531e2a68a41f54572255521e3edb540502d4a8`.
+- v1.10 preserves behavior while freezing user-selected names `RXD_IDLE/RXD_PREF/RXD_PAYL`, `dec_fra`, `upk_trig`, `pref_fra/pref_del/pref_num`; `word_pos_r` has one timing owner and `next_term_r/term_phase_r` retain one coupled owner. User formatting and compact semantic naming remain authoritative.
+- TB/manifest SHA256 `d79a3f9e814950243feb44ccdee7967effcd7fb6fddd2cfd3297c94cb7468471` / `2373439d7cb4d6d906f339e313342d0ede5beda10f99281c8286ad80f974ba0d`; the added directed test binds IDLE/PREF/PAYL ownership, common clear, gap update and illegal-state recovery.
+- User-authorized seventh fresh VMware run `ADC_TOP_33bc74bdf97d4f17a739919f36ea22d7`: VIF `3fb3f3029656bddd3893d0e506b789738effa87f679402d3b61e8e37437717f1`; toolchain `979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c`; lint/simulation `0/0`; 16/16 PASS; JUnit SHA256 `8888d486cb93e77e060f79af48c56222e7b82f2c6729467a8609e9ec8e418ced`; seed `20260818`; timeout `600`; cleanup PASS.
+- Constraint: `DEFERRED_TO_TOP/EXTERNAL_ONLY`; review SHA256 `f369a63160feecf5276074762281b3dfe642f498935cb17b35c75de121f3e4d7`; dependency manifest SHA256 `895093b4dd32640aa77f4826d807068b3af7073d0d1070cf41ba20de4c8df25e`; `VIVADO_RESOLUTION_NOT_RUN`.
+- Previous release baselines are stale. PPA is `HYPOTHESIS`; model boundary is `NON_VENDOR_EQUIVALENT`.
+- Release sidecar: `D:\Codex\RTL_Temp\ADC_TOP\.work\state\ADC_TOP_Release_Baseline.json`; finalization patch: `D:\Codex\RTL_Temp\ADC_TOP\.work\state\ADC_TOP_Finalization_Patch.json`.
 
 ## Next Task
 
-- Required phase: independent rtl-vibe Review of the exact review-pending sidecar.
-- Next owner: `/root/adc_config_review`; upon acceptance, Docs alone applies the bound mechanical finalization patch.
+- User-owned `NON_UVM_SYSTEMVERILOG_SOC` VCS/Verdi verification; VCS execution is `NOT_RUN`.
+- Official IP, XSIM, synthesis/PPA, implementation, timing, bitstream and board validation remain `NOT_RUN`.
 
 ## Distillation Status
 
-- Knowledge writeback candidate: `ADC_RXD` payload-prefix naming/formula clarity and runtime clear factoring, supported by v1.9 design plus VMware run `ADC_TOP_a068bcae19f94e85b1f32373b9e126f9`.
-- `WIKI_WRITEBACK_AUTHORIZED=FALSE`; `ARCHIVE_PUBLISH_AUTHORIZED=FALSE`.
+- Knowledge writeback candidate `NONE`; Wiki/Archive authorization `FALSE`.
