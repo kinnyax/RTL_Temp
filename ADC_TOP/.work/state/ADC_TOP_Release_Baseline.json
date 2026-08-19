@@ -4,43 +4,53 @@
   "module_work_root": "D:\\Codex\\RTL_Temp\\ADC_TOP",
   "algorithm": "SHA256 of UTF-8/LF ROLE<TAB>PATH_OR_ID<TAB>SHA256_OR_VALUE lines sorted by UTF-8 bytes of ROLE then PATH_OR_ID, with one final LF",
   "self_reference_rule": "This sidecar is not a component and its fingerprint field is excluded.",
-  "verification_input_fingerprint": "3fb3f3029656bddd3893d0e506b789738effa87f679402d3b61e8e37437717f1",
+  "verification_input_fingerprint": "40df98fc4a08cabf67f7624f12946436c1c7e5d7cf6163cd45a8560b35af7fdb",
   "verification_toolchain_fingerprint": "979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c",
   "components": [
     {
+      "role": "constraint_dependency_manifest",
+      "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_Constraint_Dependency_Manifest.tsv",
+      "sha256_or_value": "a50414cbca11fd50d349120e9f4324fc3f991a19ed89d8a8b7c0d593d3d171f0"
+    },
+    {
       "role": "constraint_review",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_Constraint_Review.md",
-      "sha256_or_value": "f369a63160feecf5276074762281b3dfe642f498935cb17b35c75de121f3e4d7"
+      "sha256_or_value": "54343ce19c80cb960fae55ccac63b6f5df5972839f8d7223fcd245a361214768"
     },
     {
       "role": "design",
       "path_or_id": "D:\\Codex\\Vault\\Archive\\Modules\\ADC\\ADC_Design\\ADC_TOP_Design.md",
-      "sha256_or_value": "afd18901724ba292162e6bc500b70de00ced69002e315e5ca38b4b314f1401f8"
+      "sha256_or_value": "95f274fa2cae62e09c6c9addc3bcfe5ac62d6490ad1d946b96bc844f5602e7ef"
+    },
+    {
+      "role": "design_review",
+      "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-19_FINAL_DESIGN_REVIEW_handoff_02.md",
+      "sha256_or_value": "45be60c7164c465a5582afec2f876d2dc2f6c70e1d23037767353593519f38a9"
     },
     {
       "role": "evidence_summary",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_summary.md",
-      "sha256_or_value": "1045dee6f12b305590aaa271f559a29761999a9dac2421164bae78c53c68625e"
+      "sha256_or_value": "acbc280c2a1bc1592edb19e42cbec7eeaca2c70b31dc4c9e783b112f59e7045b"
     },
     {
       "role": "finalization_patch",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
-      "sha256_or_value": "313fdd5ea8e83b7ec707f7515d388fb903f92fa374433525112553118a5b5c93"
+      "sha256_or_value": "56b21cb69589a0169df4b9450b9b54cbbe6455cc3e1c007eccaca8b41bd63f4b"
     },
     {
       "role": "junit",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_cocotb_results.xml",
-      "sha256_or_value": "8888d486cb93e77e060f79af48c56222e7b82f2c6729467a8609e9ec8e418ced"
+      "sha256_or_value": "c077efbab0d38228e491205372e80cce0136ea2387b94130990b8157c8eb918c"
     },
     {
       "role": "orchestration_timing",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_vmware_timing.json",
-      "sha256_or_value": "a1a4a53d6ca7c22db506242109462c0856cc5e5a01e16e820c72d430e14ccad4"
+      "sha256_or_value": "f112ae96f4391d82a8646b5fb92b51feebaee6eab597cce78fa37c6e5cc04656"
     },
     {
       "role": "owned_lint",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_owned_lint.log",
-      "sha256_or_value": "6053f17e3af72caafc6e84b0a9f1c3739454552093f49b2c0ce2cf07fdbb8353"
+      "sha256_or_value": "4596714a1628fde5e592ac96ff566efc3ee81d283dab14e74b7eb9c5d7977a0d"
     },
     {
       "role": "provenance_or_na",
@@ -50,87 +60,87 @@
     {
       "role": "pub_boundary_summary",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_pub_dependency_lint_summary.json",
-      "sha256_or_value": "6e2ae411f5a28cee45a300236218fe650919a7dbf39aefeb1f54b98a46a83476"
+      "sha256_or_value": "fb3d14f6dfbe80d6e6a3bcdd5301d98a0b0e1d3e3e76ade9757fc2aa10f5ca5e"
     },
     {
       "role": "raw_evidence",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_cocotb.log",
-      "sha256_or_value": "c49e590bbade3c4384fbd2ce5518e5c006b6836a583eb79b9d9c1cbf7500e96c"
+      "sha256_or_value": "b69bec3730d90d90f51b8650e7215c962b28f2d561bc9f524af873f70c4da724"
     },
     {
       "role": "raw_evidence",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_vmware_transport.log",
-      "sha256_or_value": "26cb41fc7e0e62f3ec9e0bc1d1f739e88643ff7771fd787edde4dbeefa60f946"
+      "sha256_or_value": "4020a1cd992d3b1b045efe987b8127bfb51c0a8140fc08b63a6cafe14bd356c1"
     },
     {
       "role": "raw_lint",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_verilator_lint.log",
-      "sha256_or_value": "f07281a138b84747ccb05db4f3b206115e55586d025bded2528399d557d126d3"
+      "sha256_or_value": "10d940febf29f1901f15e3ef7db8dd4eceab3dda3ea078f0e4c7fbcf89483cdf"
     },
     {
       "role": "review_pending_draft",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md",
-      "sha256_or_value": "34f02e729b8ee51c97b13d776f56a41b02bc558edf2e2f654af08726568ab041"
+      "sha256_or_value": "86107f55b2eac94d9d381a95d148992b970babafec2b4eb0fe57c2e0e165642b"
     },
     {
       "role": "review_pending_draft",
-      "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-18_RTL_handoff_02.md",
-      "sha256_or_value": "a71284f826c91883672440262d2814d12aedc1d785f515d886022d861e874d28"
+      "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-19_RTL_handoff_04.md",
+      "sha256_or_value": "13c8073f76ab5c805ebc6a958cfb56fb3b4033598c494c82cc43ed058630cbe4"
     },
     {
       "role": "review_pending_draft",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md",
-      "sha256_or_value": "8679f2d08504db1e029fab39f2ec3e401bee26caf4bcaa78244c74f813afdb81"
+      "sha256_or_value": "7a2741f4f79bd4a24335c4c740d0557f74997e828e21baa11b2ec641a56ffe73"
     },
     {
       "role": "role_roster",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Role_Roster.json",
-      "sha256_or_value": "689b9a18399f7b87e227e08446f87124a3873206d6e6ff190b148aad0ec4483e"
+      "sha256_or_value": "7f5646d543abdaa78e39bf8511a485e702906b15521b92a38622db5d4a60993b"
     },
     {
       "role": "run_status",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_run_status.json",
-      "sha256_or_value": "49f2fdb3df17d0745a59bbc3c8b088e41ea267fd98692a68bad8f099dd74564d"
+      "sha256_or_value": "205b75bd2dfaef588ff299817f046cd95f65bf299f2067a3b4bf0873d7d4678a"
     },
     {
       "role": "source_ownership_evidence",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_verilator_ownership.log",
-      "sha256_or_value": "533a59edeec81364ade86dee5554d932b1f89124da3305342ab8a70788e26059"
+      "sha256_or_value": "730e31b288dbf2c0617fca89768695612ad1e7c2cd28fd10cee1c10c17706ff3"
     },
     {
       "role": "source_ownership_evidence",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_verilator_ownership.tree.json",
-      "sha256_or_value": "66be869456e68b9bd4206b9a7f1b58d921ac6a2c6d79cf7bfcfd5fb3bd1630c8"
+      "sha256_or_value": "c22351e769bd3ea29ab5bcef3ebae1943d9047c369e1c6b6cd2f62209dc13661"
     },
     {
       "role": "source_ownership_evidence",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_verilator_ownership.tree.meta.json",
-      "sha256_or_value": "d9fdee50c28969fcb797bd3df576f7080f59b83f3c69922fd3b3b2c513921bb2"
+      "sha256_or_value": "1f79aa78cc03e6928d232aa2bcbdcfe5bf61073e4dba729ca83080b7fb2c7f68"
     },
     {
       "role": "source_ownership_evidence",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_verilator_preprocessed.v",
-      "sha256_or_value": "91604b8cf3a899dde49cf46bb54c0881554a1881b53512ecc58806774dfcbe33"
+      "sha256_or_value": "961416b4a6ee59ef12e819816c2bf62e457b3193fbb458760d11d954e365f24a"
     },
     {
       "role": "source_ownership_summary",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_source_ownership_summary.json",
-      "sha256_or_value": "222ac555e8e4ebf01864bb734d7a78f41566cf1918960219310c43b7ca9139d0"
+      "sha256_or_value": "a9f071d0b47f8b45228539f8b8f6ad8216a50386f7db8981854c1c9533a6e800"
     },
     {
       "role": "structured_evidence",
       "path_or_id": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\sim\\ADC_TOP_evidence.json",
-      "sha256_or_value": "e1fc32899f8fea85d8f3a3215c5e04f433a9171429c8652f3c6ad2fd2b836442"
+      "sha256_or_value": "7af93e4bda7e7593a441ded14e44049ecc1254686f9d6dec81d96abb1ad8650f"
     },
     {
       "role": "verification_input",
       "path_or_id": "VERIFICATION_INPUT_FINGERPRINT",
-      "sha256_or_value": "3fb3f3029656bddd3893d0e506b789738effa87f679402d3b61e8e37437717f1"
+      "sha256_or_value": "40df98fc4a08cabf67f7624f12946436c1c7e5d7cf6163cd45a8560b35af7fdb"
     },
     {
       "role": "verification_run",
       "path_or_id": "RTL_VMWARE_RUN_ID",
-      "sha256_or_value": "ADC_TOP_33bc74bdf97d4f17a739919f36ea22d7"
+      "sha256_or_value": "ADC_TOP_6981ada4757a4989b4c56db8da415309"
     },
     {
       "role": "verification_toolchain",
@@ -143,6 +153,6 @@
       "sha256_or_value": "DEFERRED_TO_TOP_EXTERNAL_ONLY"
     }
   ],
-  "release_baseline_fingerprint": "a4e34d348cf82942dd526b3158bcc56269df6ae71dd74e3ac23f00b64e731ed3",
+  "release_baseline_fingerprint": "5603c795795d3497145856f3904f3281c53b5cfb9dff5220a440310d24618a7f",
   "baseline_stage": "REVIEW_PENDING"
 }

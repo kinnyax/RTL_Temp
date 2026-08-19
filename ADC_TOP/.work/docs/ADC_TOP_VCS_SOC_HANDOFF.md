@@ -1,30 +1,31 @@
 ---
 type: vcs_soc_handoff
 module_name: ADC_TOP
-date: 2026-08-18
+date: 2026-08-19
 verification_status: READY_FOR_VCS
-accepting_review_agent_id: /root/adc_unpack_review
-accepting_review_handoff_sha256: 1cc90cb33603487bbfa3dc74c0fc85429d0a19e389867e284e065a7084a0d6e3
+accepting_review_agent_id: /root/adc_fmt_review
+accepting_review_handoff_sha256: 66798366b02cf89758823894e7eaa31e73f1e3c6ae810c84e566c4d641cbeee3
 tags: [FPGA/VCS, Verification]
 ---
 
-# ADC_TOP VCS SoC Verification Handoff
+# ADC_TOP v1.26 VCS SoC Verification Handoff
 
 ## Source Baseline
 
-- Design v1.10 SHA256 `afd18901724ba292162e6bc500b70de00ced69002e315e5ca38b4b314f1401f8`; `RTL_MODULE_CONTRACT_V1`, `VERILOG_2001_EXPLICIT_V1`, `MODIFIED_THIRD_PARTY_RTL`.
-- ADC_RXD SHA256 `416855dfa9c7abfe3482e32597531e2a68a41f54572255521e3edb540502d4a8`; TB/manifest SHA256 `d79a3f9e814950243feb44ccdee7967effcd7fb6fddd2cfd3297c94cb7468471` / `2373439d7cb4d6d906f339e313342d0ede5beda10f99281c8286ad80f974ba0d`.
-- Constraint `DEFERRED_TO_TOP/EXTERNAL_ONLY`; review SHA256 `f369a63160feecf5276074762281b3dfe642f498935cb17b35c75de121f3e4d7`; dependency manifest SHA256 `895093b4dd32640aa77f4826d807068b3af7073d0d1070cf41ba20de4c8df25e`; `VIVADO_RESOLUTION_NOT_RUN`.
-- User-authorized seventh VMware run `ADC_TOP_33bc74bdf97d4f17a739919f36ea22d7`, VIF `3fb3f3029656bddd3893d0e506b789738effa87f679402d3b61e8e37437717f1`, toolchain `979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c`, lint/sim `0/0`, 16/16 PASS, JUnit SHA256 `8888d486cb93e77e060f79af48c56222e7b82f2c6729467a8609e9ec8e418ced`.
+- Design v1.26 SHA256 `95f274fa2cae62e09c6c9addc3bcfe5ac62d6490ad1d946b96bc844f5602e7ef`; accepted Design Review SHA256 `45be60c7164c465a5582afec2f876d2dc2f6c70e1d23037767353593519f38a9`.
+- `ADC_RXD.v` SHA256 `045c45194e54e2ffc33099302d8e0ce6ab4e3c7b66813a8192946c7f52532f57`; TB/manifest SHA256 `3fdcb2e965c1dc9fc54f271b0ec7a2e5ad45c6b6c8ffa06d2a3efc77910ceac5` / `4989e2415682346d2eae7ff52edad6b6386516923db02a1911fcfa9c606d16f6`.
+- Fresh VMware run `ADC_TOP_6981ada4757a4989b4c56db8da415309`; VIF `40df98fc4a08cabf67f7624f12946436c1c7e5d7cf6163cd45a8560b35af7fdb`; toolchain `979fe02a6ecb4126a385f07cb5ebcfff02c04524919595a7e6b330698b3f9c0c`; lint/sim `0/0`; 19/19 PASS; JUnit SHA256 `c077efbab0d38228e491205372e80cce0136ea2387b94130990b8157c8eb918c`; cleanup PASS.
+- Constraint `DEFERRED_TO_TOP/EXTERNAL_ONLY`; review/manifest SHA256 `54343ce19c80cb960fae55ccac63b6f5df5972839f8d7223fcd245a361214768` / `a50414cbca11fd50d349120e9f4324fc3f991a19ed89d8a8b7c0d593d3d171f0`; `VIVADO_RESOLUTION_NOT_RUN`.
 
-## VCS Scope
+## Required SoC Focus
 
-- Methodology `NON_UVM_SYSTEMVERILOG_SOC`; intended tools VCS / Verdi.
-- Recheck three-state RXD ownership, separate word-position/terminal timing blocks, reset/FIFO clear, scheduler maps, DDC recovery, AXI/AXIS backpressure and official-IP integration.
-- `MODEL_EQUIVALENCE=NON_VENDOR_EQUIVALENT`; previous release evidence is stale.
+- Verify normalized AC9810 N'=16 word behavior: `FRAME_FMT=1` preserves raw left-aligned `S`; `FRAME_FMT=0` yields signed right-aligned code from `S[15:6]`, `S[15:4]`, or `S[15:2]` for p=10/12/14.
+- Formatting registers do not configure AC9810 source width/coding, and packet headers omit FRAME_FMT/device-coding metadata.
+- Retain checks for decoded FSM transitions, `prefix_cnt`, pre-edge raw marker capture, P0/P1 request timing, FIFO clear/abort recovery, dec/DDC scheduling, AXI-Lite, TGC, AXIS backpressure, packets and CRC/TLAST.
 
-## PPA, Risks And Status
+## Boundary And Status
 
-- PPA `HYPOTHESIS`; no synthesis/timing observation exists.
-- Intended final stage `READY_FOR_VCS`; user-owned VCS execution is `NOT_RUN`; a VCS pass advances to `VCS_SOC_VERIFIED`.
-- Official FIFO/PHY equivalence and downstream Vivado/board phases remain unproved.
+- ADI `jesd204_rx.v` provenance remains analogdevicesinc/hdl commit `9d5de2fc21b6069675104567c9041bcdbfbe9baa`, GPLv2; official PHY/FIFO behavior is not vendor-equivalent in VMware.
+- PPA remains `HYPOTHESIS`. Future integration owns CMU/RMU clocks/resets, PHY/GTH and FIFO XCI semantics, vendor XDC precedence, and timing closure.
+- Stage is `REVIEW_PENDING`; independent review must accept the frozen release baseline. Thereafter mechanical finalization may advance only to `READY_FOR_VCS`.
+- VCS/Verdi execution/evidence: `NOT_RUN`; passing VCS would advance to `VCS_SOC_VERIFIED`. Integrated XSIM, synthesis, implementation, bitstream, programming, and board validation are `NOT_RUN`.

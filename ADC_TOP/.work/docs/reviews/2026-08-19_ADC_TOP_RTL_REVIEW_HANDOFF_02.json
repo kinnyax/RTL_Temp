@@ -1,0 +1,31 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_v124_review7",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_accum_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_accum_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_accum_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_v124_verify7"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_v124_docs7"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "18830afaf1dd1088aadb81803af8376232299ce14c286b454491aa998dedb8a5",
+  "release_baseline_fingerprint": "8375ff3450bdf7d055b83f660dcb1599c23603a17bdbf8e5680dc851aeeb2c7a",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "9d9244d94aae3264e0787caeb95259bf698749da0d0429252fd82dd6a45a2b4f",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "406b3769c22bd916937a5f01446d2e01b0aa7bff9e2fb86f8be041632a710b9c"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-19_RTL_handoff_03.md", "sha256": "b96ad16a36d937ba34c429574e60cf76f1b1cf995bf3d5c32a505919e280f2bc"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "898f3ab030874b2d22b5ce270625a66db94f4ca267762a88788336e031bdc713"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "The v1.25 style delta is statically and dynamically equivalent for the reviewed scheduler behavior, but final timing and PPA remain HYPOTHESIS until synthesis and implementation.",
+    "The modified ADI source and trusted PUB models remain NON_VENDOR_EQUIVALENT to the future official JESD PHY/GTH and FIFO Generator integration.",
+    "VCS/Verdi, integrated Vivado/XSIM, synthesis, implementation, timing closure, bitstream, programming, and board validation remain NOT_RUN."
+  ]
+}

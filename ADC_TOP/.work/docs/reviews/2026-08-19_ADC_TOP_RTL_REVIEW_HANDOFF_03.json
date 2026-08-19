@@ -1,0 +1,30 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "ACCEPTED",
+  "agent_id": "/root/adc_fmt_review",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {"role": "RTL_DESIGNER", "agent_id": "/root/adc_fmt_rtl"},
+    {"role": "SIMULATION_WORKER", "agent_id": "/root/adc_fmt_sim"},
+    {"role": "CONSTRAINT_WORKER", "agent_id": "/root/adc_fmt_constraint"},
+    {"role": "VERIFICATION_RUNNER", "agent_id": "/root/adc_fmt_verify"},
+    {"role": "DOCS_WORKER", "agent_id": "/root/adc_fmt_docs"}
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "e4c1c60001717dcd802815b94daae90b7db98e2f5f2337874b2a830595098e64",
+  "release_baseline_fingerprint": "5603c795795d3497145856f3904f3281c53b5cfb9dff5220a440310d24618a7f",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "56b21cb69589a0169df4b9450b9b54cbbe6455cc3e1c007eccaca8b41bd63f4b",
+  "reviewed_drafts": [
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State.md", "sha256": "7a2741f4f79bd4a24335c4c740d0557f74997e828e21baa11b2ec641a56ffe73"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-19_RTL_handoff_04.md", "sha256": "13c8073f76ab5c805ebc6a958cfb56fb3b4033598c494c82cc43ed058630cbe4"},
+    {"path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF.md", "sha256": "86107f55b2eac94d9d381a95d148992b970babafec2b4eb0fe57c2e0e165642b"}
+  ],
+  "findings": [],
+  "residual_risks": [
+    "The accepted FRAME_FMT=0 conversion is valid only when software has configured the AC9810 source to matching two's-complement p=10/12/14 before the epoch. p=16, sign-magnitude and unsigned source coding remain out of contract.",
+    "VMware evidence is a non-vendor-equivalent ADI/PUB-boundary sanity result. VCS/Verdi, integrated XSIM, Vivado object resolution, synthesis, implementation, timing closure and hardware validation remain NOT_RUN."
+  ]
+}
