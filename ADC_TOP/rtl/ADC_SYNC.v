@@ -65,7 +65,6 @@ assign tgc_profile_afe = tgc_profile_sys;
 assign tgc_up_dn_afe   = tgc_up_dn_sys;
 assign tgc_slope_afe   = tgc_slope_sys;
 
-levels_sync #(.DS(8)) afe_enable_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(afe_en_sys), .out(afe_en_adc));
 pulse_sync2 tgc_request_to_afe(.clka(sys_clk), .clkb(afe_clk), .rst_n_a(sys_rst_n), .rst_n_b(afe_rst_n), .in(tgc_req_sys), .out(tgc_req_afe));
 level_sync tgc_busy_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(tgc_busy_afe), .out(tgc_busy_sys));
 pulse_sync2 tgc_done_to_sys(.clka(afe_clk), .clkb(sys_clk), .rst_n_a(afe_rst_n), .rst_n_b(sys_rst_n), .in(tgc_done_afe), .out(tgc_done_sys));

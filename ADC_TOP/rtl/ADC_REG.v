@@ -41,17 +41,9 @@ module ADC_REG(
     input  wire [15:0]                      notintable_evt                              ,
     input  wire                             tgc_busy                                    ,
     input  wire                             tgc_done                                    ,
-    output wire [7:0]                       afe_en                                      ,
-    output wire [7:0]                       fifo_clr                                    ,
-    output wire [1:0]                       smp_prec                                    ,
-    output wire [1:0]                       smp_mode                                    ,
-    output wire                             frame_fmt                                   ,
-    output wire [1:0]                       dec_del_mode                                ,
-    output wire [7:0]                       dec_m                                       ,
-    output wire [7:0]                       tgc_mask                                    ,
-    output wire [1:0]                       tgc_profile_sel                             ,
-    output wire                             tgc_up_dn                                   ,
-    output wire                             tgc_slope_trig                              ,
+    output reg [31:0]                      adc_ctl                                     ,
+    output reg [31:0]                      adc_tgc                                     ,
+    output reg [31:0]                      frame_cfg                                   ,
     output reg                              tgc_req
 );
 
@@ -62,9 +54,6 @@ reg [15:0]                                  axi_awaddr_r                        
 reg                                         axi_aw_hold                                 ;
 reg [31:0]                                  axi_wdata_r                                 ;
 reg                                         axi_w_hold                                  ;
-reg [31:0]                                  adc_ctl                                     ;
-reg [31:0]                                  adc_tgc                                     ;
-reg [31:0]                                  frame_cfg                                   ;
 reg [25:0]                                  adc_pd                                      ;
 reg [7:0]                                   sysref_pd                                   ;
 reg [31:0]                                  lane_pd                                     ;
@@ -105,6 +94,17 @@ wire [31:0]                                 reg_0020                            
 wire [31:0]                                 reg_0024                                    ;
 wire [31:0]                                 reg_rdata                                   ;
 wire [3:0]                                  unused_wstrb                                ;
+wire [7:0]                                  afe_en                                      ;
+wire [7:0]                                  fifo_clr                                    ;
+wire                                        frame_fmt                                   ;
+wire [1:0]                                  smp_mode                                    ;
+wire [1:0]                                  smp_prec                                    ;
+wire [7:0]                                  tgc_mask                                    ;
+wire [1:0]                                  tgc_profile_sel                             ;
+wire                                        tgc_up_dn                                   ;
+wire                                        tgc_slope_trig                              ;
+wire [7:0]                                  dec_e                                       ;
+wire [1:0]                                  dec_del_mode                                ;
 
 integer                                     adc_pd_i                                    ;
 integer                                     sysref_pd_i                                 ;
@@ -191,7 +191,7 @@ assign tgc_mask        = adc_tgc[8:1];
 assign tgc_profile_sel = adc_tgc[10:9];
 assign tgc_up_dn       = adc_tgc[11];
 assign tgc_slope_trig  = adc_tgc[12];
-assign dec_m           = frame_cfg[7:0];
+assign dec_e           = frame_cfg[7:0];
 assign dec_del_mode    = frame_cfg[9:8];
 
 assign sysref_rise     = sysref_level && !sysref_r;

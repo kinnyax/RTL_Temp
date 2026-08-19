@@ -21,6 +21,7 @@ SELF_WRITTEN_FILES = (
     "ADC_TGC.v",
     "ADC_PKT.v",
     "ADC_RXD.v",
+    "ADC_UPK.v",
     "ADC_CHN.v",
 )
 
@@ -31,6 +32,7 @@ EXPECTED_FILELIST_FILES = (
     "ADC_TGC.v",
     "ADC_PKT.v",
     "ADC_RXD.v",
+    "ADC_UPK.v",
     "ADC_CHN.v",
     "ADC_TOP.v",
 )

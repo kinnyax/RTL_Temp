@@ -729,8 +729,11 @@ async def _assert_fifo_empty_stable(dut, channels=(0,), samples=8):
 
 
 async def _fifo_clear_cycle_protocol(dut, selected_mask=0x01):
-    """Cycle/status based FIFO_CLR protocol; no wall-clock hold is assumed."""
-    await _axi_write(dut, 0x0000, (selected_mask & 0xFF) << 8, 0xF)
+    """Check FIFO reset convergence while CLR is asserted, preserving AFE_EN."""
+    original_ctl = await _axi_read(dut, 0x0000)
+    release_ctl = original_ctl & ~0x0000ff00
+    await _axi_write(dut, 0x0000,
+                     release_ctl | ((selected_mask & 0xFF) << 8), 0xF)
     await _poll_register(dut, 0x000C, (selected_mask & 0xFF) << 8,
                          (selected_mask & 0xFF) << 8, attempts=160)
     # Both reset-owning clocks remain active. Hold a bounded number of cycles
@@ -739,33 +742,35 @@ async def _fifo_clear_cycle_protocol(dut, selected_mask=0x01):
         await RisingEdge(dut.afe_clk)
     for _ in range(8):
         await RisingEdge(dut.adc_clk)
-    await _axi_write(dut, 0x0000, 0x00000000, 0xF)
+    # A live producer may refill immediately after release.  Empty is therefore
+    # a CLR-active invariant, not a post-release invariant.
     await _assert_fifo_empty_stable(dut, tuple(channel for channel in range(8)
                                                 if selected_mask & (1 << channel)))
+    await _axi_write(dut, 0x0000, release_ctl, 0xF)
 
 
 def _rxd0(dut):
-    """The v1.15 contract permits read-only ADC_RXD acceptance observation."""
+    """Read-only v1.32 acceptance observation of the contract-permitted UPK."""
     channel = getattr(dut, "adc_chn0", None)
-    assert channel is not None, "rxd_three_state: ADC_CHN0 hierarchy is absent"
-    unpack = getattr(channel, "adc_rxd", None)
-    assert unpack is not None, "rxd_three_state: ADC_RXD hierarchy is absent"
+    assert channel is not None, "v1.32 acceptance: ADC_CHN0 hierarchy is absent"
+    unpack = getattr(channel, "adc_upk", None)
+    assert unpack is not None, "v1.32 acceptance: ADC_UPK hierarchy is absent"
     return unpack
 
 
 def _rxd_context(rxd):
     return (
         int(rxd.rxd_fsm.value), int(rxd.prefix_cnt.value),
-        int(rxd.region_cnt.value), int(rxd.rxd_pair_phase.value),
-        int(rxd.ddc_iq_phase.value), int(rxd.ddc_i_accepted_r.value),
+        int(rxd.region_cnt.value), int(rxd.ddc_wr_sel.value),
     )
 
 
 def _assert_rxd_buffer_shape(rxd):
-    """Check the v1.15 two-lane, first-valid-beat-only buffer contract."""
+    """Check the v1.32 UPK first-half and explicit I/Q context shape."""
     assert len(rxd.rxd_buff0) == 128 and len(rxd.rxd_buff1) == 128
-    for name in ("rxd_buff0", "rxd_buff1", "region_cnt", "rxd_pair_phase",
-                 "ddc_iq_phase"):
+    for name in ("rxd_buff0", "rxd_buff1", "region_cnt", "ddc_i_buff",
+                 "ddc_q_buff", "ddc_wr_sel", "rxd_buff_upd", "rxd_data_upd",
+                 "ddc_i_sta", "ddc_q_sta"):
         assert getattr(rxd, name).value.is_resolvable, f"{name} contains X/Z"
 
 
@@ -815,15 +820,15 @@ async def _rxd_monitor(dut, label, predicate, attempts=1024):
 
 
 async def _rxd_preedge_marker_monitor(dut, label, attempts=4096):
-    """Pre-arm one raw valid/SOMF tuple and its post-UDLY RXD consequence."""
+    """Pre-arm the v1.32 AFE tuple marker and its post-edge UPK consequence."""
     rxd = _rxd0(dut)
     for cycle in range(1, attempts + 1):
         await FallingEdge(dut.afe_clk)
         await ReadOnly()
-        raw_valid = _diag_int(rxd.adi_rx_valid)
-        raw_somf = _diag_int(rxd.adi_rx_somf)
-        if raw_valid == 1 and raw_somf is not None and (raw_somf & 1):
-            pre = (cycle, raw_valid, raw_somf, _diag_hex(rxd.adi_rx_data),
+        tuple_valid = _diag_int(rxd.link_ready_afe)
+        raw_somf = _diag_int(rxd.rxd_somf)
+        if tuple_valid == 1 and raw_somf is not None and (raw_somf & 1):
+            pre = (cycle, tuple_valid, raw_somf, _diag_hex(rxd.rxd_data),
                    _rxd_context(rxd))
             await RisingEdge(dut.afe_clk)
             await Timer(2, unit="ns")
@@ -846,12 +851,28 @@ async def _rxd_observe(dut, label, predicate, source):
 
 
 async def _rxd_fifo_clear_source(dut):
-    """Selected FIFO_CLR source; observation is owned by the armed monitor."""
-    await _axi_write(dut, 0x0000, 0x00000100, 0xF)
+    """FIFO-only clear: observe reset while asserted, then allow live refill."""
+    upk = _rxd0(dut)
+    pre_context = _rxd_context(upk)
+    pre_buffers = (int(upk.rxd_buff0.value), int(upk.rxd_buff1.value),
+                   int(upk.ddc_i_buff.value), int(upk.ddc_q_buff.value))
+    pre_request = int(upk.fifo_wr_data.value)
+    await _axi_write(dut, 0x0000, 0x00000101, 0xF)
+    await _poll_register(dut, 0x000C, 0x00000100, 0x00000100, attempts=160)
     for _ in range(8):
         await RisingEdge(dut.afe_clk)
-    await _axi_write(dut, 0x0000, 0x00000000, 0xF)
     await _assert_fifo_empty_stable(dut, (0,))
+    assert _rxd_context(upk) == pre_context, "FIFO_CLR modified UPK FSM/counters/commit"
+    assert (int(upk.rxd_buff0.value), int(upk.rxd_buff1.value),
+            int(upk.ddc_i_buff.value), int(upk.ddc_q_buff.value)) == pre_buffers, (
+                "FIFO_CLR modified UPK buffers")
+    assert int(upk.fifo_wlevel.value) == 512, "FIFO_CLR left a pre-clear word resident"
+    assert int(dut.m_axis_afe0_tvalid.value) == 0, (
+        f"pre-clear FIFO request 0x{pre_request:0128x} escaped while CLR was asserted")
+    await _axi_write(dut, 0x0000, 0x00000001, 0xF)
+    assert (await _axi_read(dut, 0x0000)) & 0x1, "FIFO_CLR release disabled AFE_EN"
+    # No persistent-empty assertion follows release: the active source may
+    # resume or continue and legitimately create a new FIFO request.
 
 
 async def _rxd_rx_reset_done_source(dut, value):
@@ -1554,23 +1575,21 @@ def _ddc_recovery_snapshot(dut, label):
     """Stable-point, read-only DDC recovery state marker; X/Z is diagnostic."""
     rxd = _rxd0(dut)
     dut._log.info(
-        "DDC_RECOVERY %s fsm=%s raw_v=%s somf=%s abort=%s fifo_clr=%s "
-        "level=%s fifo_valid=%s fifo_lsw=%s pair=%s iq=%s iaccepted=%s",
-        label, _diag_scalar(rxd.rxd_fsm), _diag_scalar(rxd.adi_rx_valid),
-        _diag_hex(rxd.adi_rx_somf), _diag_scalar(rxd.ddc_abort_afe),
-        _diag_scalar(rxd.fifo_clr), _diag_scalar(rxd.fifo_wlevel),
+        "DDC_RECOVERY %s fsm=%s tuple_live=%s somf=%s commit=%s "
+        "level=%s fifo_valid=%s fifo_lsw=%s i_sta=%s q_sta=%s",
+        label, _diag_scalar(rxd.rxd_fsm), _diag_scalar(rxd.link_ready_afe),
+        _diag_hex(rxd.rxd_somf), _diag_scalar(rxd.ddc_wr_sel),
+        _diag_scalar(rxd.fifo_wlevel),
         _diag_scalar(rxd.fifo_wr_valid), _diag_hex(rxd.fifo_wr_data),
-        _diag_scalar(getattr(rxd, "rxd_pair_phase", None)),
-        _diag_scalar(getattr(rxd, "ddc_iq_phase", None)),
-        _diag_scalar(getattr(rxd, "ddc_i_accepted_r", None)))
+        _diag_scalar(rxd.ddc_i_sta), _diag_scalar(rxd.ddc_q_sta))
 
 
 async def _ddc_recovery_trace(dut, attempts=65536):
     """Bounded whole-test post-edge DDC recovery trace; no DUT signal is driven."""
     rxd = _rxd0(dut)
     dut._log.info("DDC_RECOVERY monitor_start POST_EDGE sampling")
-    previous_abort = _diag_int(rxd.ddc_abort_afe)
-    previous_clear = _diag_int(rxd.fifo_clr)
+    previous_abort = _diag_int(rxd.ddc_wr_sel)
+    previous_clear = _diag_int(rxd.link_ready_afe)
     writes = 0
     writes_since_clear = 0
     somf_records = 0
@@ -1581,9 +1600,9 @@ async def _ddc_recovery_trace(dut, attempts=65536):
             await RisingEdge(dut.afe_clk)
             await Timer(2, unit="ns")
             await ReadOnly()
-            abort = _diag_int(rxd.ddc_abort_afe)
-            clear = _diag_int(rxd.fifo_clr)
-            somf = _diag_int(rxd.adi_rx_somf)
+            abort = _diag_int(rxd.ddc_wr_sel)
+            clear = _diag_int(rxd.link_ready_afe)
+            somf = _diag_int(rxd.rxd_somf)
             wr_valid = _diag_int(rxd.fifo_wr_valid)
             somf_hit = somf is not None and (somf & 1)
             clear_released = previous_clear == 1 and clear == 0
@@ -1595,13 +1614,12 @@ async def _ddc_recovery_trace(dut, attempts=65536):
                 dut._log.info(
                     "DDC_RECOVERY POST_EDGE cycle=%d somf=%s raw_v=%s fsm=%s abort=%s "
                     "fifo_clr=%s level=%s fifo_valid=%s fifo_lsw=%s pair=%s iq=%s iaccepted=%s",
-                    cycle, _diag_hex(rxd.adi_rx_somf), _diag_scalar(rxd.adi_rx_valid),
-                    _diag_scalar(rxd.rxd_fsm), _diag_scalar(rxd.ddc_abort_afe),
-                    _diag_scalar(rxd.fifo_clr), _diag_scalar(rxd.fifo_wlevel),
+                    cycle, _diag_hex(rxd.rxd_somf), _diag_scalar(rxd.link_ready_afe),
+                    _diag_scalar(rxd.rxd_fsm), _diag_scalar(rxd.ddc_wr_sel),
+                    _diag_scalar(rxd.link_ready_afe), _diag_scalar(rxd.fifo_wlevel),
                     _diag_scalar(rxd.fifo_wr_valid), _diag_hex(rxd.fifo_wr_data),
-                    _diag_scalar(getattr(rxd, "rxd_pair_phase", None)),
-                    _diag_scalar(getattr(rxd, "ddc_iq_phase", None)),
-                    _diag_scalar(getattr(rxd, "ddc_i_accepted_r", None)))
+                    _diag_scalar(rxd.ddc_wr_sel), _diag_scalar(rxd.ddc_i_sta),
+                    _diag_scalar(rxd.ddc_q_sta))
             if somf_hit:
                 somf_records += 1
             if wr_valid == 1:
@@ -1704,7 +1722,7 @@ async def _ddc_abort_requires_fifo_clear_recovery(dut):
             "DDC abort allowed a new AXIS packet before FIFO_CLR recovery"
         )
     dut._log.info("A11_RETAINED_QUEUE level=%d abort=%d", retained_level,
-                  int(rxd.ddc_abort_afe.value))
+                  int(rxd.ddc_wr_sel.value))
     await _poll_register(dut, 0x0010, 1 << 8, 0, attempts=160)
 
     # Recover through disable, idle, FIFO clear, and a clean relink.
@@ -2014,16 +2032,16 @@ async def _region_coordinate_trace(dut, label, attempts=4096):
             await Timer(2, unit="ns")
             await ReadOnly()
             cycle += 1
-            somf = _diag_int(rxd.adi_rx_somf)
+            somf = _diag_int(rxd.rxd_somf)
             fsm = _diag_int(rxd.rxd_fsm)
             record = (
-                f"cycle={cycle} raw_v={_diag_scalar(rxd.adi_rx_valid)} "
-                f"raw_somf={_diag_hex(rxd.adi_rx_somf)} "
-                f"raw_lsw={_diag_hex(rxd.adi_rx_data)} "
+                f"cycle={cycle} tuple_live={_diag_scalar(rxd.link_ready_afe)} "
+                f"tuple_somf={_diag_hex(rxd.rxd_somf)} "
+                f"tuple_lsw={_diag_hex(rxd.rxd_data)} "
                 f"fsm={_diag_scalar(rxd.rxd_fsm)} prefix={_diag_scalar(rxd.prefix_cnt)} "
-                f"region={_diag_scalar(rxd.region_cnt)} pair={_diag_scalar(rxd.rxd_pair_phase)} "
-                f"valid={_diag_scalar(rxd.rxd_valid_beat)} "
-                f"complete={_diag_scalar(rxd.rxd_pair_complete)} "
+                f"region={_diag_scalar(rxd.region_cnt)} commit={_diag_scalar(rxd.ddc_wr_sel)} "
+                f"buffer_upd={_diag_scalar(rxd.rxd_buff_upd)} "
+                f"data_upd={_diag_scalar(rxd.rxd_data_upd)} "
                 f"fifo_valid={_diag_scalar(rxd.fifo_wr_valid)} "
                 f"fifo_lsw={_diag_hex(rxd.fifo_wr_data)} "
                 f"concat0_lsw={_diag_hex(getattr(rxd, 'rxd_concat0', None))}")
@@ -2044,8 +2062,8 @@ async def _region_coordinate_trace(dut, label, attempts=4096):
                     if write_count <= 2:
                         dut._log.info(
                             "REGION_COORD %s POST_EDGE fifo_write=%d pair=%s concat0_lsw=%s fifo_lsw=%s",
-                            label, write_count, _diag_scalar(rxd.rxd_pair_phase),
-                            _diag_hex(getattr(rxd, "rxd_concat0", None)),
+                            label, write_count, _diag_scalar(rxd.ddc_wr_sel),
+                            _diag_hex(getattr(rxd, "mapped_data", None)),
                             _diag_hex(rxd.fifo_wr_data))
                 if fsm == 2 and valid_cycle is None:
                     valid_cycle = cycle
@@ -2150,7 +2168,7 @@ async def _rxd_three_state_directed(dut):
                        _rxd_drive_afe_beats(dut, 16))
     first0, first1 = int(rxd.rxd_buff0.value), int(rxd.rxd_buff1.value)
     assert first0 or first1, "first valid beat was not captured"
-    assert int(rxd.rxd_pair_phase.value) == 1 and int(rxd.fifo_wr_valid.value) == 0, (
+    assert int(rxd.ddc_wr_sel.value) == 0 and int(rxd.fifo_wr_valid.value) == 0, (
         "P0 must capture only the first pair half and must not request FIFO")
     level_before_p1 = int(rxd.fifo_wlevel.value)
     await _rxd_drive_afe_beat(dut)
@@ -2161,7 +2179,7 @@ async def _rxd_three_state_directed(dut):
     request_data = int(rxd.fifo_wr_data.value)
     assert int(rxd.fifo_wr_valid.value) == 1 and request_data != 0, (
         "P1 terminal15 did not register exactly one nonzero FIFO request")
-    assert int(rxd.rxd_pair_phase.value) == 0, "P1 did not close the first pair"
+    assert int(rxd.ddc_wr_sel.value) == 0, "P1 did not leave a DDC commit pending"
     await _rxd_drive_afe_beat(dut)
     await Timer(2, unit="ns")
     await ReadOnly()
@@ -2251,8 +2269,8 @@ async def fixed_somf_alignment_and_legal_zero_payload(dut):
 
 
 @cocotb.test()
-async def ddc_abort_blocks_admission_until_fifo_clear_recovery(dut):
-    await with_timeout(_ddc_abort_requires_fifo_clear_recovery(dut), 600, "us")
+async def ddc_cancellation_dirty_fifo_clear_recovery(dut):
+    await with_timeout(_ddc_v132_cancel_and_recovery(dut), 600, "us")
 
 
 @cocotb.test()
@@ -2267,4 +2285,78 @@ async def link_drop_incomplete_block_discard(dut):
 
 @cocotb.test()
 async def rxd_region_state_directed_recovery(dut):
-    await with_timeout(_rxd_three_state_directed(dut), 2, "ms")
+    await with_timeout(_rxd_v132_directed_recovery(dut), 2, "ms")
+
+
+async def _rxd_v132_directed_recovery(dut):
+    """Contract-permitted hierarchy audit of P0/P1 and clear separation.
+
+    The public scoreboards remain primary. This directed check observes only
+    state/actions explicitly named by the finalized contract.
+    """
+    await _setup(dut)
+    upk = _rxd0(dut)
+    _assert_rxd_buffer_shape(upk)
+    for forbidden in ("rxd_pair_phase", "ddc_iq_phase", "ddc_i_accepted_r",
+                      "ddc_abort_afe", "rxd_buff_vld", "data_cnt"):
+        assert getattr(upk, forbidden, None) is None, f"retired state present: {forbidden}"
+    assert _rxd_context(upk) == (0, 0, 0, 0)
+
+    marker_monitor = cocotb.start_soon(_rxd_preedge_marker_monitor(dut, "IDLE->PREF"))
+    try:
+        await _rxd_start_epoch_source(dut)
+        marker_pre, marker_post = await with_timeout(marker_monitor, 100, "us")
+    finally:
+        if not marker_monitor.done():
+            marker_monitor.kill()
+    assert marker_pre[1] == 1 and (marker_pre[2] & 1) == 1
+    assert marker_pre[4][:2] == (0, 0)
+    assert marker_post[:2] == (1, 0)
+
+    await _rxd_observe(dut, "PREF->VALID", lambda c: c[0] == 2,
+                       _rxd_drive_afe_beats(dut, 16))
+    first_half = (int(upk.rxd_buff0.value), int(upk.rxd_buff1.value))
+    assert first_half != (0, 0), "P0 did not capture the first half"
+    level_before_p1 = int(upk.fifo_wlevel.value)
+    await _rxd_drive_afe_beat(dut)
+    await Timer(2, unit="ns")
+    await ReadOnly()
+    assert int(upk.fifo_wr_valid.value) == 1, "ADC/dec P1 did not register a request"
+    await _rxd_drive_afe_beat(dut)
+    await Timer(2, unit="ns")
+    await ReadOnly()
+    assert int(upk.fifo_wlevel.value) == level_before_p1 - 1, "P1 request was not sampled once"
+
+    await _rxd_fifo_clear_source(dut)
+    assert int(upk.link_ready_afe.value) == 1, "FIFO_CLR release did not preserve live UPK source"
+    await _rxd_rx_reset_done_source(dut, 0)
+    await _rxd_monitor(dut, "upk_vld cancellation", lambda c: c == (0, 0, 0, 0), attempts=64)
+    assert int(upk.rxd_buff0.value) == 0 and int(upk.rxd_buff1.value) == 0
+    assert int(upk.ddc_i_buff.value) == 0 and int(upk.ddc_q_buff.value) == 0
+
+
+async def _ddc_v132_cancel_and_recovery(dut):
+    """DDC source-atomic cancellation uses UPK clear, not a persistent abort."""
+    await _setup(dut)
+    upk = _rxd0(dut)
+    for forbidden in ("ddc_abort_afe", "ddc_i_accepted_r", "ddc_iq_phase"):
+        assert getattr(upk, forbidden, None) is None, f"retired DDC state present: {forbidden}"
+    adc_ctl = 0x88000001
+    await _axi_write(dut, 0x0008, 0x20, 0xF)
+    await _axi_write(dut, 0x0000, adc_ctl, 0xF)
+    dut.afe0_pll_lock.value = 1
+    dut.afe0_rx_reset_done.value = 1
+    dut.afe0_byte_aligned.value = 0x3
+    for _ in range(2100):
+        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+    await _drive_afe0_raw_word_stream(dut, [0x1357] * 64, [0x2468] * 64)
+    await _rxd_monitor(dut, "DDC active", lambda c: c[0] in (1, 2, 3), attempts=4096)
+    fifo_level_before_loss = int(upk.fifo_wlevel.value)
+    await _rxd_rx_reset_done_source(dut, 0)
+    await _rxd_monitor(dut, "DDC cancellation", lambda c: c == (0, 0, 0, 0), attempts=64)
+    assert int(upk.ddc_i_buff.value) == 0 and int(upk.ddc_q_buff.value) == 0
+    assert int(upk.ddc_wr_sel.value) == 0 and int(upk.fifo_wr_valid.value) == 0
+    assert int(upk.fifo_wlevel.value) == fifo_level_before_loss, "upk_vld clear flushed FIFO"
+    await _fifo_clear_cycle_protocol(dut)
+    assert int(upk.fifo_wlevel.value) == 512, "FIFO_CLR did not complete after cancellation"

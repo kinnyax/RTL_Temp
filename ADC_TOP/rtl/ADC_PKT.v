@@ -12,7 +12,6 @@ module ADC_PKT(
     input  wire [1:0]                       smp_mode                                    ,
     input  wire [7:0]                       dec_m                                       ,
     input  wire                             link_ready                                  ,
-    input  wire                             ddc_admit_ok_adc                            ,
     input  wire [511:0]                     fifo_data                                   ,
     input  wire                             fifo_empty                                  ,
     input  wire [9:0]                       fifo_level                                  ,
@@ -51,7 +50,7 @@ wire                                        axis_handshake                      
 wire                                        packet_done                                 ;
 
 assign packet_start   = (pkt_fsm == PKT_IDLE) && chn_en_eff && afe_en &&
-                        link_ready && ddc_admit_ok_adc && (fifo_level >= 10'd256);
+                        link_ready && (fifo_level >= 10'd256);
 assign crc_done       = (crc_byte_r == 6'd61) && (crc_bit_r == 3'd7);
 assign crc_feedback   = crc_r[15] ^ crc_byte_data[7-crc_bit_r];
 assign axis_handshake = m_axis_tvalid && m_axis_tready;
