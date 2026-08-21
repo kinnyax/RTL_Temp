@@ -8,5 +8,6 @@ rtl/CHN_SYNC.v
 rtl/ADC_TGC.v
 rtl/ADC_PKT.v
 rtl/ADC_RXD.v
+rtl/ADC_UPK.v
 rtl/ADC_CHN.v
 rtl/ADC_TOP.v

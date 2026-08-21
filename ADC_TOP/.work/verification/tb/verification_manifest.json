@@ -5,172 +5,73 @@
   "seed": 20260818,
   "timeout_seconds": 600,
   "all_legal_configurations": false,
-  "reset_cases": [
-    "reset defaults and domain release recovery",
-    "afe_rst_n asserts whole-FIFO reset, discards source context, and cleanly relinks",
-    "adc_rst_n resets whole FIFO plus read/packet domain and cleanly restarts",
-    "jesd_rst_n relinks without committing a stale partial block",
-    "software disable JESD reset re-enable and CGS/ILAS recovery",
-    "FIFO_CLR is selected-reset cycle/status based with stable FIFO_EMPTY convergence"
-  ],
+  "reset_cases": ["reset defaults and domain release recovery", "FIFO_CLR reset/recovery and stopped ADC clock access", "AFE/ADC/JESD reset discards FIFO/context and relinks cleanly"],
   "normal_configurations": [
-    "pure ADC 10-bit right-aligned mapping and fixed packet",
-    "decimation 12-bit left-aligned E=32 N=8 f=0 mapping",
-    "decimation plus DDC 14-bit right-aligned E=32 N=8 f=0 I/Q mapping"
+    "normalized ADC 10-bit FRAME_FMT=0 right-aligned packet scoreboard",
+    "normalized ADC 10-bit FRAME_FMT=1 left-aligned packet scoreboard",
+    "normalized ADC 12-bit FRAME_FMT=0 right-aligned packet scoreboard",
+    "normalized dec 12-bit FRAME_FMT=1 left-aligned packet scoreboard",
+    "normalized DDC 14-bit FRAME_FMT=0 right-aligned I/Q packet scoreboard",
+    "normalized ADC 14-bit FRAME_FMT=1 left-aligned packet scoreboard"
   ],
   "boundary_cases": [
-    "AXI AW and W independent arrival with full-word write contract",
-    "every accepted WSTRB pattern consumes complete WDATA with no byte-update semantics",
-    "reserved and unimplemented registers read zero",
-    "software static configuration precondition is legal and stable while active",
-    "global static write gate accepts same ADC_CTL write containing static fields and AFE_EN",
-    "unsafe ADC_CTL write preserves static fields while applying AFE_EN and FIFO_CLR",
-    "unsafe FRAME_CFG write preserves the complete prior register value",
-    "all AFE_EN clear with one active packet remains unsafe until every AFE_IDLE bit is set",
-    "disable all and wait all AFE_IDLE reopens the global static write gate",
-    "FIFO_CLR empty status and stopped ADC clock",
-    "FWFT WC=0 full write request gives native overflow without normal-mode data-drop",
-    "empty FIFO no-underflow guard",
-    "fixed SOMF bit0 epoch alignment with non-bit0 marker excluded from recovery",
-    "legal zero-valued payload is preserved positionally",
-    "SOMF-bearing DATA stream uses the complete positive prefix count on every selected scheduler branch representative",
-    "DUT v1.9 E equals four N plus f scheduler covers every single and DDC f branch and delay mode",
-    "reference layer exhaustively enumerates all 1500 legal single and DDC N f d configurations",
-    "reference layer checks exact prefix gaps phases periods offsets and 12-bit maxima against hard-coded anchors",
-    "single N=1 DDC N=2 and maximum N=63 boundaries are exercised on the public DUT",
-    "single f=1 uses corrected long gap 64N-32 and cycle length 64N+16",
-    "single f=2 public payload scoreboard exercises terminal offsets zero through seven",
-    "scheduler representative pure ADC uses positive prefix and fixed sixteen-word gap",
-    "scheduler representative single N=1 f=0 delay zero",
-    "scheduler representative single N=1 f=1 delay zero",
-    "scheduler representative single N=1 f=2 delay one",
-    "scheduler representative single N=1 f=3 delay two",
-    "scheduler representative single N=63 f=3 delay two exercises maximum prefix and gap",
-    "scheduler representative DDC N=2 f=0 delay one",
-    "scheduler representative DDC N=2 f=1 delay two",
-    "scheduler representative DDC N=2 f=2 delay zero",
-    "scheduler representative DDC N=2 f=3 delay one",
-    "pure ADC uses the fixed legal adc_num=(16+96+16)/8=16-beat prefix",
-    "no encoded JESD_STATE readback is required; LINK_READY is the public link decision",
-    "DDC wlevel two-slot reservation rejects 0/1 free slots without an orphan",
-    "DDC startup and first-SOMF wait do not false-abort",
-    "healthy effective disable ends DDC epoch without data-drop",
-    "DDC valid-epoch link or data-valid loss blocks new packet admission until FIFO_CLR",
-    "DDC DATA_DROP W1C alone does not reopen packet admission",
-    "DDC FIFO_CLR relink produces only clean new-epoch packets",
-    "link drop discards an incomplete AC9810 block",
-    "reset-domain whole-FIFO discard and clean relink payload scoreboard",
-    "exact one header plus 256 payload packet with no tail packet",
-    "TGC single and multi mask slope no-slope and unselected retention",
-    "decimation zero-padding removal and 12-bit signed sample mapping",
-    "DDC zero-padding removal and 14-bit signed I/Q mapping",
-    "rxd_three_state: directed IDLE PREF PAYL ownership, clear, gap, and illegal-state recovery"
+    "all legal dec N=1..63 and ddc N=2..63, f=0..3, d=0..2 reference enumeration",
+    "v1.32 dec and ddc prefix, region valid/zero formulas, alignment, even beats and limits",
+    "corrected dec f2 N=1 and N=63 has no N.5 duplicate endpoint",
+    "zero bypass dec f0 N=1 and ddc f0 N=2 has no phantom ZERO region",
+    "public dec/ddc representatives cover all fraction and delay branches",
+    "monotonic nonzero lane data proves zero regions do not contaminate or duplicate candidates",
+    "fixed two-beat concat and channel mapping are checked by the public packet scoreboard",
+    "A12 10-bit FRAME_FMT=0 uses normalized N'=16 positive and negative containers",
+    "A12 10-bit FRAME_FMT=1 uses normalized N'=16 positive and negative containers",
+    "A12 12-bit FRAME_FMT=0 uses normalized N'=16 positive and negative containers",
+    "A12 12-bit FRAME_FMT=1 uses normalized N'=16 positive and negative containers",
+    "A12 14-bit FRAME_FMT=0 uses normalized N'=16 positive and negative containers",
+    "A12 14-bit FRAME_FMT=1 uses normalized N'=16 positive and negative containers",
+    "A6 DDC free=0 drop and free=2/512 admission decisions",
+    "A6 DDC free=1 whole-pair drop decision",
+    "v1.32 Layer-B A9/A10/A11 AFE-tuple marker, payload-hit capture and following FIFO-request sample, source-atomic DDC cancellation and clear recovery",
+    "fixed eight-channel public PHY/AXIS/TGC interface",
+    "all eight TGC outputs preserve channel routing",
+    "AXI full-word/register/static-config behavior and TGC behavior",
+    "pure ADC fixed sixteen-beat prefix packet alignment",
+    "static configuration remains blocked until every AFE is idle",
+    "fixed SOMF, legal zero payload and FIFO empty/full behavior",
+    "link drop discards an incomplete block"
   ],
   "error_cases": [
-    "TGC mask-zero target error and busy reentry W1C",
-    "public ADI SYSREF alignment error sticky and software recovery",
-    "FIFO native overflow sticky reporting",
-    "DDC data-drop sticky reporting"
+    "TGC error/W1C and FIFO overflow reporting",
+    "DDC fewer-than-two-free-entry whole-pair drop with one DATA_DROP and accepted sequential I/Q",
+    "upk_vld cancellation clears complete I context without FIFO flush or DATA_DROP"
   ],
-  "backpressure_cases": [
-    "AXI B response stability while BREADY is low",
-    "AXI R response stability while RREADY is low",
-    "AXIS header and payload stability with started-packet completion under backpressure"
-  ],
+  "backpressure_cases": ["AXI B/R response stability", "AXIS started-packet stability and completion", "DDC dirty-FIFO software clear recovery after cancellation"],
   "testcase_map": {
-    "reset_and_top_level_defaults": [
-      "reset:reset defaults and domain release recovery"
+    "reset_and_top_level_defaults": ["reset:reset defaults and domain release recovery", "boundary:fixed eight-channel public PHY/AXIS/TGC interface"],
+    "fifo_clear_and_adc_clock_stop": ["reset:FIFO_CLR reset/recovery and stopped ADC clock access"],
+    "reset_domains_whole_fifo_and_relink": ["reset:AFE/ADC/JESD reset discards FIFO/context and relinks cleanly"],
+    "public_phy_cgs_ilas_packet_header_and_axis": ["normal:normalized ADC 10-bit FRAME_FMT=0 right-aligned packet scoreboard", "boundary:A12 10-bit FRAME_FMT=0 uses normalized N'=16 positive and negative containers", "backpressure:AXIS started-packet stability and completion"],
+    "decimation12_end_to_end_scoreboard_and_empty_fifo_guard": ["normal:normalized dec 12-bit FRAME_FMT=1 left-aligned packet scoreboard", "boundary:A12 12-bit FRAME_FMT=1 uses normalized N'=16 positive and negative containers"],
+    "ddc14_end_to_end_scoreboard": ["normal:normalized DDC 14-bit FRAME_FMT=0 right-aligned I/Q packet scoreboard", "boundary:A12 14-bit FRAME_FMT=0 uses normalized N'=16 positive and negative containers", "boundary:A6 DDC free=0 drop and free=2/512 admission decisions", "error:DDC fewer-than-two-free-entry whole-pair drop with one DATA_DROP and accepted sequential I/Q"],
+    "normalized_format10_left_aligned_scoreboard": ["normal:normalized ADC 10-bit FRAME_FMT=1 left-aligned packet scoreboard", "boundary:A12 10-bit FRAME_FMT=1 uses normalized N'=16 positive and negative containers"],
+    "normalized_format12_right_aligned_scoreboard": ["normal:normalized ADC 12-bit FRAME_FMT=0 right-aligned packet scoreboard", "boundary:A12 12-bit FRAME_FMT=0 uses normalized N'=16 positive and negative containers"],
+    "normalized_format14_left_aligned_scoreboard": ["normal:normalized ADC 14-bit FRAME_FMT=1 left-aligned packet scoreboard", "boundary:A12 14-bit FRAME_FMT=1 uses normalized N'=16 positive and negative containers"],
+    "dec_ddc_region_v132_legal_matrix": [
+      "boundary:all legal dec N=1..63 and ddc N=2..63, f=0..3, d=0..2 reference enumeration",
+      "boundary:v1.32 dec and ddc prefix, region valid/zero formulas, alignment, even beats and limits",
+      "boundary:corrected dec f2 N=1 and N=63 has no N.5 duplicate endpoint",
+      "boundary:zero bypass dec f0 N=1 and ddc f0 N=2 has no phantom ZERO region",
+      "boundary:public dec/ddc representatives cover all fraction and delay branches",
+      "boundary:monotonic nonzero lane data proves zero regions do not contaminate or duplicate candidates",
+      "boundary:fixed two-beat concat and channel mapping are checked by the public packet scoreboard"
     ],
-    "axi_register_contract_and_modes": [
-      "boundary:AXI AW and W independent arrival with full-word write contract",
-      "boundary:every accepted WSTRB pattern consumes complete WDATA with no byte-update semantics",
-      "boundary:reserved and unimplemented registers read zero",
-      "boundary:global static write gate accepts same ADC_CTL write containing static fields and AFE_EN",
-      "boundary:unsafe ADC_CTL write preserves static fields while applying AFE_EN and FIFO_CLR",
-      "boundary:unsafe FRAME_CFG write preserves the complete prior register value",
-      "boundary:disable all and wait all AFE_IDLE reopens the global static write gate",
-      "backpressure:AXI B response stability while BREADY is low"
-    ],
-    "fifo_clear_and_adc_clock_stop": [
-      "reset:FIFO_CLR is selected-reset cycle/status based with stable FIFO_EMPTY convergence",
-      "boundary:FIFO_CLR empty status and stopped ADC clock"
-    ],
-    "tgc_sticky_error_and_inactive_backpressure": [
-      "boundary:TGC single and multi mask slope no-slope and unselected retention",
-      "error:TGC mask-zero target error and busy reentry W1C"
-    ],
-    "axi_read_response_backpressure_and_reset_ready_low": [
-      "backpressure:AXI R response stability while RREADY is low"
-    ],
-    "public_phy_cgs_ilas_packet_header_and_axis": [
-      "reset:afe_rst_n asserts whole-FIFO reset, discards source context, and cleanly relinks",
-      "reset:software disable JESD reset re-enable and CGS/ILAS recovery",
-      "normal:pure ADC 10-bit right-aligned mapping and fixed packet",
-      "boundary:no encoded JESD_STATE readback is required; LINK_READY is the public link decision",
-      "boundary:FWFT WC=0 full write request gives native overflow without normal-mode data-drop",
-      "boundary:exact one header plus 256 payload packet with no tail packet",
-      "error:public ADI SYSREF alignment error sticky and software recovery",
-      "error:FIFO native overflow sticky reporting",
-      "backpressure:AXIS header and payload stability with started-packet completion under backpressure"
-    ],
-    "decimation12_end_to_end_scoreboard_and_empty_fifo_guard": [
-      "normal:decimation 12-bit left-aligned E=32 N=8 f=0 mapping",
-      "boundary:decimation zero-padding removal and 12-bit signed sample mapping",
-      "boundary:empty FIFO no-underflow guard"
-    ],
-    "ddc14_end_to_end_scoreboard": [
-      "normal:decimation plus DDC 14-bit right-aligned E=32 N=8 f=0 I/Q mapping",
-      "boundary:DDC zero-padding removal and 14-bit signed I/Q mapping",
-      "boundary:DDC wlevel two-slot reservation rejects 0/1 free slots without an orphan",
-      "error:DDC data-drop sticky reporting"
-    ],
-    "fixed_somf_alignment_and_legal_zero_payload": [
-      "boundary:fixed SOMF bit0 epoch alignment with non-bit0 marker excluded from recovery",
-      "boundary:legal zero-valued payload is preserved positionally"
-    ],
-    "unpack_schedule_v19_legal_matrix": [
-      "boundary:SOMF-bearing DATA stream uses the complete positive prefix count on every selected scheduler branch representative",
-      "boundary:DUT v1.9 E equals four N plus f scheduler covers every single and DDC f branch and delay mode",
-      "boundary:reference layer exhaustively enumerates all 1500 legal single and DDC N f d configurations",
-      "boundary:reference layer checks exact prefix gaps phases periods offsets and 12-bit maxima against hard-coded anchors",
-      "boundary:single N=1 DDC N=2 and maximum N=63 boundaries are exercised on the public DUT",
-      "boundary:single f=1 uses corrected long gap 64N-32 and cycle length 64N+16",
-      "boundary:single f=2 public payload scoreboard exercises terminal offsets zero through seven",
-      "boundary:scheduler representative pure ADC uses positive prefix and fixed sixteen-word gap",
-      "boundary:scheduler representative single N=1 f=0 delay zero",
-      "boundary:scheduler representative single N=1 f=1 delay zero",
-      "boundary:scheduler representative single N=1 f=2 delay one",
-      "boundary:scheduler representative single N=1 f=3 delay two",
-      "boundary:scheduler representative single N=63 f=3 delay two exercises maximum prefix and gap",
-      "boundary:scheduler representative DDC N=2 f=0 delay one",
-      "boundary:scheduler representative DDC N=2 f=1 delay two",
-      "boundary:scheduler representative DDC N=2 f=2 delay zero",
-      "boundary:scheduler representative DDC N=2 f=3 delay one"
-    ],
-    "pure_adc_fixed_prefix": [
-      "boundary:pure ADC uses the fixed legal adc_num=(16+96+16)/8=16-beat prefix"
-    ],
-    "static_cfg_non_idle_only_gate": [
-      "boundary:all AFE_EN clear with one active packet remains unsafe until every AFE_IDLE bit is set"
-    ],
-    "ddc_abort_blocks_admission_until_fifo_clear_recovery": [
-      "boundary:DDC startup and first-SOMF wait do not false-abort",
-      "boundary:healthy effective disable ends DDC epoch without data-drop",
-      "boundary:DDC valid-epoch link or data-valid loss blocks new packet admission until FIFO_CLR",
-      "boundary:DDC DATA_DROP W1C alone does not reopen packet admission",
-      "boundary:DDC FIFO_CLR relink produces only clean new-epoch packets"
-    ],
-    "reset_domains_whole_fifo_and_relink": [
-      "reset:adc_rst_n resets whole FIFO plus read/packet domain and cleanly restarts",
-      "reset:jesd_rst_n relinks without committing a stale partial block",
-      "boundary:reset-domain whole-FIFO discard and clean relink payload scoreboard"
-    ],
-    "link_drop_incomplete_block_discard": [
-      "boundary:software static configuration precondition is legal and stable while active",
-      "boundary:link drop discards an incomplete AC9810 block"
-    ],
-    "rxd_three_state_directed_recovery": [
-      "boundary:rxd_three_state: directed IDLE PREF PAYL ownership, clear, gap, and illegal-state recovery"
-    ]
+    "rxd_region_state_directed_recovery": ["boundary:v1.32 Layer-B A9/A10/A11 AFE-tuple marker, payload-hit capture and following FIFO-request sample, source-atomic DDC cancellation and clear recovery"],
+    "pure_adc_fixed_prefix": ["boundary:pure ADC fixed sixteen-beat prefix packet alignment"],
+    "static_cfg_non_idle_only_gate": ["boundary:static configuration remains blocked until every AFE is idle"],
+    "axi_register_contract_and_modes": ["boundary:AXI full-word/register/static-config behavior and TGC behavior"],
+    "tgc_sticky_error_and_inactive_backpressure": ["error:TGC error/W1C and FIFO overflow reporting", "boundary:all eight TGC outputs preserve channel routing"],
+    "axi_read_response_backpressure_and_reset_ready_low": ["backpressure:AXI B/R response stability"],
+    "ddc_cancellation_dirty_fifo_clear_recovery": ["boundary:A6 DDC free=1 whole-pair drop decision", "error:upk_vld cancellation clears complete I context without FIFO flush or DATA_DROP", "backpressure:DDC dirty-FIFO software clear recovery after cancellation"],
+    "fixed_somf_alignment_and_legal_zero_payload": ["boundary:fixed SOMF, legal zero payload and FIFO empty/full behavior"],
+    "link_drop_incomplete_block_discard": ["boundary:link drop discards an incomplete block"]
   }
 }

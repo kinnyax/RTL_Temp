@@ -1,115 +1,119 @@
 `timescale 1ns / 1ps
 
-// =====
-// 1. AXI Register Control
-// =====
+// AXI4-Lite register control and software-visible status owner.
 module ADC_REG(
-    input  wire                             sys_clk                                     ,
-    input  wire                             sys_rst_n                                   ,
-    input  wire [15:0]                      s_axi_awaddr                                ,
-    input  wire                             s_axi_awvalid                               ,
-    output wire                             s_axi_awready                               ,
-    input  wire [31:0]                      s_axi_wdata                                 ,
-    input  wire [3:0]                       s_axi_wstrb                                 ,
-    input  wire                             s_axi_wvalid                                ,
-    output wire                             s_axi_wready                                ,
-    output wire [1:0]                       s_axi_bresp                                 ,
-    output reg                              s_axi_bvalid                                ,
-    input  wire                             s_axi_bready                                ,
-    input  wire [15:0]                      s_axi_araddr                                ,
-    input  wire                             s_axi_arvalid                               ,
-    output wire                             s_axi_arready                               ,
-    output reg [31:0]                       s_axi_rdata                                 ,
-    output wire [1:0]                       s_axi_rresp                                 ,
-    output reg                              s_axi_rvalid                                ,
-    input  wire                             s_axi_rready                                ,
-    input  wire [7:0]                       link_ready                                  ,
-    input  wire [7:0]                       fifo_empty                                  ,
-    input  wire [7:0]                       fifo_full                                   ,
-    input  wire [7:0]                       afe_idle                                    ,
-    input  wire [7:0]                       pll_lock                                    ,
-    input  wire [7:0]                       rx_reset_done                               ,
-    input  wire [15:0]                      lane_ready                                  ,
-    input  wire [15:0]                      byte_aligned                                ,
-    input  wire [15:0]                      comma_detected                              ,
-    input  wire                             sysref_level                                ,
-    input  wire [7:0]                       fifo_overflow_evt                           ,
-    input  wire [7:0]                       data_drop_evt                               ,
-    input  wire [7:0]                       link_error_evt                              ,
-    input  wire [7:0]                       sysref_seen_evt                             ,
-    input  wire [15:0]                      disparity_evt                               ,
-    input  wire [15:0]                      notintable_evt                              ,
-    input  wire                             tgc_busy                                    ,
-    input  wire                             tgc_done                                    ,
-    output wire [7:0]                       afe_en                                      ,
-    output wire [7:0]                       fifo_clr                                    ,
-    output wire [1:0]                       smp_prec                                    ,
-    output wire [1:0]                       smp_mode                                    ,
-    output wire                             frame_fmt                                   ,
-    output wire [1:0]                       dec_del_mode                                ,
-    output wire [7:0]                       dec_m                                       ,
-    output wire [7:0]                       tgc_mask                                    ,
-    output wire [1:0]                       tgc_profile_sel                             ,
-    output wire                             tgc_up_dn                                   ,
-    output wire                             tgc_slope_trig                              ,
+    // System clock domain
+    input  wire                             sys_clk                                      ,
+    input  wire                             sys_rst_n                                    ,
+
+    // AXI-Lite write address channel
+    input  wire [15:0]                      s_axi_awaddr                                 ,
+    input  wire                             s_axi_awvalid                                ,
+    output wire                             s_axi_awready                                ,
+
+    // AXI-Lite write data and response channels
+    input  wire [31:0]                      s_axi_wdata                                  ,
+    input  wire [3:0]                       s_axi_wstrb                                  ,
+    input  wire                             s_axi_wvalid                                 ,
+    output wire                             s_axi_wready                                 ,
+    output wire [1:0]                       s_axi_bresp                                  ,
+    output reg                              s_axi_bvalid                                 ,
+    input  wire                             s_axi_bready                                 ,
+
+    // AXI-Lite read address and data channels
+    input  wire [15:0]                      s_axi_araddr                                 ,
+    input  wire                             s_axi_arvalid                                ,
+    output wire                             s_axi_arready                                ,
+    output reg  [31:0]                      s_axi_rdata                                  ,
+    output wire [1:0]                       s_axi_rresp                                  ,
+    output reg                              s_axi_rvalid                                 ,
+    input  wire                             s_axi_rready                                 ,
+
+    // Synchronized ADC and AFE status
+    input  wire [7:0]                       link_ready                                   ,
+    input  wire [7:0]                       fifo_empty                                   ,
+    input  wire [7:0]                       fifo_full                                    ,
+    input  wire [7:0]                       afe_idle                                     ,
+    input  wire [7:0]                       pll_lock                                     ,
+    input  wire [7:0]                       rx_reset_done                                ,
+    input  wire [15:0]                      lane_ready                                   ,
+    input  wire [15:0]                      byte_aligned                                 ,
+    input  wire [15:0]                      comma_detected                               ,
+    input  wire                             sysref_level                                 ,
+    input  wire [7:0]                       fifo_overflow_evt                            ,
+    input  wire [7:0]                       data_drop_evt                                ,
+    input  wire [7:0]                       link_error_evt                               ,
+    input  wire [7:0]                       sysref_seen_evt                              ,
+    input  wire [15:0]                      disparity_evt                                ,
+    input  wire [15:0]                      notintable_evt                               ,
+    input  wire                             tgc_busy                                     ,
+    input  wire                             tgc_done                                     ,
+
+    // Register control outputs
+    output reg  [31:0]                      adc_ctl                                      ,
+    output reg  [31:0]                      adc_tgc                                      ,
+    output reg  [31:0]                      frame_cfg                                    ,
     output reg                              tgc_req
 );
 
-parameter                                  UDLY         = 1                             ;
-localparam [31:0]                          ADC_CTL_MASK = 32'hce00_ffff                 ;
+parameter                                   UDLY                                         = 1            ;
+localparam [31:0]                           ADC_CTL_MASK                                 = 32'hce00_ffff;
 
-reg [15:0]                                  axi_awaddr_r                                ;
-reg                                         axi_aw_hold                                 ;
-reg [31:0]                                  axi_wdata_r                                 ;
-reg                                         axi_w_hold                                  ;
-reg [31:0]                                  adc_ctl                                     ;
-reg [31:0]                                  adc_tgc                                     ;
-reg [31:0]                                  frame_cfg                                   ;
-reg [25:0]                                  adc_pd                                      ;
-reg [7:0]                                   sysref_pd                                   ;
-reg [31:0]                                  lane_pd                                     ;
-reg                                         sysref_r                                    ;
-reg [15:0]                                  sysref_cnt                                  ;
+reg      [15:0]                             axi_awaddr_r                                 ;
+reg                                         axi_aw_hold                                  ;
+reg      [31:0]                             axi_wdata_r                                  ;
+reg                                         axi_w_hold                                   ;
+reg      [25:0]                             adc_pd                                       ;
+reg      [7:0]                              sysref_pd                                    ;
+reg      [31:0]                             lane_pd                                      ;
+reg                                         sysref_r                                     ;
+reg      [15:0]                             sysref_cnt                                   ;
 
-wire                                        wr_access                                   ;
-wire                                        rd_access                                   ;
-wire                                        reg_0000_wr                                 ;
-wire                                        reg_0004_wr                                 ;
-wire                                        reg_0008_wr                                 ;
-wire                                        reg_0010_wr                                 ;
-wire                                        reg_0018_wr                                 ;
-wire                                        reg_0024_wr                                 ;
-wire                                        reg_0000_rd                                 ;
-wire                                        reg_0004_rd                                 ;
-wire                                        reg_0008_rd                                 ;
-wire                                        reg_000c_rd                                 ;
-wire                                        reg_0010_rd                                 ;
-wire                                        reg_0014_rd                                 ;
-wire                                        reg_0018_rd                                 ;
-wire                                        reg_001c_rd                                 ;
-wire                                        reg_0020_rd                                 ;
-wire                                        reg_0024_rd                                 ;
-wire                                        sysref_rise                                 ;
-wire                                        tgc_target_err                              ;
-wire                                        tgc_reentry_err                             ;
-wire                                        cfg_wr_safe                                 ;
-wire [31:0]                                 reg_0000                                    ;
-wire [31:0]                                 reg_0004                                    ;
-wire [31:0]                                 reg_0008                                    ;
-wire [31:0]                                 reg_000c                                    ;
-wire [31:0]                                 reg_0010                                    ;
-wire [31:0]                                 reg_0014                                    ;
-wire [31:0]                                 reg_0018                                    ;
-wire [31:0]                                 reg_001c                                    ;
-wire [31:0]                                 reg_0020                                    ;
-wire [31:0]                                 reg_0024                                    ;
-wire [31:0]                                 reg_rdata                                   ;
-wire [3:0]                                  unused_wstrb                                ;
+wire                                        wr_access                                    ;
+wire                                        rd_access                                    ;
+wire                                        reg_0000_wr                                  ;
+wire                                        reg_0004_wr                                  ;
+wire                                        reg_0008_wr                                  ;
+wire                                        reg_0010_wr                                  ;
+wire                                        reg_0018_wr                                  ;
+wire                                        reg_0024_wr                                  ;
+wire                                        reg_0000_rd                                  ;
+wire                                        reg_0004_rd                                  ;
+wire                                        reg_0008_rd                                  ;
+wire                                        reg_000c_rd                                  ;
+wire                                        reg_0010_rd                                  ;
+wire                                        reg_0014_rd                                  ;
+wire                                        reg_0018_rd                                  ;
+wire                                        reg_001c_rd                                  ;
+wire                                        reg_0020_rd                                  ;
+wire                                        reg_0024_rd                                  ;
+wire                                        sysref_rise                                  ;
+wire                                        tgc_target_err                               ;
+wire                                        tgc_reentry_err                              ;
+wire                                        tgc_cmd_accept                               ;
+wire                                        tgc_req_set                                  ;
+wire                                        cfg_wr_safe                                  ;
+wire     [25:0]                             adc_pd_set                                   ;
+wire     [25:0]                             adc_pd_clr                                   ;
+wire     [7:0]                              sysref_pd_set                                ;
+wire     [7:0]                              sysref_pd_clr                                ;
+wire     [31:0]                             lane_pd_set                                  ;
+wire     [31:0]                             lane_pd_clr                                  ;
+wire                                        sysref_cnt_inc                               ;
+wire     [31:0]                             reg_0000                                     ;
+wire     [31:0]                             reg_0004                                     ;
+wire     [31:0]                             reg_0008                                     ;
+wire     [31:0]                             reg_000c                                     ;
+wire     [31:0]                             reg_0010                                     ;
+wire     [31:0]                             reg_0014                                     ;
+wire     [31:0]                             reg_0018                                     ;
+wire     [31:0]                             reg_001c                                     ;
+wire     [31:0]                             reg_0020                                     ;
+wire     [31:0]                             reg_0024                                     ;
+wire     [31:0]                             reg_rdata                                    ;
+wire     [3:0]                              unused_wstrb                                 ;
 
-integer                                     adc_pd_i                                    ;
-integer                                     sysref_pd_i                                 ;
-integer                                     lane_pd_i                                   ;
-
+// AXI write address and data are captured independently.
 assign s_axi_awready = sys_rst_n && !axi_aw_hold && !s_axi_bvalid;
 assign s_axi_wready  = sys_rst_n && !axi_w_hold  && !s_axi_bvalid;
 assign s_axi_bresp   = 2'b00;
@@ -164,6 +168,7 @@ always @(posedge sys_clk or negedge sys_rst_n) begin
     end
 end
 
+// Register address decode.
 assign reg_0000_wr = wr_access && (axi_awaddr_r == 16'h0000);
 assign reg_0004_wr = wr_access && (axi_awaddr_r == 16'h0004);
 assign reg_0008_wr = wr_access && (axi_awaddr_r == 16'h0008);
@@ -182,23 +187,22 @@ assign reg_001c_rd = rd_access && (s_axi_araddr == 16'h001c);
 assign reg_0020_rd = rd_access && (s_axi_araddr == 16'h0020);
 assign reg_0024_rd = rd_access && (s_axi_araddr == 16'h0024);
 
-assign afe_en          = adc_ctl[7:0];
-assign fifo_clr        = adc_ctl[15:8];
-assign frame_fmt       = adc_ctl[25];
-assign smp_mode        = adc_ctl[27:26];
-assign smp_prec        = adc_ctl[31:30];
-assign tgc_mask        = adc_tgc[8:1];
-assign tgc_profile_sel = adc_tgc[10:9];
-assign tgc_up_dn       = adc_tgc[11];
-assign tgc_slope_trig  = adc_tgc[12];
-assign dec_m           = frame_cfg[7:0];
-assign dec_del_mode    = frame_cfg[9:8];
+assign sysref_rise      = sysref_level && !sysref_r;
+assign tgc_cmd_accept   = reg_0004_wr && !adc_tgc[0] && !tgc_busy;
+assign tgc_req_set      = tgc_cmd_accept && axi_wdata_r[0] && (axi_wdata_r[8:1] != 8'd0);
+assign tgc_target_err   = tgc_cmd_accept && axi_wdata_r[0] && (axi_wdata_r[8:1] == 8'd0);
+assign tgc_reentry_err  = reg_0004_wr && axi_wdata_r[0] && (adc_tgc[0] || tgc_busy);
+assign cfg_wr_safe      = (adc_ctl[7:0] == 8'h00) && (afe_idle == 8'hff);
+assign adc_pd_set       = {tgc_reentry_err,tgc_target_err,link_error_evt,
+                           data_drop_evt,fifo_overflow_evt};
+assign adc_pd_clr       = {26{reg_0010_wr}} & axi_wdata_r[25:0];
+assign sysref_pd_set    = sysref_seen_evt;
+assign sysref_pd_clr    = {8{reg_0018_wr}} & axi_wdata_r[7:0];
+assign lane_pd_set      = {notintable_evt,disparity_evt};
+assign lane_pd_clr      = {32{reg_0024_wr}} & axi_wdata_r;
+assign sysref_cnt_inc   = sysref_rise && (sysref_cnt != 16'hffff);
 
-assign sysref_rise     = sysref_level && !sysref_r;
-assign tgc_target_err  = reg_0004_wr && axi_wdata_r[0] && (axi_wdata_r[8:1] == 8'd0);
-assign tgc_reentry_err = reg_0004_wr && axi_wdata_r[0] && (adc_tgc[0] || tgc_busy);
-assign cfg_wr_safe     = (adc_ctl[7:0] == 8'h00) && (afe_idle == 8'hff);
-
+// Static configuration changes only while all channels are disabled and idle.
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if (!sys_rst_n) begin
         adc_ctl   <= #UDLY 32'd0;
@@ -214,134 +218,60 @@ always @(posedge sys_clk or negedge sys_rst_n) begin
     end
 end
 
+// TGC configuration and request lifetime.
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if (!sys_rst_n) begin
-        adc_tgc   <= #UDLY 32'd0;
+        adc_tgc <= #UDLY 32'd0;
         tgc_req <= #UDLY 1'b0;
     end else begin
         tgc_req <= #UDLY 1'b0;
         if (tgc_done)
             adc_tgc[0] <= #UDLY 1'b0;
-        if (reg_0004_wr && !adc_tgc[0] && !tgc_busy) begin
+        if (tgc_cmd_accept) begin
             adc_tgc <= #UDLY {19'd0,axi_wdata_r[12:1],1'b0};
-            if (axi_wdata_r[0] && (axi_wdata_r[8:1] != 8'd0)) begin
+            if (tgc_req_set) begin
                 adc_tgc[0] <= #UDLY 1'b1;
-                tgc_req  <= #UDLY 1'b1;
+                tgc_req    <= #UDLY 1'b1;
             end
         end
     end
 end
 
+// Hardware event set has priority over a same-cycle software W1C request.
 always @(posedge sys_clk or negedge sys_rst_n) begin
-    if (!sys_rst_n) begin
+    if (!sys_rst_n)
         adc_pd <= #UDLY 26'd0;
-    end else begin
-        for (adc_pd_i=0; adc_pd_i<26; adc_pd_i=adc_pd_i+1) begin
-            if (reg_0010_wr && axi_wdata_r[adc_pd_i])
-                adc_pd[adc_pd_i] <= #UDLY 1'b0;
-        end
-        if (fifo_overflow_evt[0]) adc_pd[0]  <= #UDLY 1'b1;
-        if (fifo_overflow_evt[1]) adc_pd[1]  <= #UDLY 1'b1;
-        if (fifo_overflow_evt[2]) adc_pd[2]  <= #UDLY 1'b1;
-        if (fifo_overflow_evt[3]) adc_pd[3]  <= #UDLY 1'b1;
-        if (fifo_overflow_evt[4]) adc_pd[4]  <= #UDLY 1'b1;
-        if (fifo_overflow_evt[5]) adc_pd[5]  <= #UDLY 1'b1;
-        if (fifo_overflow_evt[6]) adc_pd[6]  <= #UDLY 1'b1;
-        if (fifo_overflow_evt[7]) adc_pd[7]  <= #UDLY 1'b1;
-        if (data_drop_evt[0])     adc_pd[8]  <= #UDLY 1'b1;
-        if (data_drop_evt[1])     adc_pd[9]  <= #UDLY 1'b1;
-        if (data_drop_evt[2])     adc_pd[10] <= #UDLY 1'b1;
-        if (data_drop_evt[3])     adc_pd[11] <= #UDLY 1'b1;
-        if (data_drop_evt[4])     adc_pd[12] <= #UDLY 1'b1;
-        if (data_drop_evt[5])     adc_pd[13] <= #UDLY 1'b1;
-        if (data_drop_evt[6])     adc_pd[14] <= #UDLY 1'b1;
-        if (data_drop_evt[7])     adc_pd[15] <= #UDLY 1'b1;
-        if (link_error_evt[0])    adc_pd[16] <= #UDLY 1'b1;
-        if (link_error_evt[1])    adc_pd[17] <= #UDLY 1'b1;
-        if (link_error_evt[2])    adc_pd[18] <= #UDLY 1'b1;
-        if (link_error_evt[3])    adc_pd[19] <= #UDLY 1'b1;
-        if (link_error_evt[4])    adc_pd[20] <= #UDLY 1'b1;
-        if (link_error_evt[5])    adc_pd[21] <= #UDLY 1'b1;
-        if (link_error_evt[6])    adc_pd[22] <= #UDLY 1'b1;
-        if (link_error_evt[7])    adc_pd[23] <= #UDLY 1'b1;
-        if (tgc_target_err)         adc_pd[24] <= #UDLY 1'b1;
-        if (tgc_reentry_err)        adc_pd[25] <= #UDLY 1'b1;
-    end
+    else
+        adc_pd <= #UDLY (adc_pd & ~adc_pd_clr) | adc_pd_set;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
-    if (!sys_rst_n) begin
+    if (!sys_rst_n)
         sysref_pd <= #UDLY 8'd0;
-    end else begin
-        for (sysref_pd_i=0; sysref_pd_i<8; sysref_pd_i=sysref_pd_i+1) begin
-            if (reg_0018_wr && axi_wdata_r[sysref_pd_i])
-                sysref_pd[sysref_pd_i] <= #UDLY 1'b0;
-        end
-        if (sysref_seen_evt[0]) sysref_pd[0] <= #UDLY 1'b1;
-        if (sysref_seen_evt[1]) sysref_pd[1] <= #UDLY 1'b1;
-        if (sysref_seen_evt[2]) sysref_pd[2] <= #UDLY 1'b1;
-        if (sysref_seen_evt[3]) sysref_pd[3] <= #UDLY 1'b1;
-        if (sysref_seen_evt[4]) sysref_pd[4] <= #UDLY 1'b1;
-        if (sysref_seen_evt[5]) sysref_pd[5] <= #UDLY 1'b1;
-        if (sysref_seen_evt[6]) sysref_pd[6] <= #UDLY 1'b1;
-        if (sysref_seen_evt[7]) sysref_pd[7] <= #UDLY 1'b1;
-    end
+    else
+        sysref_pd <= #UDLY (sysref_pd & ~sysref_pd_clr) | sysref_pd_set;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
-    if (!sys_rst_n) begin
+    if (!sys_rst_n)
         lane_pd <= #UDLY 32'd0;
-    end else begin
-        for (lane_pd_i=0; lane_pd_i<32; lane_pd_i=lane_pd_i+1) begin
-            if (reg_0024_wr && axi_wdata_r[lane_pd_i])
-                lane_pd[lane_pd_i] <= #UDLY 1'b0;
-        end
-        if (disparity_evt[0])   lane_pd[0]  <= #UDLY 1'b1;
-        if (disparity_evt[1])   lane_pd[1]  <= #UDLY 1'b1;
-        if (disparity_evt[2])   lane_pd[2]  <= #UDLY 1'b1;
-        if (disparity_evt[3])   lane_pd[3]  <= #UDLY 1'b1;
-        if (disparity_evt[4])   lane_pd[4]  <= #UDLY 1'b1;
-        if (disparity_evt[5])   lane_pd[5]  <= #UDLY 1'b1;
-        if (disparity_evt[6])   lane_pd[6]  <= #UDLY 1'b1;
-        if (disparity_evt[7])   lane_pd[7]  <= #UDLY 1'b1;
-        if (disparity_evt[8])   lane_pd[8]  <= #UDLY 1'b1;
-        if (disparity_evt[9])   lane_pd[9]  <= #UDLY 1'b1;
-        if (disparity_evt[10])  lane_pd[10] <= #UDLY 1'b1;
-        if (disparity_evt[11])  lane_pd[11] <= #UDLY 1'b1;
-        if (disparity_evt[12])  lane_pd[12] <= #UDLY 1'b1;
-        if (disparity_evt[13])  lane_pd[13] <= #UDLY 1'b1;
-        if (disparity_evt[14])  lane_pd[14] <= #UDLY 1'b1;
-        if (disparity_evt[15])  lane_pd[15] <= #UDLY 1'b1;
-        if (notintable_evt[0])  lane_pd[16] <= #UDLY 1'b1;
-        if (notintable_evt[1])  lane_pd[17] <= #UDLY 1'b1;
-        if (notintable_evt[2])  lane_pd[18] <= #UDLY 1'b1;
-        if (notintable_evt[3])  lane_pd[19] <= #UDLY 1'b1;
-        if (notintable_evt[4])  lane_pd[20] <= #UDLY 1'b1;
-        if (notintable_evt[5])  lane_pd[21] <= #UDLY 1'b1;
-        if (notintable_evt[6])  lane_pd[22] <= #UDLY 1'b1;
-        if (notintable_evt[7])  lane_pd[23] <= #UDLY 1'b1;
-        if (notintable_evt[8])  lane_pd[24] <= #UDLY 1'b1;
-        if (notintable_evt[9])  lane_pd[25] <= #UDLY 1'b1;
-        if (notintable_evt[10]) lane_pd[26] <= #UDLY 1'b1;
-        if (notintable_evt[11]) lane_pd[27] <= #UDLY 1'b1;
-        if (notintable_evt[12]) lane_pd[28] <= #UDLY 1'b1;
-        if (notintable_evt[13]) lane_pd[29] <= #UDLY 1'b1;
-        if (notintable_evt[14]) lane_pd[30] <= #UDLY 1'b1;
-        if (notintable_evt[15]) lane_pd[31] <= #UDLY 1'b1;
-    end
+    else
+        lane_pd <= #UDLY (lane_pd & ~lane_pd_clr) | lane_pd_set;
 end
 
+// SYSREF live edge history and saturating event count.
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if (!sys_rst_n) begin
         sysref_r   <= #UDLY 1'b0;
         sysref_cnt <= #UDLY 16'd0;
     end else begin
         sysref_r <= #UDLY sysref_level;
-        if (sysref_rise && (sysref_cnt != 16'hffff))
+        if (sysref_cnt_inc)
             sysref_cnt <= #UDLY sysref_cnt + 16'd1;
     end
 end
 
+// Software readback map; reserved addresses return zero.
 assign reg_0000 = adc_ctl;
 assign reg_0004 = adc_tgc;
 assign reg_0008 = frame_cfg;

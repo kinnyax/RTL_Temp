@@ -1,0 +1,52 @@
+{
+  "schema": "RTL_REVIEW_HANDOFF_V1",
+  "module": "ADC_TOP",
+  "status": "REJECTED",
+  "agent_id": "/root/adc_rework_rtlreview",
+  "role_separation_audit": "PASS",
+  "lead_agent_id": "/root",
+  "contributors": [
+    {
+      "role": "RTL_DESIGNER",
+      "agent_id": "/root/adc_rework_rtl"
+    },
+    {
+      "role": "VERIFICATION_DESIGN_WORKER",
+      "agent_id": "/root/adc_rework_verdesign"
+    },
+    {
+      "role": "VERIFICATION_RELEASE_WORKER",
+      "agent_id": "/root/adc_rework_release"
+    }
+  ],
+  "reviewed_sidecar_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Release_Baseline.json",
+  "reviewed_sidecar_sha256": "0f81640c1d6ca60f73079b6b3ad2a93844b7c7c7a8b283380c33010ae317f941",
+  "release_baseline_fingerprint": "99cd85f9847f2a3b98bfbcbe5ed7c9d7980189b19ab80413775ec4d08637b2d4",
+  "finalization_patch_path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Finalization_Patch.json",
+  "finalization_patch_sha256": "9959ac57acea9be502b95b736c5daa43ab1353e1aff3e89867e9e4f7a910c150",
+  "reviewed_drafts": [
+    {
+      "path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\state\\ADC_TOP_Current_State_REVIEW_PENDING.md",
+      "sha256": "f6c09296a0af67f17292f82c2d5c96ebf57fb80826e10dbdf7b38b5c22f2bc8f"
+    },
+    {
+      "path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\handoffs\\2026-08-19_RTL_handoff_05.md",
+      "sha256": "6e960616a352494edc77551d65e1e734b60664cc9a3135ed64cf4008793c0db7"
+    },
+    {
+      "path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\docs\\ADC_TOP_VCS_SOC_HANDOFF_REVIEW_PENDING.md",
+      "sha256": "5986f3ae88c3dafb7ecd0f90202629651e1a484a30e81feeba792dfbe7f4afa2"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "P1",
+      "path": "D:\\Codex\\RTL_Temp\\ADC_TOP\\.work\\verification\\tb\\test_rtl_filename_contract.py",
+      "line": 15,
+      "detail": "The claimed self-written RTL filename/filelist regression excludes ADC_UPK.v from both SELF_WRITTEN_FILES and EXPECTED_FILELIST_FILES, although rtl/filelist.f correctly includes rtl/ADC_UPK.v and ADC_CHN instantiates ADC_UPK. Running the test directly with python -B fails at line 54 because the expected list omits ADC_UPK.v. This leaves the user-focused self-written unpacker outside the static filename/FSM contract and means the retained static regression is failing rather than passing. Add ADC_UPK.v to both tuples, rerun the static check, and rebuild/review the release baseline; retain its explicit FSM-prefix and naming coverage."
+    }
+  ],
+  "residual_risks": [
+    "Release baseline integrity recomputation passed for 29 components, and the sidecar binds a fresh VMware run with 19/19 simulation tests passing. Those results do not cover the failing retained static filename/filelist regression. XDC remains DEFERRED_TO_TOP/EXTERNAL_ONLY; VIVADO resolution, VCS/Verdi, XSIM, synthesis, implementation, timing closure and board validation remain NOT_RUN."
+  ]
+}

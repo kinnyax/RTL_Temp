@@ -1,240 +1,269 @@
 `timescale 1ns / 1ps
 
-// =====
-// 1. System Integration
-// =====
+// Fixed eight-channel ADC integration boundary.
 module ADC_TOP(
-    input  wire                             sys_clk             ,
-    input  wire                             adc_clk             ,
-    input  wire                             afe_clk             ,
-    input  wire [7:0]                       jesd_clk            ,
-    input  wire                             sys_rst_n           ,
-    input  wire                             adc_rst_n           ,
-    input  wire                             afe_rst_n           ,
-    input  wire [7:0]                       jesd_rst_n          ,
-    input  wire                             sysref_in           ,
-    input  wire [15:0]                      s_axi_awaddr        ,
-    input  wire                             s_axi_awvalid       ,
-    output wire                             s_axi_awready       ,
-    input  wire [31:0]                      s_axi_wdata         ,
-    input  wire [3:0]                       s_axi_wstrb         ,
-    input  wire                             s_axi_wvalid        ,
-    output wire                             s_axi_wready        ,
-    output wire [1:0]                       s_axi_bresp         ,
-    output wire                             s_axi_bvalid        ,
-    input  wire                             s_axi_bready        ,
-    input  wire [15:0]                      s_axi_araddr        ,
-    input  wire                             s_axi_arvalid       ,
-    output wire                             s_axi_arready       ,
-    output wire [31:0]                      s_axi_rdata         ,
-    output wire [1:0]                       s_axi_rresp         ,
-    output wire                             s_axi_rvalid        ,
-    input  wire                             s_axi_rready        ,
-    input  wire [63:0]                      afe0_rx_data        ,
-    input  wire [7:0]                       afe0_rx_charisk     ,
-    input  wire [7:0]                       afe0_rx_disperr     ,
-    input  wire [7:0]                       afe0_rx_notintable  ,
-    input  wire                             afe0_rx_reset_done  ,
-    input  wire                             afe0_pll_lock       ,
-    input  wire [1:0]                       afe0_byte_aligned   ,
-    output wire                             afe0_rx_encommalign ,
-    output wire                             afe0_sync_n         ,
-    input  wire [63:0]                      afe1_rx_data        ,
-    input  wire [7:0]                       afe1_rx_charisk     ,
-    input  wire [7:0]                       afe1_rx_disperr     ,
-    input  wire [7:0]                       afe1_rx_notintable  ,
-    input  wire                             afe1_rx_reset_done  ,
-    input  wire                             afe1_pll_lock       ,
-    input  wire [1:0]                       afe1_byte_aligned   ,
-    output wire                             afe1_rx_encommalign ,
-    output wire                             afe1_sync_n         ,
-    input  wire [63:0]                      afe2_rx_data        ,
-    input  wire [7:0]                       afe2_rx_charisk     ,
-    input  wire [7:0]                       afe2_rx_disperr     ,
-    input  wire [7:0]                       afe2_rx_notintable  ,
-    input  wire                             afe2_rx_reset_done  ,
-    input  wire                             afe2_pll_lock       ,
-    input  wire [1:0]                       afe2_byte_aligned   ,
-    output wire                             afe2_rx_encommalign ,
-    output wire                             afe2_sync_n         ,
-    input  wire [63:0]                      afe3_rx_data        ,
-    input  wire [7:0]                       afe3_rx_charisk     ,
-    input  wire [7:0]                       afe3_rx_disperr     ,
-    input  wire [7:0]                       afe3_rx_notintable  ,
-    input  wire                             afe3_rx_reset_done  ,
-    input  wire                             afe3_pll_lock       ,
-    input  wire [1:0]                       afe3_byte_aligned   ,
-    output wire                             afe3_rx_encommalign ,
-    output wire                             afe3_sync_n         ,
-    input  wire [63:0]                      afe4_rx_data        ,
-    input  wire [7:0]                       afe4_rx_charisk     ,
-    input  wire [7:0]                       afe4_rx_disperr     ,
-    input  wire [7:0]                       afe4_rx_notintable  ,
-    input  wire                             afe4_rx_reset_done  ,
-    input  wire                             afe4_pll_lock       ,
-    input  wire [1:0]                       afe4_byte_aligned   ,
-    output wire                             afe4_rx_encommalign ,
-    output wire                             afe4_sync_n         ,
-    input  wire [63:0]                      afe5_rx_data        ,
-    input  wire [7:0]                       afe5_rx_charisk     ,
-    input  wire [7:0]                       afe5_rx_disperr     ,
-    input  wire [7:0]                       afe5_rx_notintable  ,
-    input  wire                             afe5_rx_reset_done  ,
-    input  wire                             afe5_pll_lock       ,
-    input  wire [1:0]                       afe5_byte_aligned   ,
-    output wire                             afe5_rx_encommalign ,
-    output wire                             afe5_sync_n         ,
-    input  wire [63:0]                      afe6_rx_data        ,
-    input  wire [7:0]                       afe6_rx_charisk     ,
-    input  wire [7:0]                       afe6_rx_disperr     ,
-    input  wire [7:0]                       afe6_rx_notintable  ,
-    input  wire                             afe6_rx_reset_done  ,
-    input  wire                             afe6_pll_lock       ,
-    input  wire [1:0]                       afe6_byte_aligned   ,
-    output wire                             afe6_rx_encommalign ,
-    output wire                             afe6_sync_n         ,
-    input  wire [63:0]                      afe7_rx_data        ,
-    input  wire [7:0]                       afe7_rx_charisk     ,
-    input  wire [7:0]                       afe7_rx_disperr     ,
-    input  wire [7:0]                       afe7_rx_notintable  ,
-    input  wire                             afe7_rx_reset_done  ,
-    input  wire                             afe7_pll_lock       ,
-    input  wire [1:0]                       afe7_byte_aligned   ,
-    output wire                             afe7_rx_encommalign ,
-    output wire                             afe7_sync_n         ,
-    output wire [511:0]                     m_axis_afe0_tdata   ,
-    output wire [63:0]                      m_axis_afe0_tkeep   ,
-    output wire                             m_axis_afe0_tvalid  ,
-    output wire                             m_axis_afe0_tlast   ,
-    input  wire                             m_axis_afe0_tready  ,
-    output wire                             tgc0_slope          ,
-    output wire                             tgc0_up_dn          ,
-    output wire                             tgc0_prof1          ,
-    output wire                             tgc0_prof2          ,
-    output wire [511:0]                     m_axis_afe1_tdata   ,
-    output wire [63:0]                      m_axis_afe1_tkeep   ,
-    output wire                             m_axis_afe1_tvalid  ,
-    output wire                             m_axis_afe1_tlast   ,
-    input  wire                             m_axis_afe1_tready  ,
-    output wire                             tgc1_slope          ,
-    output wire                             tgc1_up_dn          ,
-    output wire                             tgc1_prof1          ,
-    output wire                             tgc1_prof2          ,
-    output wire [511:0]                     m_axis_afe2_tdata   ,
-    output wire [63:0]                      m_axis_afe2_tkeep   ,
-    output wire                             m_axis_afe2_tvalid  ,
-    output wire                             m_axis_afe2_tlast   ,
-    input  wire                             m_axis_afe2_tready  ,
-    output wire                             tgc2_slope          ,
-    output wire                             tgc2_up_dn          ,
-    output wire                             tgc2_prof1          ,
-    output wire                             tgc2_prof2          ,
-    output wire [511:0]                     m_axis_afe3_tdata   ,
-    output wire [63:0]                      m_axis_afe3_tkeep   ,
-    output wire                             m_axis_afe3_tvalid  ,
-    output wire                             m_axis_afe3_tlast   ,
-    input  wire                             m_axis_afe3_tready  ,
-    output wire                             tgc3_slope          ,
-    output wire                             tgc3_up_dn          ,
-    output wire                             tgc3_prof1          ,
-    output wire                             tgc3_prof2          ,
-    output wire [511:0]                     m_axis_afe4_tdata   ,
-    output wire [63:0]                      m_axis_afe4_tkeep   ,
-    output wire                             m_axis_afe4_tvalid  ,
-    output wire                             m_axis_afe4_tlast   ,
-    input  wire                             m_axis_afe4_tready  ,
-    output wire                             tgc4_slope          ,
-    output wire                             tgc4_up_dn          ,
-    output wire                             tgc4_prof1          ,
-    output wire                             tgc4_prof2          ,
-    output wire [511:0]                     m_axis_afe5_tdata   ,
-    output wire [63:0]                      m_axis_afe5_tkeep   ,
-    output wire                             m_axis_afe5_tvalid  ,
-    output wire                             m_axis_afe5_tlast   ,
-    input  wire                             m_axis_afe5_tready  ,
-    output wire                             tgc5_slope          ,
-    output wire                             tgc5_up_dn          ,
-    output wire                             tgc5_prof1          ,
-    output wire                             tgc5_prof2          ,
-    output wire [511:0]                     m_axis_afe6_tdata   ,
-    output wire [63:0]                      m_axis_afe6_tkeep   ,
-    output wire                             m_axis_afe6_tvalid  ,
-    output wire                             m_axis_afe6_tlast   ,
-    input  wire                             m_axis_afe6_tready  ,
-    output wire                             tgc6_slope          ,
-    output wire                             tgc6_up_dn          ,
-    output wire                             tgc6_prof1          ,
-    output wire                             tgc6_prof2          ,
-    output wire [511:0]                     m_axis_afe7_tdata   ,
-    output wire [63:0]                      m_axis_afe7_tkeep   ,
-    output wire                             m_axis_afe7_tvalid  ,
-    output wire                             m_axis_afe7_tlast   ,
-    input  wire                             m_axis_afe7_tready  ,
-    output wire                             tgc7_slope          ,
-    output wire                             tgc7_up_dn          ,
-    output wire                             tgc7_prof1          ,
+    // System and channel clock domains
+    input  wire                             sys_clk                                      ,
+    input  wire                             sys_rst_n                                    ,
+    input  wire                             adc_clk                                      ,
+    input  wire                             adc_rst_n                                    ,
+    input  wire                             afe_clk                                      ,
+    input  wire                             afe_rst_n                                    ,
+    input  wire [7:0]                       jesd_clk                                     ,
+    input  wire [7:0]                       jesd_rst_n                                   ,
+    input  wire                             sysref_in                                    ,
+
+    // AXI-Lite slave interface
+    input  wire [15:0]                      s_axi_awaddr                                 ,
+    input  wire                             s_axi_awvalid                                ,
+    output wire                             s_axi_awready                                ,
+    input  wire [31:0]                      s_axi_wdata                                  ,
+    input  wire [3:0]                       s_axi_wstrb                                  ,
+    input  wire                             s_axi_wvalid                                 ,
+    output wire                             s_axi_wready                                 ,
+    output wire [1:0]                       s_axi_bresp                                  ,
+    output wire                             s_axi_bvalid                                 ,
+    input  wire                             s_axi_bready                                 ,
+    input  wire [15:0]                      s_axi_araddr                                 ,
+    input  wire                             s_axi_arvalid                                ,
+    output wire                             s_axi_arready                                ,
+    output wire [31:0]                      s_axi_rdata                                  ,
+    output wire [1:0]                       s_axi_rresp                                  ,
+    output wire                             s_axi_rvalid                                 ,
+    input  wire                             s_axi_rready                                 ,
+
+    // AFE0 JESD PHY interface
+    input  wire [63:0]                      afe0_rx_data                                 ,
+    input  wire [7:0]                       afe0_rx_charisk                              ,
+    input  wire [7:0]                       afe0_rx_disperr                              ,
+    input  wire [7:0]                       afe0_rx_notintable                           ,
+    input  wire                             afe0_rx_reset_done                           ,
+    input  wire                             afe0_pll_lock                                ,
+    input  wire [1:0]                       afe0_byte_aligned                            ,
+    output wire                             afe0_rx_encommalign                          ,
+    output wire                             afe0_sync_n                                  ,
+
+    // AFE1 JESD PHY interface
+    input  wire [63:0]                      afe1_rx_data                                 ,
+    input  wire [7:0]                       afe1_rx_charisk                              ,
+    input  wire [7:0]                       afe1_rx_disperr                              ,
+    input  wire [7:0]                       afe1_rx_notintable                           ,
+    input  wire                             afe1_rx_reset_done                           ,
+    input  wire                             afe1_pll_lock                                ,
+    input  wire [1:0]                       afe1_byte_aligned                            ,
+    output wire                             afe1_rx_encommalign                          ,
+    output wire                             afe1_sync_n                                  ,
+
+    // AFE2 JESD PHY interface
+    input  wire [63:0]                      afe2_rx_data                                 ,
+    input  wire [7:0]                       afe2_rx_charisk                              ,
+    input  wire [7:0]                       afe2_rx_disperr                              ,
+    input  wire [7:0]                       afe2_rx_notintable                           ,
+    input  wire                             afe2_rx_reset_done                           ,
+    input  wire                             afe2_pll_lock                                ,
+    input  wire [1:0]                       afe2_byte_aligned                            ,
+    output wire                             afe2_rx_encommalign                          ,
+    output wire                             afe2_sync_n                                  ,
+
+    // AFE3 JESD PHY interface
+    input  wire [63:0]                      afe3_rx_data                                 ,
+    input  wire [7:0]                       afe3_rx_charisk                              ,
+    input  wire [7:0]                       afe3_rx_disperr                              ,
+    input  wire [7:0]                       afe3_rx_notintable                           ,
+    input  wire                             afe3_rx_reset_done                           ,
+    input  wire                             afe3_pll_lock                                ,
+    input  wire [1:0]                       afe3_byte_aligned                            ,
+    output wire                             afe3_rx_encommalign                          ,
+    output wire                             afe3_sync_n                                  ,
+
+    // AFE4 JESD PHY interface
+    input  wire [63:0]                      afe4_rx_data                                 ,
+    input  wire [7:0]                       afe4_rx_charisk                              ,
+    input  wire [7:0]                       afe4_rx_disperr                              ,
+    input  wire [7:0]                       afe4_rx_notintable                           ,
+    input  wire                             afe4_rx_reset_done                           ,
+    input  wire                             afe4_pll_lock                                ,
+    input  wire [1:0]                       afe4_byte_aligned                            ,
+    output wire                             afe4_rx_encommalign                          ,
+    output wire                             afe4_sync_n                                  ,
+
+    // AFE5 JESD PHY interface
+    input  wire [63:0]                      afe5_rx_data                                 ,
+    input  wire [7:0]                       afe5_rx_charisk                              ,
+    input  wire [7:0]                       afe5_rx_disperr                              ,
+    input  wire [7:0]                       afe5_rx_notintable                           ,
+    input  wire                             afe5_rx_reset_done                           ,
+    input  wire                             afe5_pll_lock                                ,
+    input  wire [1:0]                       afe5_byte_aligned                            ,
+    output wire                             afe5_rx_encommalign                          ,
+    output wire                             afe5_sync_n                                  ,
+
+    // AFE6 JESD PHY interface
+    input  wire [63:0]                      afe6_rx_data                                 ,
+    input  wire [7:0]                       afe6_rx_charisk                              ,
+    input  wire [7:0]                       afe6_rx_disperr                              ,
+    input  wire [7:0]                       afe6_rx_notintable                           ,
+    input  wire                             afe6_rx_reset_done                           ,
+    input  wire                             afe6_pll_lock                                ,
+    input  wire [1:0]                       afe6_byte_aligned                            ,
+    output wire                             afe6_rx_encommalign                          ,
+    output wire                             afe6_sync_n                                  ,
+
+    // AFE7 JESD PHY interface
+    input  wire [63:0]                      afe7_rx_data                                 ,
+    input  wire [7:0]                       afe7_rx_charisk                              ,
+    input  wire [7:0]                       afe7_rx_disperr                              ,
+    input  wire [7:0]                       afe7_rx_notintable                           ,
+    input  wire                             afe7_rx_reset_done                           ,
+    input  wire                             afe7_pll_lock                                ,
+    input  wire [1:0]                       afe7_byte_aligned                            ,
+    output wire                             afe7_rx_encommalign                          ,
+    output wire                             afe7_sync_n                                  ,
+
+    // AFE0 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe0_tdata                            ,
+    output wire [63:0]                      m_axis_afe0_tkeep                            ,
+    output wire                             m_axis_afe0_tvalid                           ,
+    output wire                             m_axis_afe0_tlast                            ,
+    input  wire                             m_axis_afe0_tready                           ,
+    output wire                             tgc0_slope                                   ,
+    output wire                             tgc0_up_dn                                   ,
+    output wire                             tgc0_prof1                                   ,
+    output wire                             tgc0_prof2                                   ,
+
+    // AFE1 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe1_tdata                            ,
+    output wire [63:0]                      m_axis_afe1_tkeep                            ,
+    output wire                             m_axis_afe1_tvalid                           ,
+    output wire                             m_axis_afe1_tlast                            ,
+    input  wire                             m_axis_afe1_tready                           ,
+    output wire                             tgc1_slope                                   ,
+    output wire                             tgc1_up_dn                                   ,
+    output wire                             tgc1_prof1                                   ,
+    output wire                             tgc1_prof2                                   ,
+
+    // AFE2 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe2_tdata                            ,
+    output wire [63:0]                      m_axis_afe2_tkeep                            ,
+    output wire                             m_axis_afe2_tvalid                           ,
+    output wire                             m_axis_afe2_tlast                            ,
+    input  wire                             m_axis_afe2_tready                           ,
+    output wire                             tgc2_slope                                   ,
+    output wire                             tgc2_up_dn                                   ,
+    output wire                             tgc2_prof1                                   ,
+    output wire                             tgc2_prof2                                   ,
+
+    // AFE3 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe3_tdata                            ,
+    output wire [63:0]                      m_axis_afe3_tkeep                            ,
+    output wire                             m_axis_afe3_tvalid                           ,
+    output wire                             m_axis_afe3_tlast                            ,
+    input  wire                             m_axis_afe3_tready                           ,
+    output wire                             tgc3_slope                                   ,
+    output wire                             tgc3_up_dn                                   ,
+    output wire                             tgc3_prof1                                   ,
+    output wire                             tgc3_prof2                                   ,
+
+    // AFE4 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe4_tdata                            ,
+    output wire [63:0]                      m_axis_afe4_tkeep                            ,
+    output wire                             m_axis_afe4_tvalid                           ,
+    output wire                             m_axis_afe4_tlast                            ,
+    input  wire                             m_axis_afe4_tready                           ,
+    output wire                             tgc4_slope                                   ,
+    output wire                             tgc4_up_dn                                   ,
+    output wire                             tgc4_prof1                                   ,
+    output wire                             tgc4_prof2                                   ,
+
+    // AFE5 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe5_tdata                            ,
+    output wire [63:0]                      m_axis_afe5_tkeep                            ,
+    output wire                             m_axis_afe5_tvalid                           ,
+    output wire                             m_axis_afe5_tlast                            ,
+    input  wire                             m_axis_afe5_tready                           ,
+    output wire                             tgc5_slope                                   ,
+    output wire                             tgc5_up_dn                                   ,
+    output wire                             tgc5_prof1                                   ,
+    output wire                             tgc5_prof2                                   ,
+
+    // AFE6 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe6_tdata                            ,
+    output wire [63:0]                      m_axis_afe6_tkeep                            ,
+    output wire                             m_axis_afe6_tvalid                           ,
+    output wire                             m_axis_afe6_tlast                            ,
+    input  wire                             m_axis_afe6_tready                           ,
+    output wire                             tgc6_slope                                   ,
+    output wire                             tgc6_up_dn                                   ,
+    output wire                             tgc6_prof1                                   ,
+    output wire                             tgc6_prof2                                   ,
+
+    // AFE7 AXIS and TGC interface
+    output wire [511:0]                     m_axis_afe7_tdata                            ,
+    output wire [63:0]                      m_axis_afe7_tkeep                            ,
+    output wire                             m_axis_afe7_tvalid                           ,
+    output wire                             m_axis_afe7_tlast                            ,
+    input  wire                             m_axis_afe7_tready                           ,
+    output wire                             tgc7_slope                                   ,
+    output wire                             tgc7_up_dn                                   ,
+    output wire                             tgc7_prof1                                   ,
     output wire                             tgc7_prof2
 );
 
-wire [7:0]                                  afe_en_sys                                  ;
-wire [7:0]                                  fifo_clr_sys                                ;
-wire [1:0]                                  smp_prec                                    ;
-wire [1:0]                                  smp_mode                                    ;
-wire                                        frame_fmt                                   ;
-wire [1:0]                                  dec_del_mode                                ;
-wire [7:0]                                  dec_m                                       ;
-wire [7:0]                                  tgc_mask_sys                                ;
-wire [1:0]                                  tgc_profile_sys                             ;
-wire                                        tgc_up_dn_sys                               ;
-wire                                        tgc_slope_sys                               ;
-wire                                        tgc_req_sys                                 ;
-wire [7:0]                                  afe_en_adc                                  ;
-wire                                        tgc_req_afe                                 ;
-wire [7:0]                                  tgc_mask_afe                                ;
-wire [1:0]                                  tgc_profile_afe                             ;
-wire                                        tgc_up_dn_afe                               ;
-wire                                        tgc_slope_afe                               ;
-wire [7:0]                                  tgc_slope_vec                               ;
-wire [7:0]                                  tgc_up_dn_vec                               ;
-wire [7:0]                                  tgc_prof1_vec                               ;
-wire [7:0]                                  tgc_prof2_vec                               ;
-wire                                        tgc_busy_afe                                ;
-wire                                        tgc_done_afe                                ;
-wire                                        tgc_busy_sys                                ;
-wire                                        tgc_done_sys                                ;
+wire     [31:0]                             adc_ctl                                      ;
+wire     [31:0]                             tgc_cfg                                      ;
+wire     [31:0]                             frame_cfg                                    ;
+wire     [7:0]                              tgc_mask_sys                                 ;
+wire     [1:0]                              tgc_profile_sys                              ;
+wire                                        tgc_up_dn_sys                                ;
+wire                                        tgc_slope_sys                                ;
+wire                                        tgc_req_sys                                  ;
+wire     [7:0]                              afe_en_adc                                   ;
+wire                                        tgc_req_afe                                  ;
+wire     [7:0]                              tgc_mask_afe                                 ;
+wire     [1:0]                              tgc_profile_afe                              ;
+wire                                        tgc_up_dn_afe                                ;
+wire                                        tgc_slope_afe                                ;
+wire     [7:0]                              tgc_slope_vec                                ;
+wire     [7:0]                              tgc_up_dn_vec                                ;
+wire     [7:0]                              tgc_prof1_vec                                ;
+wire     [7:0]                              tgc_prof2_vec                                ;
+wire                                        tgc_busy_afe                                 ;
+wire                                        tgc_done_afe                                 ;
+wire                                        tgc_busy_sys                                 ;
+wire                                        tgc_done_sys                                 ;
 
-wire [7:0]                                  link_ready_adc                              ;
-wire [7:0]                                  fifo_empty_adc                              ;
-wire [7:0]                                  fifo_full_adc                               ;
-wire [7:0]                                  afe_idle_adc                                ;
-wire [7:0]                                  pll_lock_adc                                ;
-wire [7:0]                                  rx_reset_done_adc                           ;
-wire [15:0]                                 lane_ready_adc                              ;
-wire [15:0]                                 byte_aligned_adc                            ;
-wire [15:0]                                 comma_detected_adc                          ;
-wire [7:0]                                  fifo_overflow_evt_afe                       ;
-wire [7:0]                                  data_drop_evt_adc                           ;
-wire [7:0]                                  link_error_evt_adc                          ;
-wire [7:0]                                  sysref_seen_evt_adc                         ;
-wire [15:0]                                 disparity_evt_adc                           ;
-wire [15:0]                                 notintable_evt_adc                          ;
+wire     [7:0]                              link_ready_adc                               ;
+wire     [7:0]                              fifo_empty_adc                               ;
+wire     [7:0]                              fifo_full_adc                                ;
+wire     [7:0]                              afe_idle_adc                                 ;
+wire     [7:0]                              pll_lock_adc                                 ;
+wire     [7:0]                              rx_reset_done_adc                            ;
+wire     [15:0]                             lane_ready_adc                               ;
+wire     [15:0]                             byte_aligned_adc                             ;
+wire     [15:0]                             comma_detected_adc                           ;
+wire     [7:0]                              fifo_overflow_evt_afe                        ;
+wire     [7:0]                              data_drop_evt_adc                            ;
+wire     [7:0]                              link_error_evt_adc                           ;
+wire     [7:0]                              sysref_seen_evt_adc                          ;
+wire     [15:0]                             disparity_evt_adc                            ;
+wire     [15:0]                             notintable_evt_adc                           ;
 
-wire [7:0]                                  link_ready_sys                              ;
-wire [7:0]                                  fifo_empty_sys                              ;
-wire [7:0]                                  fifo_full_sys                               ;
-wire [7:0]                                  afe_idle_sys                                ;
-wire [7:0]                                  pll_lock_sys                                ;
-wire [7:0]                                  rx_reset_done_sys                           ;
-wire [15:0]                                 lane_ready_sys                              ;
-wire [15:0]                                 byte_aligned_sys                            ;
-wire [15:0]                                 comma_detected_sys                          ;
-wire                                        sysref_level_sys                            ;
-wire [7:0]                                  fifo_overflow_evt_sys                       ;
-wire [7:0]                                  data_drop_evt_sys                           ;
-wire [7:0]                                  link_error_evt_sys                          ;
-wire [7:0]                                  sysref_seen_evt_sys                         ;
-wire [15:0]                                 disparity_evt_sys                           ;
-wire [15:0]                                 notintable_evt_sys                          ;
+wire     [7:0]                              link_ready_sys                               ;
+wire     [7:0]                              fifo_empty_sys                               ;
+wire     [7:0]                              fifo_full_sys                                ;
+wire     [7:0]                              afe_idle_sys                                 ;
+wire     [7:0]                              pll_lock_sys                                 ;
+wire     [7:0]                              rx_reset_done_sys                            ;
+wire     [15:0]                             lane_ready_sys                               ;
+wire     [15:0]                             byte_aligned_sys                             ;
+wire     [15:0]                             comma_detected_sys                           ;
+wire                                        sysref_level_sys                             ;
+wire     [7:0]                              fifo_overflow_evt_sys                        ;
+wire     [7:0]                              data_drop_evt_sys                            ;
+wire     [7:0]                              link_error_evt_sys                           ;
+wire     [7:0]                              sysref_seen_evt_sys                          ;
+wire     [15:0]                             disparity_evt_sys                            ;
+wire     [15:0]                             notintable_evt_sys                           ;
 
 assign tgc0_slope  = tgc_slope_vec[0];
 assign tgc0_up_dn  = tgc_up_dn_vec[0];
@@ -307,17 +336,9 @@ ADC_REG adc_reg(
     .notintable_evt                     (notintable_evt_sys                          ),
     .tgc_busy                           (tgc_busy_sys                                ),
     .tgc_done                           (tgc_done_sys                                ),
-    .afe_en                             (afe_en_sys                                  ),
-    .fifo_clr                           (fifo_clr_sys                                ),
-    .smp_prec                           (smp_prec                                    ),
-    .smp_mode                           (smp_mode                                    ),
-    .frame_fmt                          (frame_fmt                                   ),
-    .dec_del_mode                       (dec_del_mode                                ),
-    .dec_m                              (dec_m                                       ),
-    .tgc_mask                           (tgc_mask_sys                                ),
-    .tgc_profile_sel                    (tgc_profile_sys                             ),
-    .tgc_up_dn                          (tgc_up_dn_sys                               ),
-    .tgc_slope_trig                     (tgc_slope_sys                               ),
+    .adc_ctl                            (adc_ctl                                     ),
+    .frame_cfg                          (frame_cfg                                   ),
+    .adc_tgc                            (tgc_cfg                                     ),
     .tgc_req                            (tgc_req_sys                                 )
 );
 
@@ -329,12 +350,12 @@ ADC_SYNC adc_sync(
     .afe_clk                            (afe_clk                                     ),
     .afe_rst_n                          (afe_rst_n                                   ),
     .sysref                             (sysref_in                                   ),
-    .afe_en_sys                         (afe_en_sys                                  ),
+    .afe_en_sys                         (adc_ctl[7:0]                                ),
     .tgc_req_sys                        (tgc_req_sys                                 ),
-    .tgc_mask_sys                       (tgc_mask_sys                                ),
-    .tgc_profile_sys                    (tgc_profile_sys                             ),
-    .tgc_up_dn_sys                      (tgc_up_dn_sys                               ),
-    .tgc_slope_sys                      (tgc_slope_sys                               ),
+    .tgc_mask_sys                       (tgc_cfg[8:1]                                ),
+    .tgc_profile_sys                    (tgc_cfg[10:9]                               ),
+    .tgc_up_dn_sys                      (tgc_cfg[11]                                 ),
+    .tgc_slope_sys                      (tgc_cfg[12]                                 ),
     .link_ready_adc                     (link_ready_adc                              ),
     .fifo_empty_adc                     (fifo_empty_adc                              ),
     .fifo_full_adc                      (fifo_full_adc                               ),
@@ -403,13 +424,10 @@ ADC_CHN adc_chn0(
     .jesd_rst_n                         (jesd_rst_n[0]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd0                                         ),
-    .afe_en                             (afe_en_adc[0]                                ),
-    .fifo_clr                           (fifo_clr_sys[0]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[0]                                   ),
+    .fifo_clr                           (adc_ctl[8]                                   ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe0_rx_data                                 ),
     .phy_rx_charisk                     (afe0_rx_charisk                              ),
     .phy_rx_disperr                     (afe0_rx_disperr                              ),
@@ -450,13 +468,10 @@ ADC_CHN adc_chn1(
     .jesd_rst_n                         (jesd_rst_n[1]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd1                                         ),
-    .afe_en                             (afe_en_adc[1]                                ),
-    .fifo_clr                           (fifo_clr_sys[1]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[1]                                   ),
+    .fifo_clr                           (adc_ctl[9]                                   ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe1_rx_data                                 ),
     .phy_rx_charisk                     (afe1_rx_charisk                              ),
     .phy_rx_disperr                     (afe1_rx_disperr                              ),
@@ -497,13 +512,10 @@ ADC_CHN adc_chn2(
     .jesd_rst_n                         (jesd_rst_n[2]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd2                                         ),
-    .afe_en                             (afe_en_adc[2]                                ),
-    .fifo_clr                           (fifo_clr_sys[2]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[2]                                   ),
+    .fifo_clr                           (adc_ctl[10]                                  ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe2_rx_data                                 ),
     .phy_rx_charisk                     (afe2_rx_charisk                              ),
     .phy_rx_disperr                     (afe2_rx_disperr                              ),
@@ -544,13 +556,10 @@ ADC_CHN adc_chn3(
     .jesd_rst_n                         (jesd_rst_n[3]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd3                                         ),
-    .afe_en                             (afe_en_adc[3]                                ),
-    .fifo_clr                           (fifo_clr_sys[3]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[3]                                   ),
+    .fifo_clr                           (adc_ctl[11]                                  ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe3_rx_data                                 ),
     .phy_rx_charisk                     (afe3_rx_charisk                              ),
     .phy_rx_disperr                     (afe3_rx_disperr                              ),
@@ -591,13 +600,10 @@ ADC_CHN adc_chn4(
     .jesd_rst_n                         (jesd_rst_n[4]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd4                                         ),
-    .afe_en                             (afe_en_adc[4]                                ),
-    .fifo_clr                           (fifo_clr_sys[4]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[4]                                   ),
+    .fifo_clr                           (adc_ctl[12]                                  ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe4_rx_data                                 ),
     .phy_rx_charisk                     (afe4_rx_charisk                              ),
     .phy_rx_disperr                     (afe4_rx_disperr                              ),
@@ -638,13 +644,10 @@ ADC_CHN adc_chn5(
     .jesd_rst_n                         (jesd_rst_n[5]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd5                                         ),
-    .afe_en                             (afe_en_adc[5]                                ),
-    .fifo_clr                           (fifo_clr_sys[5]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[5]                                   ),
+    .fifo_clr                           (adc_ctl[13]                                  ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe5_rx_data                                 ),
     .phy_rx_charisk                     (afe5_rx_charisk                              ),
     .phy_rx_disperr                     (afe5_rx_disperr                              ),
@@ -685,13 +688,10 @@ ADC_CHN adc_chn6(
     .jesd_rst_n                         (jesd_rst_n[6]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd6                                         ),
-    .afe_en                             (afe_en_adc[6]                                ),
-    .fifo_clr                           (fifo_clr_sys[6]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[6]                                   ),
+    .fifo_clr                           (adc_ctl[14]                                  ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe6_rx_data                                 ),
     .phy_rx_charisk                     (afe6_rx_charisk                              ),
     .phy_rx_disperr                     (afe6_rx_disperr                              ),
@@ -732,13 +732,10 @@ ADC_CHN adc_chn7(
     .jesd_rst_n                         (jesd_rst_n[7]                                ),
     .sysref                             (sysref_in                                    ),
     .afe_id                             (3'd7                                         ),
-    .afe_en                             (afe_en_adc[7]                                ),
-    .fifo_clr                           (fifo_clr_sys[7]                              ),
-    .smp_prec                           (smp_prec                                     ),
-    .smp_mode                           (smp_mode                                     ),
-    .frame_fmt                          (frame_fmt                                    ),
-    .dec_del_mode                       (dec_del_mode                                 ),
-    .dec_m                              (dec_m                                        ),
+    .afe_en                             (adc_ctl[7]                                   ),
+    .fifo_clr                           (adc_ctl[15]                                  ),
+    .adc_ctl                            (adc_ctl                                      ),
+    .frame_cfg                          (frame_cfg                                    ),
     .phy_rx_data                        (afe7_rx_data                                 ),
     .phy_rx_charisk                     (afe7_rx_charisk                              ),
     .phy_rx_disperr                     (afe7_rx_disperr                              ),

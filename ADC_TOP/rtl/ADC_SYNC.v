@@ -1,71 +1,80 @@
 `timescale 1ns / 1ps
 
-// =====
-// 1. System CDC
-// =====
+// System-level control, status, and event clock-domain crossings.
 module ADC_SYNC(
-    input  wire                             sys_clk                                     ,
-    input  wire                             sys_rst_n                                   ,
-    input  wire                             adc_clk                                     ,
-    input  wire                             adc_rst_n                                   ,
-    input  wire                             afe_clk                                     ,
-    input  wire                             afe_rst_n                                   ,
-    input  wire                             sysref                                      ,
-    input  wire [7:0]                       afe_en_sys                                  ,
-    input  wire                             tgc_req_sys                                 ,
-    input  wire [7:0]                       tgc_mask_sys                                ,
-    input  wire [1:0]                       tgc_profile_sys                             ,
-    input  wire                             tgc_up_dn_sys                               ,
-    input  wire                             tgc_slope_sys                               ,
-    input  wire [7:0]                       link_ready_adc                              ,
-    input  wire [7:0]                       fifo_empty_adc                              ,
-    input  wire [7:0]                       fifo_full_adc                               ,
-    input  wire [7:0]                       afe_idle_adc                                ,
-    input  wire [7:0]                       pll_lock_adc                                ,
-    input  wire [7:0]                       rx_reset_done_adc                           ,
-    input  wire [15:0]                      lane_ready_adc                              ,
-    input  wire [15:0]                      byte_aligned_adc                            ,
-    input  wire [15:0]                      comma_detected_adc                          ,
-    input  wire [7:0]                       data_drop_evt_adc                           ,
-    input  wire [7:0]                       link_error_evt_adc                          ,
-    input  wire [7:0]                       sysref_seen_evt_adc                         ,
-    input  wire [15:0]                      disparity_evt_adc                           ,
-    input  wire [15:0]                      notintable_evt_adc                          ,
-    input  wire [7:0]                       fifo_overflow_evt_afe                       ,
-    input  wire                             tgc_busy_afe                                ,
-    input  wire                             tgc_done_afe                                ,
-    output wire [7:0]                       afe_en_adc                                  ,
-    output wire                             tgc_req_afe                                 ,
-    output wire [7:0]                       tgc_mask_afe                                ,
-    output wire [1:0]                       tgc_profile_afe                             ,
-    output wire                             tgc_up_dn_afe                               ,
-    output wire                             tgc_slope_afe                               ,
-    output wire [7:0]                       link_ready_sys                              ,
-    output wire [7:0]                       fifo_empty_sys                              ,
-    output wire [7:0]                       fifo_full_sys                               ,
-    output wire [7:0]                       afe_idle_sys                                ,
-    output wire [7:0]                       pll_lock_sys                                ,
-    output wire [7:0]                       rx_reset_done_sys                           ,
-    output wire [15:0]                      lane_ready_sys                              ,
-    output wire [15:0]                      byte_aligned_sys                            ,
-    output wire [15:0]                      comma_detected_sys                          ,
-    output wire                             sysref_level_sys                            ,
-    output wire [7:0]                       fifo_overflow_evt_sys                       ,
-    output wire [7:0]                       data_drop_evt_sys                           ,
-    output wire [7:0]                       link_error_evt_sys                          ,
-    output wire [7:0]                       sysref_seen_evt_sys                         ,
-    output wire [15:0]                      disparity_evt_sys                           ,
-    output wire [15:0]                      notintable_evt_sys                          ,
-    output wire                             tgc_busy_sys                                ,
+    // Clock and reset domains
+    input  wire                             sys_clk                                      ,
+    input  wire                             sys_rst_n                                    ,
+    input  wire                             adc_clk                                      ,
+    input  wire                             adc_rst_n                                    ,
+    input  wire                             afe_clk                                      ,
+    input  wire                             afe_rst_n                                    ,
+
+    // System control source
+    input  wire                             sysref                                       ,
+    input  wire [7:0]                       afe_en_sys                                   ,
+    input  wire                             tgc_req_sys                                  ,
+    input  wire [7:0]                       tgc_mask_sys                                 ,
+    input  wire [1:0]                       tgc_profile_sys                              ,
+    input  wire                             tgc_up_dn_sys                                ,
+    input  wire                             tgc_slope_sys                                ,
+
+    // ADC-domain status source
+    input  wire [7:0]                       link_ready_adc                               ,
+    input  wire [7:0]                       fifo_empty_adc                               ,
+    input  wire [7:0]                       fifo_full_adc                                ,
+    input  wire [7:0]                       afe_idle_adc                                 ,
+    input  wire [7:0]                       pll_lock_adc                                 ,
+    input  wire [7:0]                       rx_reset_done_adc                            ,
+    input  wire [15:0]                      lane_ready_adc                               ,
+    input  wire [15:0]                      byte_aligned_adc                             ,
+    input  wire [15:0]                      comma_detected_adc                           ,
+    input  wire [7:0]                       data_drop_evt_adc                            ,
+    input  wire [7:0]                       link_error_evt_adc                           ,
+    input  wire [7:0]                       sysref_seen_evt_adc                          ,
+    input  wire [15:0]                      disparity_evt_adc                            ,
+    input  wire [15:0]                      notintable_evt_adc                           ,
+
+    // AFE-domain event and TGC status source
+    input  wire [7:0]                       fifo_overflow_evt_afe                        ,
+    input  wire                             tgc_busy_afe                                 ,
+    input  wire                             tgc_done_afe                                 ,
+
+    // ADC and AFE control destinations
+    output wire [7:0]                       afe_en_adc                                   ,
+    output wire                             tgc_req_afe                                  ,
+    output wire [7:0]                       tgc_mask_afe                                 ,
+    output wire [1:0]                       tgc_profile_afe                              ,
+    output wire                             tgc_up_dn_afe                                ,
+    output wire                             tgc_slope_afe                                ,
+
+    // System status destination
+    output wire [7:0]                       link_ready_sys                               ,
+    output wire [7:0]                       fifo_empty_sys                               ,
+    output wire [7:0]                       fifo_full_sys                                ,
+    output wire [7:0]                       afe_idle_sys                                 ,
+    output wire [7:0]                       pll_lock_sys                                 ,
+    output wire [7:0]                       rx_reset_done_sys                            ,
+    output wire [15:0]                      lane_ready_sys                               ,
+    output wire [15:0]                      byte_aligned_sys                             ,
+    output wire [15:0]                      comma_detected_sys                           ,
+    output wire                             sysref_level_sys                             ,
+    output wire [7:0]                       fifo_overflow_evt_sys                        ,
+    output wire [7:0]                       data_drop_evt_sys                            ,
+    output wire [7:0]                       link_error_evt_sys                           ,
+    output wire [7:0]                       sysref_seen_evt_sys                          ,
+    output wire [15:0]                      disparity_evt_sys                            ,
+    output wire [15:0]                      notintable_evt_sys                           ,
+    output wire                             tgc_busy_sys                                 ,
     output wire                             tgc_done_sys
 );
 
+// Static TGC fields remain stable while the request pulse crosses domains.
 assign tgc_mask_afe    = tgc_mask_sys;
 assign tgc_profile_afe = tgc_profile_sys;
 assign tgc_up_dn_afe   = tgc_up_dn_sys;
 assign tgc_slope_afe   = tgc_slope_sys;
 
-levels_sync #(.DS(8)) afe_enable_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(afe_en_sys), .out(afe_en_adc));
 pulse_sync2 tgc_request_to_afe(.clka(sys_clk), .clkb(afe_clk), .rst_n_a(sys_rst_n), .rst_n_b(afe_rst_n), .in(tgc_req_sys), .out(tgc_req_afe));
 level_sync tgc_busy_to_sys(.clk(sys_clk), .rst_n(sys_rst_n), .in(tgc_busy_afe), .out(tgc_busy_sys));
 pulse_sync2 tgc_done_to_sys(.clka(afe_clk), .clkb(sys_clk), .rst_n_a(afe_rst_n), .rst_n_b(sys_rst_n), .in(tgc_done_afe), .out(tgc_done_sys));

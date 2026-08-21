@@ -1,8 +1,8 @@
 """Public-interface cocotb sanity suite for ADC_TOP.
 
-The Vivado JESD204 PHY remains the external model boundary.  These tests use
-only ADC_TOP ports and cover the software-visible register/CDC/FIFO/TGC
-contracts without reaching into private implementation signals.
+The Vivado JESD204 PHY remains the external model boundary. Public ADC_TOP
+scoreboards are primary. A small Layer-A/B directed subset observes only the
+stable semantic hierarchy signals explicitly named by the v1.32 contract.
 """
 
 import cocotb
@@ -27,6 +27,33 @@ def _drive(dut, name, value):
 def _assert_known(dut, name):
     value = _required(dut, name).value
     assert value.is_resolvable, f"{name} contains X/Z: {value}"
+
+
+def _assert_fixed_eight_channel_interface(dut):
+    """Check every literal PHY/AXIS/TGC port in the non-parameterized top."""
+    expected_widths = {
+        "rx_data": 64,
+        "rx_charisk": 8,
+        "rx_disperr": 8,
+        "rx_notintable": 8,
+        "rx_reset_done": 1,
+        "pll_lock": 1,
+        "byte_aligned": 2,
+        "rx_encommalign": 1,
+        "sync_n": 1,
+    }
+    for channel in range(8):
+        for suffix, width in expected_widths.items():
+            assert len(_required(dut, f"afe{channel}_{suffix}")) == width, (
+                f"AFE{channel} {suffix} width changed from {width}")
+        for suffix, width in (("tdata", 512), ("tkeep", 64), ("tvalid", 1),
+                              ("tlast", 1), ("tready", 1)):
+            assert len(_required(dut, f"m_axis_afe{channel}_{suffix}")) == width, (
+                f"AFE{channel} AXIS {suffix} width changed from {width}")
+        for suffix in ("slope", "up_dn", "prof1", "prof2"):
+            assert len(_required(dut, f"tgc{channel}_{suffix}")) == 1
+    for prefix in ("afe8_rx_data", "m_axis_afe8_tdata", "tgc8_slope"):
+        assert getattr(dut, prefix, None) is None, f"fixed-eight interface grew an unexpected {prefix}"
 
 
 async def _jesd_clock_bus(signal, period_ns=7):
@@ -413,17 +440,14 @@ def _pack_two_words(words):
 async def _drive_afe0_ac9810_pure_adc_epoch(dut, block_count=300, base=1):
     """Continue a deterministic period-16 pure-ADC stream and return its beat.
 
-    The repeated nonzero pattern also occupies positions discarded as sync and
-    padding.  This proves removal is position-based and makes every complete
-    accepted CML1/CML5 block independent of legal elastic-buffer phase.
+    This is the frozen pure-ADC FRAME_FMT=0 / SMP_PREC=10 case.  The source is
+    always an AC9810 N'=16 container: a signed 10-bit code in bits [15:6] and
+    six zero padding bits.  Its expected result is the right-aligned signed
+    16-bit representation.  The repeated nonzero pattern also occupies
+    positions discarded as sync and padding, proving removal is position-based.
     """
-    lane0 = _ac9810_cml_words(base)
-    lane1 = _ac9810_cml_words(base + 16)
-    # This helper exercises the frozen pure-ADC default: 10-bit samples in
-    # right-aligned 16-bit PHY containers. Keep the driven containers raw, but
-    # model the DUT's independent signed 10-to-16-bit output conversion.
-    expected_words = [_sign_extend(word, 10) for word in range(base, base + 32)]
-    expected_beat = sum(word << (16 * index) for index, word in enumerate(expected_words))
+    channels, expected_beat = _normalized_sample_pattern(10, 0, phase=base)
+    lane0, lane1 = _channel_cml_words(channels)
     for _ in range(block_count * 8):
         pair = _ % 8
         await _drive_afe0_jesd_beat(dut, _pack_two_words(lane0[pair * 2:pair * 2 + 2]),
@@ -447,14 +471,29 @@ def _channel_cml_words(channels):
             [channels[index] for index in range(17, 32, 2)])
 
 
-def _packed_sample_pattern(width, left_aligned, phase):
-    """Create a signed, channel-distinct public AC9810 pattern and its model."""
-    limit = 1 << (width - 1)
-    samples = [(-limit + phase * 97 + index * 3) & ((1 << width) - 1)
-               for index in range(32)]
-    containers = [sample << (16 - width) if left_aligned else sample for sample in samples]
-    expected = sum(_sign_extend(sample, width) << (16 * index)
-                   for index, sample in enumerate(samples))
+def _normalized_sample_pattern(width, frame_fmt, phase):
+    """Build documented AC9810 N'=16 containers and the FPGA-format model.
+
+    Every physical source word is left aligned: S={C, zero-padding}.  Even
+    channels carry positive C values and odd channels carry negative C values;
+    each code has nonzero high and low payload bits.  This makes a low-p-bit
+    extraction, dropped source MSB, nonzero-padding acceptance, or reorder
+    regression observable for every supported SMP_PREC value.
+    """
+    assert width in (10, 12, 14)
+    assert frame_fmt in (0, 1)
+    magnitude_mask = (1 << (width - 1)) - 1
+    samples = []
+    for index in range(32):
+        magnitude = ((phase * 0x25 + index * 0x55) & magnitude_mask)
+        magnitude |= (1 << (width - 2)) | 1
+        samples.append(magnitude if (index & 1) == 0
+                       else (1 << (width - 1)) | magnitude)
+    containers = [(sample << (16 - width)) & 0xFFFF for sample in samples]
+    expected_words = ([_sign_extend(sample, width) for sample in samples]
+                      if frame_fmt == 0 else containers)
+    expected = sum(word << (16 * index)
+                   for index, word in enumerate(expected_words))
     return containers, expected
 
 
@@ -490,16 +529,21 @@ async def _drive_afe0_raw_word_stream(dut, lane0_words, lane1_words):
             _pack_two_words(lane1_words[index:index + 2]))
 
 
-def _scheduler_lane_word(lane, position):
-    """Deterministic positive 14-bit container for one payload lane position."""
+def _scheduler_sample_code(lane, position):
+    """Deterministic positive right-aligned 14-bit reference sample."""
     return (1 + lane * 0x0800 + position * 37 + (position >> 4) * 19) & 0x1FFF
 
 
+def _scheduler_lane_word(lane, position):
+    """AC9810 N'=16 source container: 14-bit code in [15:2], low zeros."""
+    return _scheduler_sample_code(lane, position) << 2
+
+
 def _scheduler_expected_payload(terminal):
-    """Map the 16 lane words ending at terminal into one public 512-bit beat."""
+    """Map right-aligned fmt0 samples ending at terminal into one output beat."""
     order = (0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15)
-    lane0 = [_scheduler_lane_word(0, terminal - 15 + index) for index in range(16)]
-    lane1 = [_scheduler_lane_word(1, terminal - 15 + index) for index in range(16)]
+    lane0 = [_scheduler_sample_code(0, terminal - 15 + index) for index in range(16)]
+    lane1 = [_scheduler_sample_code(1, terminal - 15 + index) for index in range(16)]
     mapped = [lane0[index] for index in order] + [lane1[index] for index in order]
     return sum(word << (16 * index) for index, word in enumerate(mapped))
 
@@ -712,8 +756,11 @@ async def _assert_fifo_empty_stable(dut, channels=(0,), samples=8):
 
 
 async def _fifo_clear_cycle_protocol(dut, selected_mask=0x01):
-    """Cycle/status based FIFO_CLR protocol; no wall-clock hold is assumed."""
-    await _axi_write(dut, 0x0000, (selected_mask & 0xFF) << 8, 0xF)
+    """Check FIFO reset convergence while CLR is asserted, preserving AFE_EN."""
+    original_ctl = await _axi_read(dut, 0x0000)
+    release_ctl = original_ctl & ~0x0000ff00
+    await _axi_write(dut, 0x0000,
+                     release_ctl | ((selected_mask & 0xFF) << 8), 0xF)
     await _poll_register(dut, 0x000C, (selected_mask & 0xFF) << 8,
                          (selected_mask & 0xFF) << 8, attempts=160)
     # Both reset-owning clocks remain active. Hold a bounded number of cycles
@@ -722,26 +769,52 @@ async def _fifo_clear_cycle_protocol(dut, selected_mask=0x01):
         await RisingEdge(dut.afe_clk)
     for _ in range(8):
         await RisingEdge(dut.adc_clk)
-    await _axi_write(dut, 0x0000, 0x00000000, 0xF)
+    # A live producer may refill immediately after release.  Empty is therefore
+    # a CLR-active invariant, not a post-release invariant.
     await _assert_fifo_empty_stable(dut, tuple(channel for channel in range(8)
                                                 if selected_mask & (1 << channel)))
+    await _axi_write(dut, 0x0000, release_ctl, 0xF)
+
+
+def _chn0(dut):
+    """Return the frozen AFE0 channel integration boundary."""
+    channel = getattr(dut, "adc_chn0", None)
+    assert channel is not None, "v1.32 acceptance: ADC_CHN0 hierarchy is absent"
+    return channel
 
 
 def _rxd0(dut):
-    """The v1.10 rxd_three_state contract explicitly permits this scope."""
-    channel = getattr(dut, "adc_chn0", None)
-    assert channel is not None, "rxd_three_state: ADC_CHN0 hierarchy is absent"
-    unpack = getattr(channel, "adc_rxd", None)
-    assert unpack is not None, "rxd_three_state: ADC_RXD hierarchy is absent"
+    """Return the frozen AFE0 ADI/JESD wrapper boundary."""
+    wrapper = getattr(_chn0(dut), "adc_rxd", None)
+    assert wrapper is not None, "v1.32 acceptance: ADC_RXD hierarchy is absent"
+    return wrapper
+
+
+def _upk0(dut):
+    """Return the frozen AFE0 unpacker boundary."""
+    channel = _chn0(dut)
+    unpack = getattr(channel, "adc_upk", None)
+    assert unpack is not None, "v1.32 acceptance: ADC_UPK hierarchy is absent"
     return unpack
 
 
-def _rxd_context(rxd):
+def _upk_context(upk):
     return (
-        int(rxd.rxd_fsm.value), int(rxd.prefix_beat_r.value),
-        int(rxd.word_pos_r.value), int(rxd.next_term_r.value),
-        int(rxd.term_phase_r.value),
+        int(upk.rxd_fsm.value), int(upk.prefix_cnt.value),
+        int(upk.region_cnt.value), int(upk.ddc_wr_sel.value),
     )
+
+
+def _assert_upk_contract_shape(upk):
+    """Check only the stable v1.32 semantic signals exposed for verification."""
+    assert len(upk.rxd_buff0) == 128 and len(upk.rxd_buff1) == 128
+    for name in ("rxd_buff0", "rxd_buff1", "region_cnt", "ddc_i_buff",
+                  "ddc_q_buff", "ddc_wr_sel", "rxd_buff_upd", "rxd_data_upd",
+                  "ddc_i_sta", "ddc_q_sta", "pref_num", "region_vld_max",
+                  "region_zro_max", "region_vld_clr", "region_zro_clr",
+                  "normal_wr_req", "ddc_i_upd", "ddc_q_upd", "ddc_pair_wr",
+                  "data_drop_set"):
+        assert getattr(upk, name).value.is_resolvable, f"{name} contains X/Z"
 
 
 async def _rxd_start_epoch_source(dut):
@@ -760,7 +833,7 @@ async def _rxd_start_epoch_source(dut):
 async def _rxd_drive_afe0_jesd_beat(dut):
     """Leave ReadOnly before changing the PHY inputs for this directed test."""
     await _jesd_bus_bit0_falling(dut)
-    await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    await _drive_afe0_jesd_beat(dut, [1, 2, 3, 4], [5, 6, 7, 8])
 
 
 async def _rxd_drive_afe_beat(dut):
@@ -776,17 +849,38 @@ async def _rxd_drive_afe_beats(dut, count):
 
 async def _rxd_monitor(dut, label, predicate, attempts=1024):
     """Pre-armed monitor: capture the first stable AFE context that matches."""
-    rxd = _rxd0(dut)
+    upk = _upk0(dut)
     for _ in range(attempts):
         await RisingEdge(dut.afe_clk)
-        # ADC_RXD uses #UDLY=1ns nonblocking state updates.  This is after
+        # ADC_UPK uses #UDLY=1ns nonblocking state updates.  This is after
         # that declared delay and still far before the 28ns AFE period ends.
         await Timer(2, unit="ns")
         await ReadOnly()
-        context = _rxd_context(rxd)
+        context = _upk_context(upk)
         if predicate(context):
             return context
-    raise AssertionError(f"rxd_three_state: {label} monitor timed out: {_rxd_context(rxd)}")
+    raise AssertionError(f"upk_region: {label} monitor timed out: {_upk_context(upk)}")
+
+
+async def _rxd_preedge_marker_monitor(dut, label, attempts=4096):
+    """Pre-arm the v1.32 AFE tuple marker and its post-edge UPK consequence."""
+    rxd = _rxd0(dut)
+    upk = _upk0(dut)
+    for cycle in range(1, attempts + 1):
+        await FallingEdge(dut.afe_clk)
+        await ReadOnly()
+        tuple_valid = _diag_int(rxd.link_ready_afe)
+        raw_somf = _diag_int(rxd.rxd_somf)
+        if tuple_valid == 1 and raw_somf is not None and (raw_somf & 1):
+            pre = (cycle, tuple_valid, raw_somf, _diag_hex(rxd.rxd_data),
+                   _upk_context(upk))
+            await RisingEdge(dut.afe_clk)
+            await Timer(2, unit="ns")
+            await ReadOnly()
+            post = _upk_context(upk)
+            dut._log.info("A9_PREEDGE_MARKER %s pre=%s post=%s", label, pre, post)
+            return pre, post
+    raise AssertionError(f"A9 pre-edge marker monitor timed out: {label}")
 
 
 async def _rxd_observe(dut, label, predicate, source):
@@ -800,18 +894,240 @@ async def _rxd_observe(dut, label, predicate, source):
             monitor.kill()
 
 
+async def _monitor_ddc_pair_decisions(dut, coverage):
+    """Observe atomic Q decisions and their exact FIFO-free boundaries."""
+    upk = _upk0(dut)
+    while True:
+        await FallingEdge(dut.afe_clk)
+        await ReadOnly()
+        pre_drop = int(upk.data_drop_set.value)
+        pre_q = int(upk.ddc_q_upd.value)
+        pre_pair_wr = int(upk.ddc_pair_wr.value)
+        pre_level = int(upk.fifo_wlevel.value)
+        if pre_pair_wr:
+            coverage["admit_levels"].add(pre_level)
+        if pre_drop:
+            coverage["drop_levels"].add(pre_level)
+        await RisingEdge(dut.afe_clk)
+        await Timer(2, unit="ns")
+        await ReadOnly()
+        event = int(upk.data_drop_evt.value)
+        assert event == pre_drop, (
+            "DATA_DROP pulse does not match the preceding Q-completion decision")
+        if event:
+            coverage["drop_count"] += 1
+            assert pre_q == 1, (
+                "DATA_DROP event occurred outside a completed Q block")
+            assert pre_pair_wr == 0, (
+                "a rejected DDC pair was simultaneously admitted")
+            assert int(upk.fifo_wr_valid.value) == 0, (
+                "a rejected DDC pair emitted a FIFO request")
+
+
+async def _rxd_sample_fifo_request_once(dut):
+    """Prove one accepted UPK request is stable into, then retires after, E2."""
+    channel = _chn0(dut)
+    upk = _upk0(dut)
+    await FallingEdge(dut.afe_clk)
+    await ReadOnly()
+    pre_valid = int(upk.fifo_wr_valid.value)
+    pre_full = int(channel.fifo_full_afe.value)
+    pre_data = int(upk.fifo_wr_data.value)
+    pre_level = int(channel.fifo_wr_level.value)
+    assert pre_valid == 1, "FIFO request was not held through the E2 setup window"
+    assert pre_full == 0, "FIFO request reached E2 while the write side was full"
+
+    await RisingEdge(dut.afe_clk)
+    await Timer(2, unit="ns")
+    await ReadOnly()
+    post_valid = int(upk.fifo_wr_valid.value)
+    post_full_value = channel.fifo_full_afe.value
+    assert post_full_value.is_resolvable, "FIFO full status contains X/Z after E2"
+    post_full = int(post_full_value)
+    post_data = int(upk.fifo_wr_data.value)
+    post_level = int(channel.fifo_wr_level.value)
+    assert post_valid == 0, "accepted FIFO request was not a single-cycle pulse"
+    assert post_full == pre_full == 0, "FIFO full status changed across the E2 sample edge"
+    assert post_data == pre_data, "FIFO request data changed across the E2 sample edge"
+    dut._log.info(
+        "A10_FIFO_REQUEST_SAMPLE valid=%d full=%d->%d level=%d->%d data_lsw=0x%08x",
+        pre_valid, pre_full, post_full, pre_level, post_level, pre_data & 0xFFFFFFFF)
+
+
+async def _wait_ddc_zero_terminal(dut, attempts=32):
+    """Return at the read-only ZERO cnt11 boundary before the next VALID region."""
+    upk = _upk0(dut)
+    for cycle in range(1, attempts + 1):
+        await FallingEdge(dut.afe_clk)
+        await ReadOnly()
+        if int(upk.rxd_fsm_zero.value) and int(upk.region_zro_clr.value):
+            region = int(upk.region_cnt.value)
+            assert region == 11, f"DDC ZERO terminal count changed from 11 to {region}"
+            context = _upk_context(upk)
+            dut._log.info(
+                "DDC_CANCEL_ALIGN cycle=%d context=%s fifo_level=%d",
+                cycle, context, int(_chn0(dut).fifo_wr_level.value))
+            return context
+    raise AssertionError(
+        f"DDC ZERO terminal was not observed within {attempts} AFE beats: "
+        f"{_upk_context(upk)}")
+
+
+def _ddc14_payload_from_observed_tuple(first_tuple, second_tuple):
+    """Independently format one DDC candidate from two observed RXD tuple beats.
+
+    ``first_tuple`` is the cnt=0 first half and ``second_tuple`` is the cnt=1
+    completing half.  This mirrors the published lane ordering and 14-bit
+    right-aligned conversion, but deliberately derives every input word from
+    the arriving ADC_RXD tuple rather than from a nominal PHY-drive phase.
+    """
+    half_mask = (1 << 128) - 1
+    raw0 = ((second_tuple & half_mask) << 128) | (first_tuple & half_mask)
+    raw1 = ((second_tuple >> 128) << 128) | (first_tuple >> 128)
+    lane_order = (0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15)
+    payload = 0
+    for lane, raw in enumerate((raw0, raw1)):
+        for output_word, input_word in enumerate(lane_order):
+            container = (raw >> (16 * input_word)) & 0xffff
+            converted = _sign_extend(container >> 2, 14)
+            payload |= converted << (16 * (lane * 16 + output_word))
+    return payload
+
+
+async def _trace_ddc_complete_i_from_tuple(dut, attempts=4096):
+    """Prove a nonzero I completion from its arriving AFE tuple through UPK.
+
+    The PHY is a clock-crossing/aggregation boundary.  Do not infer the
+    ADC_UPK input phase from when the JESD source coroutine wrote a PHY value:
+    capture the actual pre-edge RXD tuple and bind it to the next post-edge
+    rxd_buff_upd/rxd_data_upd/ddc_i_sta actions and ddc_i_buff verdict.
+    """
+    rxd = _rxd0(dut)
+    upk = _upk0(dut)
+    channel = _chn0(dut)
+    for cycle in range(1, attempts + 1):
+        await FallingEdge(dut.afe_clk)
+        await ReadOnly()
+        if not (int(upk.rxd_fsm_valid.value) and int(upk.region_cnt.value) == 0):
+            continue
+        # The first I/Q pair must already be physically committed.  This
+        # excludes the pre-recovery pair while avoiding a nominal PHY latency.
+        if int(channel.fifo_wr_level.value) > 510:
+            continue
+        first_tuple = int(rxd.rxd_data.value)
+        pre_context = _upk_context(upk)
+        assert int(upk.rxd_buff_upd.value) == 1, (
+            f"DDC I trace cnt0 pre-edge lacks first-half capture: pre={pre_context}")
+        await RisingEdge(dut.afe_clk)
+        await Timer(2, unit="ns")
+        await ReadOnly()
+        assert int(upk.rxd_fsm_valid.value) == 1 and int(upk.region_cnt.value) == 1, (
+            "DDC I trace did not advance from cnt0 to cnt1")
+        assert int(upk.rxd_buff0.value) == (first_tuple & ((1 << 128) - 1)) and \
+               int(upk.rxd_buff1.value) == (first_tuple >> 128), (
+            "DDC I trace first-half buffer does not match the observed cnt0 tuple")
+
+        await FallingEdge(dut.afe_clk)
+        await ReadOnly()
+        assert int(upk.rxd_fsm_valid.value) == 1 and int(upk.region_cnt.value) == 1, (
+            "DDC I trace did not advance from cnt0 to cnt1")
+        second_tuple = int(rxd.rxd_data.value)
+        observed_payload = _ddc14_payload_from_observed_tuple(first_tuple, second_tuple)
+        assert int(upk.rxd_data_upd.value) == 1 and int(upk.ddc_i_sta.value) == 1, (
+            "DDC I trace completion pre-edge lacks rxd_data_upd/ddc_i_sta")
+        await RisingEdge(dut.afe_clk)
+        await Timer(2, unit="ns")
+        await ReadOnly()
+        assert int(upk.ddc_i_buff.value) == observed_payload, (
+            "DDC I buffer does not match the contract-derived arriving tuple payload")
+        if observed_payload != 0:
+            dut._log.info(
+                "DDC_RECOVERY_I_TRACE cycle=%d pre=%s payload_lsw=0x%08x level=%d",
+                cycle, pre_context, observed_payload & 0xffffffff,
+                int(channel.fifo_wr_level.value))
+            return observed_payload
+    raise AssertionError("DDC recovery stream produced no nonzero tuple-derived complete I")
+
+
 async def _rxd_fifo_clear_source(dut):
-    """Selected FIFO_CLR source; observation is owned by the armed monitor."""
-    await _axi_write(dut, 0x0000, 0x00000100, 0xF)
+    """FIFO-only clear: observe reset while asserted, then allow live refill."""
+    channel = _chn0(dut)
+    upk = _upk0(dut)
+    pre_context = _upk_context(upk)
+    pre_buffers = (int(upk.rxd_buff0.value), int(upk.rxd_buff1.value),
+                   int(upk.ddc_i_buff.value), int(upk.ddc_q_buff.value))
+    pre_request = int(upk.fifo_wr_data.value)
+    await _axi_write(dut, 0x0000, 0x00000101, 0xF)
+    await _poll_register(dut, 0x000C, 0x00000100, 0x00000100, attempts=160)
     for _ in range(8):
         await RisingEdge(dut.afe_clk)
-    await _axi_write(dut, 0x0000, 0x00000000, 0xF)
     await _assert_fifo_empty_stable(dut, (0,))
+    assert _upk_context(upk) == pre_context, "FIFO_CLR modified UPK FSM/counters/commit"
+    assert (int(upk.rxd_buff0.value), int(upk.rxd_buff1.value),
+            int(upk.ddc_i_buff.value), int(upk.ddc_q_buff.value)) == pre_buffers, (
+                "FIFO_CLR modified UPK buffers")
+    assert int(channel.fifo_wr_level.value) == 512, "FIFO_CLR left a pre-clear word resident"
+    assert int(dut.m_axis_afe0_tvalid.value) == 0, (
+        f"pre-clear FIFO request 0x{pre_request:0128x} escaped while CLR was asserted")
+    await _axi_write(dut, 0x0000, 0x00000001, 0xF)
+    assert (await _axi_read(dut, 0x0000)) & 0x1, "FIFO_CLR release disabled AFE_EN"
+    # No persistent-empty assertion follows release: the active source may
+    # resume or continue and legitimately create a new FIFO request.
 
 
 async def _rxd_rx_reset_done_source(dut, value):
     await FallingEdge(dut.afe_clk)
     dut.afe0_rx_reset_done.value = value
+
+
+async def _rxd_cancel_at_effective_upk_loss(dut, attempts=16):
+    """Separate reset-done source drive from the first effective UPK loss edge.
+
+    ``link_ready_afe`` is the contract-defined same-domain tuple health gate;
+    its deassertion, rather than the asynchronous PHY source write, is the
+    first AFE pre-edge at which ADC_UPK must clear.  A FIFO request registered
+    before that edge is allowed one final FIFO sample on that edge.  No later
+    request or level change is permitted.
+    """
+    rxd = _rxd0(dut)
+    upk = _upk0(dut)
+    channel = _chn0(dut)
+    await _rxd_rx_reset_done_source(dut, 0)
+    for cycle in range(1, attempts + 1):
+        await FallingEdge(dut.afe_clk)
+        await ReadOnly()
+        if int(rxd.link_ready_afe.value) != 0:
+            continue
+        pre_context = _upk_context(upk)
+        pre_level = int(channel.fifo_wr_level.value)
+        pre_request = int(upk.fifo_wr_valid.value)
+        assert pre_context != (0, 0, 0, 0), (
+            "effective UPK-loss edge was observed only after context had already cleared")
+        await RisingEdge(dut.afe_clk)
+        await Timer(2, unit="ns")
+        await ReadOnly()
+        expected_level = pre_level - pre_request
+        assert _upk_context(upk) == (0, 0, 0, 0), (
+            "effective upk_vld withdrawal did not clear UPK context")
+        assert int(channel.fifo_wr_level.value) == expected_level, (
+            "FIFO level did not account exactly for the pre-loss registered request")
+        await FallingEdge(dut.afe_clk)
+        await ReadOnly()
+        assert int(upk.fifo_wr_valid.value) == 0, (
+            "UPK emitted a new FIFO request after effective upk_vld withdrawal")
+        stable_level = int(channel.fifo_wr_level.value)
+        assert stable_level == expected_level, (
+            "FIFO level changed after the allowed effective-loss sample")
+        await RisingEdge(dut.afe_clk)
+        await Timer(2, unit="ns")
+        await ReadOnly()
+        assert int(channel.fifo_wr_level.value) == stable_level, (
+            "FIFO accepted an extra transfer after effective upk_vld withdrawal")
+        dut._log.info(
+            "DDC_EFFECTIVE_CANCEL cycle=%d pre=%s level=%d request=%d final=%d",
+            cycle, pre_context, pre_level, pre_request, stable_level)
+        return pre_level, pre_request, stable_level
+    raise AssertionError("source reset-done withdrawal never reached effective link_ready_afe=0")
 
 
 async def _wait_clean_afe0_packet(dut, expected_payload, expected_sequence=None):
@@ -870,223 +1186,6 @@ class RegisterScoreboard:
             self.frame_cfg = data & 0x3FF
 
 
-class UnpackScheduleScoreboard:
-    """Independent v1.9 E={N,f} positive-coordinate schedule model."""
-
-    @staticmethod
-    def configuration(mode, dec_m, dec_del_mode):
-        assert mode in (0, 1, 2), f"unsupported formal sample mode {mode}"
-        if mode == 0:
-            return 16, 15, (16,), ("R",)
-
-        n = dec_m >> 2
-        frac = dec_m & 0x3
-        assert dec_del_mode in (0, 1, 2), f"software contract delay={dec_del_mode}"
-        assert ((mode == 1 and 1 <= n <= 63) or
-                (mode == 2 and 2 <= n <= 63)), (
-            f"software contract mode={mode} N={n}")
-        prefix_extra = (0, 4 * dec_m, 8 * dec_m)[dec_del_mode]
-        if frac == 0:
-            start_beat = 2 * n + 23 + prefix_extra
-            gaps = (16, 16 * n - 16) if mode == 2 else (16 * n, 16 * n)
-            phases = ("I", "Q") if mode == 2 else ("R",)
-        elif frac == 1:
-            start_beat = 8 * n + 25 + prefix_extra
-            gaps = ((16,) * 7 + (64 * n - 96,)) if mode == 2 else (16, 16, 16, 64 * n - 32)
-            phases = ("I", "Q") * 4 if mode == 2 else ("R",)
-        elif frac == 2:
-            start_beat = 4 * n + 25 + prefix_extra
-            gaps = ((16,) * 7 + (32 * n - 32,)) if mode == 2 else (16, 32 * n + 1, 16, 32 * n + 1)
-            phases = ("I", "Q") * 4 if mode == 2 else ("R",)
-        else:
-            start_beat = 8 * n + 29 + prefix_extra
-            gaps = ((16,) * 7 + (64 * n - 64,)) if mode == 2 else (16, 16, 16, 64 * n)
-            phases = ("I", "Q") * 4 if mode == 2 else ("R",)
-
-        assert 0 < start_beat <= 2573
-        assert all(gap >= 16 for gap in gaps), f"illegal multi-block beat gap: {gaps}"
-        return start_beat, 15, gaps, phases
-
-    @staticmethod
-    def terminals(first_term, gaps, count):
-        term = first_term
-        values = []
-        for index in range(count):
-            values.append(term)
-            term += gaps[index % len(gaps)]
-        return values
-
-
-def _assert_unpack_schedule_reference_vectors():
-    """Cross-check v1.9 supported branches against independent absolute vectors."""
-    vectors = (
-        (0,  0, 0,  16, (16,),                 ("R",),
-         (15, 31, 47, 63, 79, 95, 111, 127, 143)),
-        (1,  4, 0,  25, (16, 16),               ("R",),
-         (15, 31, 47, 63, 79, 95, 111, 127, 143)),
-        (1,  5, 0,  33, (16, 16, 16, 32),       ("R",),
-         (15, 31, 47, 63, 95, 111, 127, 143, 175)),
-        (1,  6, 1,  53, (16, 33, 16, 33),       ("R",),
-         (15, 31, 64, 80, 113, 129, 162, 178,
-          211, 227, 260, 276, 309, 325, 358, 374)),
-        (1,  7, 2,  93, (16, 16, 16, 64),       ("R",),
-         (15, 31, 47, 63, 127, 143, 159, 175, 239)),
-        (1, 252, 0, 149, (1008, 1008),          ("R",),
-         (15, 1023, 2031, 3039, 4047)),
-        (2,  8, 1,  59, (16, 16),               ("I", "Q"),
-         (15, 31, 47, 63, 79, 95, 111, 127, 143)),
-        (2,  9, 2, 113, (16, 16, 16, 16, 16, 16, 16, 32),
-         ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
-         (15, 31, 47, 63, 79, 95, 111, 127, 159)),
-        (2, 10, 0,  33, (16, 16, 16, 16, 16, 16, 16, 32),
-         ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
-         (15, 31, 47, 63, 79, 95, 111, 127, 159)),
-        (2, 11, 1,  89, (16, 16, 16, 16, 16, 16, 16, 64),
-         ("I", "Q", "I", "Q", "I", "Q", "I", "Q"),
-         (15, 31, 47, 63, 79, 95, 111, 127, 191)),
-    )
-    offsets = set()
-    for mode, dec_m, delay, exp_start, exp_gaps, exp_phases, exp_terms in vectors:
-        start, first, gaps, phases = UnpackScheduleScoreboard.configuration(
-            mode, dec_m, delay)
-        assert start == exp_start
-        assert first == 15
-        assert gaps == exp_gaps
-        assert phases == exp_phases
-        actual_terms = []
-        terminal = first
-        for index in range(len(exp_terms)):
-            actual_terms.append(terminal)
-            terminal += gaps[index % len(gaps)]
-        assert tuple(actual_terms) == exp_terms
-        offsets.update(term & 0x7 for term in exp_terms)
-    assert offsets == set(range(8))
-    # Maximum-prefix and long-gap width checks remain reference-only so the
-    # public DUT matrix does not spend most of its runtime transmitting gaps.
-    assert UnpackScheduleScoreboard.configuration(1, 253, 2) == (
-        2553, 15, (16, 16, 16, 4000), ("R",))
-    assert UnpackScheduleScoreboard.configuration(1, 255, 2) == (
-        2573, 15, (16, 16, 16, 4032), ("R",))
-
-    legal_count = 0
-    max_prefix = 0
-    max_gap = 0
-    exhaustive_offsets = set()
-    for mode, first_n in ((1, 1), (2, 2)):
-        for n in range(first_n, 64):
-            for frac in range(4):
-                dec_m = (n << 2) | frac
-                for delay in range(3):
-                    legal_count += 1
-                    start, first, gaps, phases = UnpackScheduleScoreboard.configuration(
-                        mode, dec_m, delay)
-                    prefix_base = (2 * n + 23, 8 * n + 25,
-                                   4 * n + 25, 8 * n + 29)[frac]
-                    expected_start = prefix_base + (0, 4 * dec_m, 8 * dec_m)[delay]
-                    if mode == 1:
-                        expected_gaps = (
-                            (16 * n, 16 * n),
-                            (16, 16, 16, 64 * n - 32),
-                            (16, 32 * n + 1, 16, 32 * n + 1),
-                            (16, 16, 16, 64 * n),
-                        )[frac]
-                        expected_phases = ("R",)
-                        expected_period = (32 * n, 64 * n + 16,
-                                           64 * n + 34, 64 * n + 48)[frac]
-                    else:
-                        expected_gaps = (
-                            (16, 16 * n - 16),
-                            (16, 16, 16, 16, 16, 16, 16, 64 * n - 96),
-                            (16, 16, 16, 16, 16, 16, 16, 32 * n - 32),
-                            (16, 16, 16, 16, 16, 16, 16, 64 * n - 64),
-                        )[frac]
-                        expected_phases = (("I", "Q") if frac == 0 else
-                                           ("I", "Q", "I", "Q",
-                                            "I", "Q", "I", "Q"))
-                        expected_period = (16 * n, 64 * n + 16,
-                                           32 * n + 80, 64 * n + 48)[frac]
-
-                    assert start == expected_start and first == 15
-                    assert gaps == expected_gaps and phases == expected_phases
-                    assert sum(gaps) == expected_period
-                    assert start < (1 << 12) and max(gaps) < (1 << 12)
-                    terms = UnpackScheduleScoreboard.terminals(first, gaps, 64)
-                    assert all(0 <= term < (1 << 64) for term in terms)
-                    exhaustive_offsets.update(term & 0x7 for term in terms)
-                    max_prefix = max(max_prefix, start)
-                    max_gap = max(max_gap, max(gaps))
-
-    assert legal_count == 1500
-    assert max_prefix == 2573 and max_gap == 4032
-    assert exhaustive_offsets == set(range(8))
-async def _unpack_schedule_matrix(dut):
-    """Drive one black-box packet for every v1.9 scheduler equivalence branch."""
-    _assert_unpack_schedule_reference_vectors()
-    await _setup(dut)
-    dut.afe0_pll_lock.value = 1
-    dut.afe0_rx_reset_done.value = 1
-    dut.afe0_byte_aligned.value = 0x3
-    dut.m_axis_afe0_tready.value = 0
-
-    representatives = (
-        ("pure",              0,   0, 0),
-        ("single_n1_f0_d0",  1,   4, 0),
-        ("single_n1_f1_d0",  1,   5, 0),
-        ("single_n1_f2_d1",  1,   6, 1),
-        ("single_n1_f3_d2",  1,   7, 2),
-        ("single_n63_f3_d2", 1, 255, 2),
-        ("ddc_n2_f0_d1",     2,   8, 1),
-        ("ddc_n2_f1_d2",     2,   9, 2),
-        ("ddc_n2_f2_d0",     2,  10, 0),
-        ("ddc_n2_f3_d1",     2,  11, 1),
-    )
-    end_offsets = set()
-
-    for label, mode, dec_m, dec_del_mode in representatives:
-        await _axi_write(dut, 0x0000, 0x00000000, 0xF)
-        await _poll_register(dut, 0x000C, 1 << 24, 1 << 24, attempts=320)
-        await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
-
-        dut.jesd_rst_n.value = 0xFE
-        for _ in range(16):
-            await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
-        dut.jesd_rst_n.value = 0xFF
-
-        frame_cfg = (dec_del_mode << 8) | dec_m if mode else 0
-        adc_ctl = 0x80000000 | (mode << 26)
-        _assert_software_static_config(adc_ctl, frame_cfg)
-        await _axi_write(dut, 0x0008, frame_cfg, 0xF)
-        await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
-        for _ in range(2100):
-            await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
-        await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
-
-        start_beat, first_term, gaps, phases = UnpackScheduleScoreboard.configuration(
-            mode, dec_m, dec_del_mode)
-        terminals = UnpackScheduleScoreboard.terminals(first_term, gaps, 256)
-        assert start_beat >= 0 and all(right > left for left, right in zip(terminals, terminals[1:]))
-        if mode == 2:
-            assert len(phases) == len(gaps)
-            assert all(phases[index] != phases[(index + 1) % len(phases)]
-                       for index in range(len(phases)))
-        end_offsets.update(term & 0x7 for term in terminals)
-
-        prefix_words = start_beat * 8
-        await _drive_afe0_raw_word_stream(
-            dut, [0x3A5A] * prefix_words, [0x15A5] * prefix_words)
-        await _drive_afe0_scheduler_payload(dut, terminals)
-        expected = [_scheduler_expected_payload(term) for term in terminals]
-        await _wait_afe0_complete_packet(dut, expected, mode, 14, dec_m)
-        await _assert_static_config_stable(dut, adc_ctl | 0x1, frame_cfg)
-        dut._log.info(
-            "STIMULUS_MARKER scheduler_%s_d%d_offsets_%s_pass",
-            label, dec_del_mode, sorted({term & 0x7 for term in terminals}))
-
-    assert end_offsets == set(range(8)), (
-        f"DUT scheduler representatives did not cover every terminal offset: {end_offsets}"
-    )
-
-
 async def _pure_adc_fixed_prefix(dut):
     """Pure ADC captures only after its fixed legal 16-AFE-beat prefix."""
     await _setup(dut)
@@ -1141,6 +1240,7 @@ async def _static_cfg_non_idle_only_gate(dut):
 
 async def _reset_and_top_level_defaults(dut):
     await _setup(dut)
+    _assert_fixed_eight_channel_interface(dut)
     for name in (
         "s_axi_awready", "s_axi_wready", "s_axi_bresp", "s_axi_bvalid",
         "s_axi_arready", "s_axi_rdata", "s_axi_rresp", "s_axi_rvalid",
@@ -1151,9 +1251,13 @@ async def _reset_and_top_level_defaults(dut):
     assert await _axi_read(dut, 0x0008) == 0
     assert await _axi_read(dut, 0x0030) == 0
     for channel in range(8):
-        name = f"m_axis_afe{channel}_tvalid"
-        _assert_known(dut, name)
-        assert int(_required(dut, name).value) == 0
+        for name in (f"m_axis_afe{channel}_tvalid", f"m_axis_afe{channel}_tlast",
+                     f"afe{channel}_rx_encommalign", f"afe{channel}_sync_n",
+                     f"tgc{channel}_slope", f"tgc{channel}_up_dn",
+                     f"tgc{channel}_prof1", f"tgc{channel}_prof2"):
+            _assert_known(dut, name)
+        assert int(_required(dut, f"m_axis_afe{channel}_tvalid").value) == 0
+        assert int(_required(dut, f"m_axis_afe{channel}_tlast").value) == 0
     dut._log.info("STIMULUS_MARKER reset_and_defaults_pass")
 
 
@@ -1278,6 +1382,23 @@ async def _tgc_error_and_backpressure(dut):
     )
     await _axi_write(dut, 0x0010, 1 << 25, 0xF)
     await _poll_register(dut, 0x0010, 1 << 25, 0)
+
+    # Exercise every fixed TGC output with one all-channel command. This also
+    # catches top-level channel swaps that AFE0 datapath scoreboards cannot see.
+    all_channel_command = (1 << 12) | (1 << 9) | (0xFF << 1) | 1
+    await _axi_write(dut, 0x0004, all_channel_command, 0xF)
+    all_slope_counts = [0] * 8
+    for _ in range(320):
+        await RisingEdge(dut.afe_clk)
+        for channel in range(8):
+            all_slope_counts[channel] += int(
+                _required(dut, f"tgc{channel}_slope").value)
+    assert all_slope_counts == [1] * 8, (
+        f"fixed-eight TGC routing mismatch: {all_slope_counts}")
+    for channel in range(8):
+        assert int(_required(dut, f"tgc{channel}_prof1").value) == 1
+        assert int(_required(dut, f"tgc{channel}_prof2").value) == 0
+        assert int(_required(dut, f"tgc{channel}_up_dn").value) == 0
 
     # A run command with an empty mask sets the public sticky error; W1C clears
     # it directly in the SYS-domain sole sticky owner.
@@ -1539,8 +1660,8 @@ async def _public_phy_cgs_ilas_and_packet_header(dut):
 async def _decimation_data_scoreboard_and_empty_guard(dut):
     """Public 12-bit decimation regression, including the empty-FIFO guard."""
     await _setup(dut)
-    # SMP_PREC=12, SMP_MODE=decimation, FRAME_FMT=left aligned.  DEC_M=32 is
-    # the smallest legal decimation setting and DEC_DEL_MODE=0.
+    # SMP_PREC=12, SMP_MODE=decimation, FRAME_FMT=1 lossless left-aligned.
+    # DEC_M=32 is the smallest legal decimation setting and DEC_DEL_MODE=0.
     adc_ctl = 0x46000000
     dut.afe0_pll_lock.value = 1
     dut.afe0_rx_reset_done.value = 1
@@ -1551,7 +1672,7 @@ async def _decimation_data_scoreboard_and_empty_guard(dut):
     await _axi_write(dut, 0x0000, adc_ctl, 0xF)
     await _poll_register(dut, 0x000C, 0xFF000000, 0xFF000000, attempts=240)
 
-    channels, expected = _packed_sample_pattern(12, True, phase=1)
+    channels, expected = _normalized_sample_pattern(12, 1, phase=1)
 
     await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
     for _ in range(96):
@@ -1586,13 +1707,13 @@ async def _decimation_data_scoreboard_and_empty_guard(dut):
 async def _ddc_data_scoreboard(dut):
     """Public 14-bit DDC regression with ordered, indivisible I/Q pairs."""
     await _setup(dut)
-    # SMP_PREC=14, SMP_MODE=DDC, FRAME_FMT=right aligned, DEC_M=32.
+    # SMP_PREC=14, SMP_MODE=DDC, FRAME_FMT=0 signed right-aligned, DEC_M=32.
     adc_ctl = 0x88000000
     dut.afe0_pll_lock.value = 1
     dut.afe0_rx_reset_done.value = 1
     dut.afe0_byte_aligned.value = 0x3
-    i_channels, expected_i = _packed_sample_pattern(14, False, phase=1)
-    q_channels, expected_q = _packed_sample_pattern(14, False, phase=41)
+    i_channels, expected_i = _normalized_sample_pattern(14, 0, phase=1)
+    q_channels, expected_q = _normalized_sample_pattern(14, 0, phase=41)
 
     # _setup leaves the public FIFO empty.  Configure while disabled, then
     # enable once and keep TREADY low while the entire public PHY sequence is
@@ -1608,7 +1729,7 @@ async def _ddc_data_scoreboard(dut):
 
     # Begin the first non-control PHY beat immediately after /A/.  The DDC
     # prefix and I/Q payload form one continuous public DATA stream.
-    # DDC E=32,N=8,f=0,d=0 has ddc_num=2N+23=39 AFE beats = 312 words.
+    # DDC E=32,N=8,f=0,d=0 has pref_num=2N+23=39 AFE beats = 312 words.
     # Supply that complete physical framing prefix after the first DATA word:
     # 32 synchronizing words followed by 280 zero-padding words per lane.
     # The subsequent I/Q CML stream then begins exactly at the public epoch's
@@ -1616,17 +1737,61 @@ async def _ddc_data_scoreboard(dut):
     await _drive_afe0_raw_word_stream(
         dut, [0x1357] * 32 + [0x0000] * 280,
         [0x2468] * 32 + [0x0000] * 280)
-    await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=2400)
+    pair_coverage = {"drop_count": 0, "admit_levels": set(), "drop_levels": set()}
+    drop_monitor = cocotb.start_soon(_monitor_ddc_pair_decisions(dut, pair_coverage))
+    try:
+        await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=2400)
+        await _poll_register(dut, 0x0010, 1 << 8, 1 << 8, attempts=400)
+    finally:
+        if not drop_monitor.done():
+            drop_monitor.kill()
     # The stalled sink exhausts the FWFT write capacity.  DDC rejects only at
-    # an I decision when fewer than two slots remain; DATA_DROP_PD is the
+    # a completed Q decision when fewer than two slots remain; DATA_DROP_PD is the
     # public indication of that whole-pair rejection.  The earliest accepted
     # packets below must remain ordered I/Q, proving no rejected I orphan was
     # inserted ahead of them.
-    await _poll_register(dut, 0x0010, 1 << 8, 1 << 8, attempts=400)
+    assert pair_coverage["drop_count"] > 0, (
+        "DDC capacity stress raised no atomic Q-completion drop pulse")
+    assert {2, 512}.issubset(pair_coverage["admit_levels"]), (
+        f"DDC admission missed free=2/512 boundaries: {pair_coverage}")
+    assert 0 in pair_coverage["drop_levels"], (
+        f"DDC capacity stress missed free=0 whole-pair drop: {pair_coverage}")
     await _wait_afe0_header_and_payload(
         dut, (expected_i, expected_q, expected_i, expected_q), 2, 14, 32)
     await _assert_static_config_stable(dut, adc_ctl | 0x1, 0x20)
     dut._log.info("STIMULUS_MARKER ddc14_iq_pair_scoreboard_pass")
+
+
+async def _normalized_format_pure_scoreboard(dut, width, frame_fmt, phase):
+    """Score one missing legal output-format pair through the public PHY path.
+
+    The device-facing stimulus never changes alignment: it is always AC9810
+    N'=16 S={C,zeros}.  FRAME_FMT selects only the FPGA's software-requested
+    output representation, so this test catches a format path that incorrectly
+    treats the physical source layout as software-dependent.
+    """
+    precision_code = {10: 0, 12: 1, 14: 2}[width]
+    adc_ctl = (precision_code << 30) | (frame_fmt << 25)
+    await _setup(dut)
+    dut.afe0_pll_lock.value = 1
+    dut.afe0_rx_reset_done.value = 1
+    dut.afe0_byte_aligned.value = 0x3
+    dut.m_axis_afe0_tready.value = 0
+    _assert_software_static_config(adc_ctl, 0x00)
+    await _axi_write(dut, 0x0008, 0x00, 0xF)
+    await _axi_write(dut, 0x0000, adc_ctl, 0xF)
+    await _poll_register(dut, 0x000C, 0xFF000000, 0xFF000000, attempts=240)
+    await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
+    for _ in range(2100):
+        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+    channels, expected = _normalized_sample_pattern(width, frame_fmt, phase)
+    await _drive_afe0_channel_blocks(dut, channels, block_count=620)
+    await _wait_afe0_header_and_payload(dut, (expected, expected), 0, width, 0)
+    await _assert_static_config_stable(dut, adc_ctl | 0x1, 0x00)
+    dut._log.info(
+        "STIMULUS_MARKER normalized_format_pure_scoreboard_pass width=%d frame_fmt=%d",
+        width, frame_fmt)
 
 
 async def _fixed_somf_alignment_and_zero_payload(dut):
@@ -1661,102 +1826,33 @@ async def _fixed_somf_alignment_and_zero_payload(dut):
     dut._log.info("STIMULUS_MARKER fixed_somf_bit0_zero_payload_pass")
 
 
-async def _ddc_abort_requires_fifo_clear_recovery(dut):
-    """Public valid-epoch link loss blocks admission until FIFO_CLR recovery."""
-    await _setup(dut)
-    adc_ctl = 0x88000000
-    frame_cfg = 0x20
-    dut.afe0_pll_lock.value = 1
-    dut.afe0_rx_reset_done.value = 1
-    dut.afe0_byte_aligned.value = 0x3
-    dut.m_axis_afe0_tready.value = 0
-    i_channels, expected_i = _packed_sample_pattern(14, False, phase=7)
-    q_channels, expected_q = _packed_sample_pattern(14, False, phase=47)
+def _diag_int(handle):
+    """Return a resolved monitor value, or None for X/Z without raising."""
+    if handle is None:
+        return None
+    value = handle.value
+    if not value.is_resolvable:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
-    _assert_software_static_config(adc_ctl, frame_cfg)
-    await _axi_write(dut, 0x0008, frame_cfg, 0xF)
-    await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
-    for _ in range(2100):
-        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
-    await _poll_register(dut, 0x0010, 1 << 8, 0, attempts=80)
-    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
-    await _drive_afe0_raw_word_stream(
-        dut, [0x1357] * 32 + [0x0000] * 280,
-        [0x2468] * 32 + [0x0000] * 280)
-    await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=4)
-    await _poll_register(dut, 0x0010, 1 << 8, 0, attempts=80)
 
-    # A healthy effective disable ends the epoch without an abort.
-    await _axi_write(dut, 0x0000, adc_ctl, 0xF)
-    await _poll_register(dut, 0x000C, 1 << 24, 1 << 24, attempts=240)
-    for _ in range(8):
-        await RisingEdge(dut.adc_clk)
-    await _poll_register(dut, 0x0010, 1 << 8, 0, attempts=160)
-    await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
+def _diag_scalar(handle):
+    if handle is None:
+        return "NA"
+    value = _diag_int(handle)
+    return "X" if value is None else str(value)
 
-    # Establish a fresh DDC epoch, then remove public PHY reset-done.
-    _assert_software_static_config(adc_ctl, frame_cfg)
-    await _axi_write(dut, 0x0008, frame_cfg, 0xF)
-    await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
-    for _ in range(2100):
-        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
-    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
-    await _drive_afe0_raw_word_stream(
-        dut, [0x1357] * 32 + [0x0000] * 280,
-        [0x2468] * 32 + [0x0000] * 280)
-    await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=4)
-    for _ in range(16):
-        await RisingEdge(dut.adc_clk)
-        await ReadOnly()
-        assert int(dut.m_axis_afe0_tvalid.value) == 0, (
-            "DDC packet started before the intentional valid-epoch link loss"
-        )
-    await FallingEdge(dut.adc_clk)
-    dut._log.info("STIMULUS_MARKER ddc_valid_epoch_rx_reset_done_loss")
-    dut.afe0_rx_reset_done.value = 0
-    await _poll_register(dut, 0x000C, 1 << 0, 0, attempts=240)
-    await _poll_register(dut, 0x0010, 1 << 8, 1 << 8, attempts=400)
-    for _ in range(16):
-        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
-    dut.afe0_rx_reset_done.value = 1
-    await _axi_write(dut, 0x0010, 1 << 8, 0xF)
-    await _poll_register(dut, 0x0010, 1 << 8, 0, attempts=400)
-    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
 
-    # W1C does not clear the abort or reopen packet admission.
-    await _drive_afe0_raw_word_stream(
-        dut, [0x1357] * 32 + [0x0000] * 280,
-        [0x2468] * 32 + [0x0000] * 280)
-    await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=1200)
-    await _poll_register(dut, 0x000C, (1 << 0) | (1 << 8), 1 << 0, attempts=240)
-    for _ in range(240):
-        await RisingEdge(dut.adc_clk)
-        await ReadOnly()
-        assert int(dut.m_axis_afe0_tvalid.value) == 0, (
-            "DDC abort allowed a new AXIS packet before FIFO_CLR recovery"
-        )
-    await _poll_register(dut, 0x0010, 1 << 8, 0, attempts=160)
-
-    # Recover through disable, idle, FIFO clear, and a clean relink.
-    await _axi_write(dut, 0x0000, 0x00000000, 0xF)
-    await _poll_register(dut, 0x000C, 1 << 24, 1 << 24, attempts=240)
-    await _fifo_clear_cycle_protocol(dut, selected_mask=0x01)
-
-    _assert_software_static_config(adc_ctl, frame_cfg)
-    await _axi_write(dut, 0x0008, frame_cfg, 0xF)
-    await _axi_write(dut, 0x0000, adc_ctl | 0x1, 0xF)
-    for _ in range(2100):
-        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
-    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
-    await _drive_afe0_raw_word_stream(
-        dut, [0x1357] * 32 + [0x0000] * 280,
-        [0x2468] * 32 + [0x0000] * 280)
-    await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=1200)
-    await _poll_register(dut, 0x000C, (1 << 0) | (1 << 8), 1 << 0, attempts=240)
-    await _wait_afe0_header_and_payload(
-        dut, (expected_i, expected_q, expected_i, expected_q), 2, 14, 32)
-    await _assert_static_config_stable(dut, adc_ctl | 0x1, frame_cfg)
-    dut._log.info("STIMULUS_MARKER ddc_abort_fifo_clear_recovery_pass")
+def _diag_hex(handle, bits=16):
+    if handle is None:
+        return "NA"
+    value = _diag_int(handle)
+    if value is None:
+        return "X"
+    return f"0x{value & ((1 << bits) - 1):0{(bits + 3) // 4}x}"
 
 
 async def _reset_domain_whole_fifo_and_relink(dut):
@@ -1890,78 +1986,212 @@ async def _link_drop_discards_incomplete_block(dut):
     dut._log.info("STIMULUS_MARKER link_drop_incomplete_block_discard_pass")
 
 
-async def _rxd_three_state_directed(dut):
-    """v1.10 state/data-owner acceptance using only the permitted RXD scope."""
-    await _setup(dut)
+class RegionScoreboard:
+    """Independent v1.32 beat-region model; it never models retired slices."""
+
+    @staticmethod
+    def configuration(mode, dec_m, dec_del_mode):
+        assert mode in (0, 1, 2)
+        assert dec_del_mode in (0, 1, 2)
+        if mode == 0:
+            return 16, ((16, "valid"),)
+        n, frac = dec_m >> 2, dec_m & 3
+        assert (mode == 1 and 1 <= n <= 63) or (mode == 2 and 2 <= n <= 63)
+        prefix = (2 * n + 23, 8 * n + 25, 4 * n + 25, 8 * n + 29)[frac]
+        prefix += (0, 4 * dec_m, 8 * dec_m)[dec_del_mode]
+        if mode == 1:
+            valid = (2, 8, 4, 8)[frac]
+            zero = (2 * n - 2, 8 * n - 6, 4 * n - 2, 8 * n - 2)[frac]
+        else:
+            valid = (4, 16, 16, 16)[frac]
+            zero = (2 * n - 4, 8 * n - 14, 4 * n - 6, 8 * n - 10)[frac]
+        assert valid > 0 and valid % 2 == 0 and zero >= 0
+        return prefix, ((valid, "valid"),) if zero == 0 else ((valid, "valid"), (zero, "zero"))
+
+    @classmethod
+    def candidate_terminals(cls, mode, dec_m, dec_del_mode, count):
+        prefix, regions = cls.configuration(mode, dec_m, dec_del_mode)
+        position, terminals = 0, []
+        while len(terminals) < count:
+            for beats, kind in regions:
+                if kind == "valid":
+                    # A complete candidate contains two adjacent 128-bit beats.
+                    terminals.extend(position + 16 * item + 15 for item in range(beats // 2))
+                position += 8 * beats
+                if len(terminals) >= count:
+                    break
+        return prefix, terminals[:count], position
+
+
+def _assert_region_reference_all_legal():
+    """Exhaust every legal dec/ddc N,f,d formula and corrected f2 endpoints."""
+    legal, max_prefix, max_zero = 0, 0, 0
+    for mode, first_n in ((1, 1), (2, 2)):
+        for n in range(first_n, 64):
+            for frac in range(4):
+                for delay in range(3):
+                    dec_m = (n << 2) | frac
+                    prefix, regions = RegionScoreboard.configuration(mode, dec_m, delay)
+                    legal += 1
+                    max_prefix = max(max_prefix, prefix)
+                    valid = next(beats for beats, kind in regions if kind == "valid")
+                    zero = next((beats for beats, kind in regions if kind == "zero"), 0)
+                    assert valid % 2 == 0 and zero >= 0
+                    terminals_prefix, terminals, _ = RegionScoreboard.candidate_terminals(
+                        mode, dec_m, delay, 32)
+                    assert terminals_prefix == prefix
+                    assert terminals == sorted(terminals) and len(set(terminals)) == len(terminals)
+                    assert all((right - left) >= 16 for left, right in zip(terminals, terminals[1:]))
+                    max_zero = max(max_zero, zero)
+                    if mode == 1 and frac == 2:
+                        # Valid [0..31], zero [32..32N+15], then valid [32N+16..].
+                        _, f2_terms, _ = RegionScoreboard.candidate_terminals(mode, dec_m, delay, 4)
+                        assert f2_terms[:2] == [15, 31]
+                        assert f2_terms[2:] == [32 * n + 31, 32 * n + 47]
+                    if (mode, n, frac) in ((1, 1, 0), (2, 2, 0)):
+                        assert zero == 0, "zero-bypass must not create a phantom ZERO region"
+    assert legal == 1500 and max_prefix == 2573 and max_zero == 502
+
+
+async def _drive_region_payload(dut, mode, dec_m, delay, candidates=256,
+                                diagnostic_prefix_tags=False):
+    """Drive monotonic nonzero source words; the model selects only valid regions."""
+    prefix, terminals, total_words = RegionScoreboard.candidate_terminals(
+        mode, dec_m, delay, candidates)
+    if diagnostic_prefix_tags:
+        # One nonzero tag per AFE beat, replicated over its eight lane words.
+        # These exact prefix beats remain deliberately discarded by the DUT.
+        prefix0 = [0x1000 + beat for beat in range(prefix) for _ in range(8)]
+        prefix1 = [0x2000 + beat for beat in range(prefix) for _ in range(8)]
+    else:
+        prefix0, prefix1 = [0x3A5A] * (prefix * 8), [0x15A5] * (prefix * 8)
+    await _drive_afe0_raw_word_stream(dut, prefix0, prefix1)
+    lane0 = [_scheduler_lane_word(0, position) for position in range(total_words)]
+    lane1 = [_scheduler_lane_word(1, position) for position in range(total_words)]
+    await _drive_afe0_raw_word_stream(dut, lane0, lane1)
+    return [_scheduler_expected_payload(terminal) for terminal in terminals]
+
+
+async def _region_coordinate_trace(dut, label, attempts=4096):
+    """Post-UDLY AFE trace around raw SOMF; no DUT signal is driven."""
     rxd = _rxd0(dut)
+    upk = _upk0(dut)
+    history, saw_somf, after_somf, cycle = [], False, 0, 0
+    valid_cycle, write_count, first_fifo_lsw = None, 0, "none"
+    reason = "timeout"
+    dut._log.info("REGION_COORD %s monitor_start POST_EDGE sampling", label)
+    try:
+        for _ in range(attempts):
+            await RisingEdge(dut.afe_clk)
+            await Timer(2, unit="ns")
+            await ReadOnly()
+            cycle += 1
+            somf = _diag_int(rxd.rxd_somf)
+            fsm = _diag_int(upk.rxd_fsm)
+            record = (
+                f"cycle={cycle} tuple_live={_diag_scalar(rxd.link_ready_afe)} "
+                f"tuple_somf={_diag_hex(rxd.rxd_somf)} "
+                f"tuple_lsw={_diag_hex(rxd.rxd_data)} "
+                f"fsm={_diag_scalar(upk.rxd_fsm)} prefix={_diag_scalar(upk.prefix_cnt)} "
+                f"region={_diag_scalar(upk.region_cnt)} commit={_diag_scalar(upk.ddc_wr_sel)} "
+                f"buffer_upd={_diag_scalar(upk.rxd_buff_upd)} "
+                f"data_upd={_diag_scalar(upk.rxd_data_upd)} "
+                f"fifo_valid={_diag_scalar(upk.fifo_wr_valid)} "
+                f"fifo_lsw={_diag_hex(upk.fifo_wr_data)}")
+            if not saw_somf:
+                history.append(record)
+                history = history[-4:]
+            if somf is not None and (somf & 1):
+                saw_somf = True
+                for prior in history[:-1]:
+                    dut._log.info("REGION_COORD %s POST_EDGE PRE %s", label, prior)
+            if saw_somf:
+                dut._log.info("REGION_COORD %s POST_EDGE %s", label, record)
+                after_somf += 1
+                if _diag_int(upk.fifo_wr_valid) == 1:
+                    write_count += 1
+                    if write_count == 1:
+                        first_fifo_lsw = _diag_hex(upk.fifo_wr_data)
+                    if write_count <= 2:
+                        dut._log.info(
+                            "REGION_COORD %s POST_EDGE fifo_write=%d pair=%s data_upd=%s fifo_lsw=%s",
+                            label, write_count, _diag_scalar(upk.ddc_wr_sel),
+                            _diag_scalar(upk.rxd_data_upd),
+                            _diag_hex(upk.fifo_wr_data))
+                if fsm == 2 and valid_cycle is None:
+                    valid_cycle = cycle
+                if valid_cycle is not None and cycle >= valid_cycle + 6:
+                    reason = "six_edges_after_fsm_valid"
+                    return
+    finally:
+        dut._log.info(
+            "REGION_COORD %s summary reason=%s cycle=%d saw_somf=%d post_somf=%d "
+            "write_count=%d first_fifo_lsw=%s",
+            label, reason, cycle, saw_somf, after_somf, write_count, first_fifo_lsw)
 
-    assert _rxd_context(rxd) == (0, 0, 0, 0, 0), "rxd_three_state: reset is not IDLE/zero"
-    idle_clear = await _rxd_observe(
-        dut, "IDLE FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
-        _rxd_fifo_clear_source(dut))
-    assert idle_clear == (0, 0, 0, 0, 0)
 
-    pref0 = await _rxd_observe(
-        dut, "IDLE->PREF", lambda context: context == (1, 0, 0, 0, 0),
-        _rxd_start_epoch_source(dut))
-    assert pref0 == (1, 0, 0, 0, 0)
-    pref1 = await _rxd_observe(
-        dut, "PREF miss", lambda context: context == (1, 1, 0, 0, 0),
-        _rxd_drive_afe_beat(dut))
-    assert pref1 == (1, 1, 0, 0, 0)
-
-    pref_gap = await _rxd_observe(
-        dut, "PREF upk_vld gap", lambda context: context == (0, 0, 0, 0, 0),
-        _rxd_rx_reset_done_source(dut, 0))
-    assert pref_gap == (0, 0, 0, 0, 0)
-    await _rxd_rx_reset_done_source(dut, 1)
-    await _rxd_observe(
-        dut, "post-PREF-gap IDLE FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
-        _rxd_fifo_clear_source(dut))
-
-    await _rxd_observe(dut, "PREF rebuild", lambda context: context == (1, 0, 0, 0, 0),
-                       _rxd_start_epoch_source(dut))
-    await _rxd_observe(dut, "PREF FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
-                       _rxd_fifo_clear_source(dut))
-    await _rxd_observe(dut, "PAYL rebuild PREF", lambda context: context == (1, 0, 0, 0, 0),
-                       _rxd_start_epoch_source(dut))
-    payl0 = await _rxd_observe(
-        dut, "PREF hit", lambda context: context == (2, 16, 8, 15, 0),
-        _rxd_drive_afe_beats(dut, 14))
-    assert payl0 == (2, 16, 8, 15, 0)
-    payl_complete = await _rxd_observe(
-        dut, "PAYL complete", lambda context: context == (2, 16, 16, 31, 0),
-        _rxd_drive_afe_beat(dut))
-    assert payl_complete == (2, 16, 16, 31, 0)
-    payl_hold = await _rxd_observe(
-        dut, "PAYL incomplete", lambda context: context == (2, 16, 24, 31, 0),
-        _rxd_drive_afe_beat(dut))
-    assert payl_hold == (2, 16, 24, 31, 0)
-
-    await _rxd_observe(dut, "PAYL FIFO_CLR", lambda context: context == (0, 0, 0, 0, 0),
-                       _rxd_fifo_clear_source(dut))
-    await _rxd_observe(dut, "PAYL gap PREF", lambda context: context == (1, 0, 0, 0, 0),
-                       _rxd_start_epoch_source(dut))
-    await _rxd_observe(dut, "PAYL gap entry", lambda context: context == (2, 16, 8, 15, 0),
-                       _rxd_drive_afe_beats(dut, 14))
-    payl_gap = await _rxd_observe(
-        dut, "PAYL upk_vld gap", lambda context: context == (0, 0, 0, 0, 0),
-        _rxd_rx_reset_done_source(dut, 0))
-    assert payl_gap == (0, 0, 0, 0, 0)
-    await _rxd_rx_reset_done_source(dut, 1)
-
-    async def _rxd_illegal_source():
-        await FallingEdge(dut.afe_clk)
-        rxd.rxd_fsm.value = Force(3)
-        await Timer(1, unit="ns")
-        assert int(rxd.rxd_fsm.value) == 3, "rxd_three_state: illegal-state Force failed"
-        rxd.rxd_fsm.value = Release()
-
-    illegal_recovery = await _rxd_observe(
-        dut, "illegal-state recovery", lambda context: context == (0, 0, 0, 0, 0),
-        _rxd_illegal_source())
-    assert illegal_recovery == (0, 0, 0, 0, 0)
-    dut._log.info("STIMULUS_MARKER rxd_three_state_directed_pass")
+async def _unpack_schedule_matrix(dut):
+    """Public v1.32 dec/ddc packet scoreboard representatives, not a slice probe."""
+    _assert_region_reference_all_legal()
+    await _setup(dut)
+    dut.afe0_pll_lock.value = 1
+    dut.afe0_rx_reset_done.value = 1
+    dut.afe0_byte_aligned.value = 0x3
+    dut.m_axis_afe0_tready.value = 0
+    representatives = (
+        ("dec_f0_n1_d0_bypass", 1, 1, 0, 0),
+        ("dec_f1_n2_d1", 1, 2, 1, 1),
+        ("dec_f2_n1_d2", 1, 1, 2, 2),
+        ("dec_f2_n63_d0", 1, 63, 2, 0),
+        ("dec_f3_n2_d2", 1, 2, 3, 2),
+        ("ddc_f0_n2_d0_bypass", 2, 2, 0, 0),
+        ("ddc_f1_n2_d1", 2, 2, 1, 1),
+        ("ddc_f2_n2_d2", 2, 2, 2, 2),
+        ("ddc_f3_n63_d0", 2, 63, 3, 0),
+    )
+    for label, mode, n, frac, delay in representatives:
+        # Keep the public packet parked from reset/relink through the header
+        # observation.  _wait_afe0_complete_packet alone releases it.
+        dut.m_axis_afe0_tready.value = 0
+        await _axi_write(dut, 0x0000, 0, 0xF)
+        await _poll_register(dut, 0x000C, 1 << 24, 1 << 24, attempts=320)
+        await _fifo_clear_cycle_protocol(dut)
+        dut.jesd_rst_n.value = 0xFE
+        for _ in range(16):
+            await _drive_afe0_jesd_beat(dut, [0] * 4, [0] * 4)
+        dut.jesd_rst_n.value = 0xFF
+        dec_m = (n << 2) | frac
+        frame_cfg, adc_ctl = (delay << 8) | dec_m, 0x80000000 | (mode << 26)
+        await _axi_write(dut, 0x0008, frame_cfg, 0xF)
+        await _axi_write(dut, 0x0000, adc_ctl | 1, 0xF)
+        for _ in range(2100):
+            await _drive_afe0_jesd_beat(dut, [0] * 4, [0] * 4)
+        await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+        _, regions = RegionScoreboard.configuration(mode, dec_m, delay)
+        zero_monitor = None
+        if any(kind == "zero" for _, kind in regions):
+            zero_monitor = cocotb.start_soon(_rxd_monitor(
+                dut, label + " RXD_ZERO", lambda c: c[0] == 3 and c[3] == 0,
+                attempts=4096))
+        coordinate_monitor = None
+        if label == "dec_f0_n1_d0_bypass":
+            coordinate_monitor = cocotb.start_soon(_region_coordinate_trace(dut, label))
+        try:
+            expected = await _drive_region_payload(
+                dut, mode, dec_m, delay,
+                diagnostic_prefix_tags=(label == "dec_f0_n1_d0_bypass"))
+            if zero_monitor is not None:
+                zero_context = await with_timeout(zero_monitor, 2, "ms")
+                assert zero_context[2] < 503 and zero_context[3] == 0
+            if coordinate_monitor is not None:
+                await with_timeout(coordinate_monitor, 2, "ms")
+        finally:
+            if zero_monitor is not None and not zero_monitor.done():
+                zero_monitor.kill()
+            if coordinate_monitor is not None and not coordinate_monitor.done():
+                coordinate_monitor.kill()
+        await _wait_afe0_complete_packet(dut, expected, mode, 14, dec_m)
+        dut._log.info("STIMULUS_MARKER region_%s_pass", label)
 
 
 @cocotb.test()
@@ -1970,8 +2200,8 @@ async def reset_and_top_level_defaults(dut):
 
 
 @cocotb.test()
-async def unpack_schedule_v19_legal_matrix(dut):
-    await with_timeout(_unpack_schedule_matrix(dut), 15, "ms")
+async def dec_ddc_region_v132_legal_matrix(dut):
+    await with_timeout(_unpack_schedule_matrix(dut), 30, "ms")
 
 
 @cocotb.test()
@@ -2020,13 +2250,28 @@ async def ddc14_end_to_end_scoreboard(dut):
 
 
 @cocotb.test()
+async def normalized_format10_left_aligned_scoreboard(dut):
+    await with_timeout(_normalized_format_pure_scoreboard(dut, 10, 1, 11), 500, "us")
+
+
+@cocotb.test()
+async def normalized_format12_right_aligned_scoreboard(dut):
+    await with_timeout(_normalized_format_pure_scoreboard(dut, 12, 0, 13), 500, "us")
+
+
+@cocotb.test()
+async def normalized_format14_left_aligned_scoreboard(dut):
+    await with_timeout(_normalized_format_pure_scoreboard(dut, 14, 1, 17), 500, "us")
+
+
+@cocotb.test()
 async def fixed_somf_alignment_and_legal_zero_payload(dut):
     await with_timeout(_fixed_somf_alignment_and_zero_payload(dut), 500, "us")
 
 
 @cocotb.test()
-async def ddc_abort_blocks_admission_until_fifo_clear_recovery(dut):
-    await with_timeout(_ddc_abort_requires_fifo_clear_recovery(dut), 600, "us")
+async def ddc_cancellation_dirty_fifo_clear_recovery(dut):
+    await with_timeout(_ddc_v132_cancel_and_recovery(dut), 600, "us")
 
 
 @cocotb.test()
@@ -2040,5 +2285,176 @@ async def link_drop_incomplete_block_discard(dut):
 
 
 @cocotb.test()
-async def rxd_three_state_directed_recovery(dut):
-    await with_timeout(_rxd_three_state_directed(dut), 2, "ms")
+async def rxd_region_state_directed_recovery(dut):
+    await with_timeout(_rxd_v132_directed_recovery(dut), 2, "ms")
+
+
+async def _rxd_v132_directed_recovery(dut):
+    """Contract-permitted hierarchy audit of payload-hit capture and clear separation.
+
+    The public scoreboards remain primary. This directed check observes only
+    state/actions explicitly named by the finalized contract.
+    """
+    await _setup(dut)
+    channel = _chn0(dut)
+    rxd = _rxd0(dut)
+    upk = _upk0(dut)
+    _assert_upk_contract_shape(upk)
+    for forbidden in ("rxd_pair_phase", "ddc_iq_phase", "ddc_i_accepted_r",
+                      "ddc_abort_afe", "rxd_buff_vld", "data_cnt"):
+        assert getattr(upk, forbidden, None) is None, f"retired state present: {forbidden}"
+    assert _upk_context(upk) == (0, 0, 0, 0)
+
+    marker_monitor = cocotb.start_soon(_rxd_preedge_marker_monitor(dut, "IDLE->PREF"))
+    try:
+        await _rxd_start_epoch_source(dut)
+        marker_pre, marker_post = await with_timeout(marker_monitor, 100, "us")
+    finally:
+        if not marker_monitor.done():
+            marker_monitor.kill()
+    assert marker_pre[1] == 1 and (marker_pre[2] & 1) == 1
+    assert marker_pre[4][:2] == (0, 0)
+    assert marker_post[:2] == (1, 0)
+
+    await _rxd_observe(dut, "PREF->VALID", lambda c: c[0] == 2,
+                       _rxd_drive_afe_beats(dut, 16))
+    first_half = (int(upk.rxd_buff0.value), int(upk.rxd_buff1.value))
+    assert first_half != (0, 0), "payload hit did not capture the first valid payload beat"
+    await _rxd_drive_afe_beat(dut)
+    await Timer(2, unit="ns")
+    await ReadOnly()
+    assert int(upk.fifo_wr_valid.value) == 1, "following ADC/dec payload beat did not register a request"
+    request_sampler = cocotb.start_soon(_rxd_sample_fifo_request_once(dut))
+    try:
+        await _rxd_drive_afe_beat(dut)
+        await with_timeout(request_sampler, 100, "us")
+    finally:
+        if not request_sampler.done():
+            request_sampler.kill()
+
+    await _rxd_fifo_clear_source(dut)
+    assert int(rxd.link_ready_afe.value) == 1, "FIFO_CLR release did not preserve live RXD tuple"
+    await _rxd_rx_reset_done_source(dut, 0)
+    await _rxd_monitor(dut, "upk_vld cancellation", lambda c: c == (0, 0, 0, 0), attempts=64)
+    assert int(upk.rxd_buff0.value) == 0 and int(upk.rxd_buff1.value) == 0
+    assert int(upk.ddc_i_buff.value) == 0 and int(upk.ddc_q_buff.value) == 0
+
+
+async def _ddc_v132_cancel_and_recovery(dut):
+    """Cancel a completed I with dirty FIFO data, then perform software recovery."""
+    await _setup(dut)
+    channel = _chn0(dut)
+    upk = _upk0(dut)
+    for forbidden in ("ddc_abort_afe", "ddc_i_accepted_r", "ddc_iq_phase"):
+        assert getattr(upk, forbidden, None) is None, f"retired DDC state present: {forbidden}"
+    adc_ctl = 0x88000001
+    i_channels, _ = _normalized_sample_pattern(14, 0, phase=7)
+    q_channels, _ = _normalized_sample_pattern(14, 0, phase=47)
+    next_i_channels, _ = _normalized_sample_pattern(14, 0, phase=23)
+    await _axi_write(dut, 0x0008, 0x20, 0xF)
+    await _axi_write(dut, 0x0000, adc_ctl, 0xF)
+    dut.afe0_pll_lock.value = 1
+    dut.afe0_rx_reset_done.value = 1
+    dut.afe0_byte_aligned.value = 0x3
+    for _ in range(2100):
+        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+
+    # E=32,N=8,f=0,d=0 has a 39-beat prefix. Commit one complete I/Q pair,
+    # then complete the following I only. This leaves two dirty FIFO entries
+    # and a live incomplete source pair when link_ready_afe is withdrawn.
+    await _drive_afe0_raw_word_stream(
+        dut, [0x1357] * 32 + [0x0000] * 280,
+        [0x2468] * 32 + [0x0000] * 280)
+
+    # Layer-A deterministic free=1 boundary. The contract explicitly exposes
+    # fifo_wlevel as the Q-completion admission input; force only that input,
+    # never FIFO storage or output data. Public scoreboards remain primary.
+    free1_coverage = {"drop_count": 0, "admit_levels": set(), "drop_levels": set()}
+    free1_monitor = cocotb.start_soon(_monitor_ddc_pair_decisions(dut, free1_coverage))
+    upk.fifo_wlevel.value = Force(1)
+    try:
+        await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=2)
+        for _ in range(64):
+            await RisingEdge(dut.afe_clk)
+            await ReadOnly()
+            if free1_coverage["drop_count"]:
+                break
+        assert free1_coverage["drop_levels"] == {1}, (
+            f"forced free=1 did not drop exactly at the pair boundary: {free1_coverage}")
+        assert free1_coverage["drop_count"] == 1, (
+            f"one rejected free=1 pair produced {free1_coverage['drop_count']} events")
+    finally:
+        if not free1_monitor.done():
+            free1_monitor.kill()
+        # The loop may exit in ReadOnly.  Release at the following falling
+        # edge, before any further AFE owner edge can sample fifo_wlevel.
+        await FallingEdge(dut.afe_clk)
+        upk.fifo_wlevel.value = Release()
+    await Timer(1, unit="ns")
+    await ReadOnly()
+    assert int(channel.fifo_wr_level.value) == 512, (
+        "free=1 rejected pair changed physical FIFO storage")
+    await _axi_write(dut, 0x0010, 1 << 8, 0xF)
+    await _poll_register(dut, 0x0010, 1 << 8, 0, attempts=160)
+
+    # Re-align after the AXI W1C/poll interval, during which the AFE region
+    # schedule continues.  N=8,f=0 is VALID4 + ZERO12.  From ZERO cnt11 the
+    # sole source driver continuously supplies I2 + Q2 + ZERO12 + next-I2
+    # AFE beats (72 JESD beats) without an extra AFE owner edge.
+    # Pre-arm an edge-accurate tuple-to-UPK trace.  Its verdict is derived
+    # from the RXD tuple actually arriving at cnt0/cnt1, not from an assumed
+    # fixed latency between the public JESD write and ADC_UPK.
+    i_buffer_monitor = cocotb.start_soon(_trace_ddc_complete_i_from_tuple(
+        dut, attempts=4096))
+    try:
+        await with_timeout(_wait_ddc_zero_terminal(dut), 100, "us")
+        # The alignment monitor returns in ReadOnly.  Enter the next JESD
+        # falling-edge write phase without consuming another AFE owner edge.
+        await _jesd_bus_bit0_falling(dut)
+        await _drive_afe0_iq_channel_blocks(dut, i_channels, q_channels, block_count=2)
+        await _drive_afe0_channel_blocks(dut, [0] * 32, block_count=6)
+        await _drive_afe0_channel_blocks(dut, next_i_channels, block_count=1)
+        observed_recovery_i = await with_timeout(i_buffer_monitor, 500, "us")
+    finally:
+        if not i_buffer_monitor.done():
+            i_buffer_monitor.kill()
+    assert observed_recovery_i != 0 and int(upk.ddc_i_buff.value) == observed_recovery_i, (
+        "DDC cancellation setup lacks the traced complete I")
+    assert int(upk.ddc_wr_sel.value) == 0, "DDC cancellation setup still has Q commit pending"
+    assert int(channel.fifo_wr_level.value) <= 510, "DDC dirty-FIFO setup did not commit I/Q"
+    assert (await _axi_read(dut, 0x0010)) & (1 << 8) == 0, (
+        "DDC cancellation setup unexpectedly reported a capacity drop")
+
+    await _rxd_cancel_at_effective_upk_loss(dut)
+    assert int(upk.ddc_i_buff.value) == 0 and int(upk.ddc_q_buff.value) == 0
+    assert int(upk.ddc_wr_sel.value) == 0 and int(upk.fifo_wr_valid.value) == 0
+    assert (await _axi_read(dut, 0x0010)) & (1 << 8) == 0, (
+        "upk_vld cancellation incorrectly raised DATA_DROP_PD")
+
+    # Software observes LINK_READY low, disables the channel, clears only the
+    # physical FIFO, then explicitly rebuilds a fresh link epoch.
+    await _poll_register(dut, 0x000C, 1 << 0, 0, attempts=240)
+    await _axi_write(dut, 0x0000, 0x88000000, 0xF)
+    await _poll_register(dut, 0x000C, 1 << 24, 1 << 24, attempts=240)
+    await _fifo_clear_cycle_protocol(dut)
+    assert int(channel.fifo_wr_level.value) == 512, (
+        "FIFO_CLR did not remove dirty data after cancellation")
+    dut.jesd_rst_n.value = 0xFE
+    for _ in range(16):
+        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    dut.afe0_rx_reset_done.value = 1
+    dut.jesd_rst_n.value = 0xFF
+    await _axi_write(dut, 0x0000, adc_ctl, 0xF)
+    for _ in range(2100):
+        await _drive_afe0_jesd_beat(dut, [0, 0, 0, 0], [0, 0, 0, 0])
+    marker_monitor = cocotb.start_soon(_rxd_preedge_marker_monitor(dut, "DDC relink"))
+    try:
+        await _drive_afe0_documented_cgs_ilas(dut, post_ilas_blocks=0)
+        marker_pre, marker_post = await with_timeout(marker_monitor, 100, "us")
+    finally:
+        if not marker_monitor.done():
+            marker_monitor.kill()
+    assert marker_pre[1] == 1 and marker_post[0] == 1, (
+        "disable/FIFO_CLR/relink did not establish a fresh DDC epoch")
+    dut._log.info("STIMULUS_MARKER ddc_v132_cancel_dirty_fifo_clear_relink_pass")

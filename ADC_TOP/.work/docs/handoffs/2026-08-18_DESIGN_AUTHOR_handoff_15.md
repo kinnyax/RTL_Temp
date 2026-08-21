@@ -1,0 +1,14 @@
+<DESIGN_AUTHOR_HANDOFF>
+  <AGENT_ID>/root/adc_accum_design</AGENT_ID>
+  <HANDOFF_PATH>D:\Codex\RTL_Temp\ADC_TOP\.work\docs\handoffs\2026-08-18_DESIGN_AUTHOR_handoff_15.md</HANDOFF_PATH>
+  <STATUS>COMPLETED</STATUS>
+  <USER_DECISION_SOURCE>Current Review_05 P1 acceptance-only correction: preserve behavior/interfaces/formulas and do not require public TB to deterministically align cross-link_ready CDC or AXI-to-AFE fifo_clr with a pending request. Freeze Layer A static/source truth-table audit for pre-edge fifo_wr_valid, upk_vld/loss, abort and fifo_clr priority; Layer B public DUT retains end-to-end marker/P0/P1/request sampling, clean abort, retained queue functionality and clear/relink recovery.</USER_DECISION_SOURCE>
+  <DESIGN_PATH>D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md</DESIGN_PATH>
+  <DESIGN_BASELINE_FINGERPRINT>2e674763720854ec4b4ccefb56b4ded2c0ca12a294d4fd1935dbc8877ed30d88</DESIGN_BASELINE_FINGERPRINT>
+  <SCHEMA_SELF_CHECK>DESIGN_CONTRACT_PRECHECK_PASS: python -B C:\Users\Administrator\.codex\skills\rtl-model\scripts\validate_design_contract.py --design D:\Codex\Vault\Archive\Modules\ADC\ADC_Design\ADC_TOP_Design.md --schema C:\Users\Administrator\.codex\skills\rtl-model\references\schemas\Module_Schema.md.</SCHEMA_SELF_CHECK>
+  <CORRECTION_BATCH>Review_05 P1 acceptance-only correction; referenced FINAL_DESIGN_REVIEW_handoff_05 SHA256 9891689c5a047c9c581e9177fca75bf74ff4eb048115d565528ee396a3b14fc6. v1.23 adds Layer A and Layer B without changing the selected FIFO/abort behavior. Layer A exhaustively audits C=fifo_clr, A=pre-edge abort, V=pre-edge registered request and U=upk_vld/loss plus eligibility, proving clear priority/no leak, at-most-one committed request, no loss replacement, post-abort closure and unreachable V=1/A=1. Layer B verifies publicly controllable A9 marker/P0/P1/request-to-next-edge FIFO sampling; clean no-pending abort fail-closed+empty; preload then effective loss retained semantics where observable; and disable/idle/FIFO_CLR/relink recovery. Exact CDC or AXI-to-AFE coincidence remains a Layer A source-truth obligation, never a phase-accidental public-DUT requirement.</CORRECTION_BATCH>
+  <OPEN_QUESTIONS>NONE.</OPEN_QUESTIONS>
+  <CONFLICT_REPORT>There is no behavior conflict. The correction separates deterministic structural proof of the same-edge priority contract from public-DUT dynamic verification where uncontrolled CDC/command phase cannot guarantee that coincidence, preserving rather than weakening the end-to-end requirements.</CONFLICT_REPORT>
+  <RESIDUAL_RISKS>No RTL/TB/XDC/state/verification artifact was changed. No test was run; this is an acceptance-contract update only. PPA remains HYPOTHESIS; implementation must produce a v1.23 exact RTL SHA256 before independent review and VMware sanity.</RESIDUAL_RISKS>
+  <NEXT_OWNER>LEAD_AGENT for exact-fingerprint independent FINAL_DESIGN review.</NEXT_OWNER>
+</DESIGN_AUTHOR_HANDOFF>
