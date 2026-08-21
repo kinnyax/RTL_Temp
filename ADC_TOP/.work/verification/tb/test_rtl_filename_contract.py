@@ -37,6 +37,39 @@ EXPECTED_FILELIST_FILES = (
     "ADC_TOP.v",
 )
 
+UPK_STABLE_ANCHORS = (
+    "payl_hit",
+    "pref_num",
+    "region_vld_max",
+    "region_zro_max",
+    "region_vld_clr",
+    "region_zro_clr",
+    "rxd_buff_upd",
+    "rxd_data_upd",
+    "ddc_i_sta",
+    "ddc_q_sta",
+    "normal_wr_req",
+    "ddc_i_upd",
+    "ddc_q_upd",
+    "ddc_pair_wr",
+    "data_drop_set",
+)
+
+STALE_UPK_ALIASES = (
+    "dec_num",
+    "ddc_num",
+    "valid_beats",
+    "zero_beats",
+    "valid_region_final",
+    "zero_region_final",
+    "ddc_abort_afe",
+    "ddc_i_accepted_r",
+    "ddc_iq_phase",
+    "rxd_second_half",
+    "rxd_buff_vld",
+    "data_cnt",
+)
+
 
 class TestAdcTopRtlNamingContract(unittest.TestCase):
     def test_self_written_rtl_uses_uppercase_filenames_and_prefixed_fsm_states(self):
@@ -63,6 +96,55 @@ class TestAdcTopRtlNamingContract(unittest.TestCase):
         self.assertNotRegex(self_written_text, r"\bST_[A-Za-z0-9_]*\b")
         self.assertRegex((RTL_ROOT / "ADC_TGC.v").read_text(encoding="utf-8"), r"\bTGC_[A-Za-z0-9_]*\b")
         self.assertRegex((RTL_ROOT / "ADC_PKT.v").read_text(encoding="utf-8"), r"\bPKT_[A-Za-z0-9_]*\b")
+
+        upk_text = (RTL_ROOT / "ADC_UPK.v").read_text(encoding="utf-8")
+        for anchor in UPK_STABLE_ANCHORS:
+            self.assertRegex(upk_text, rf"\b{anchor}\b", f"missing stable UPK anchor {anchor}")
+        for stale in STALE_UPK_ALIASES:
+            self.assertNotRegex(
+                self_written_text, rf"\b{stale}\b",
+                f"stale pre-resolution UPK name remains: {stale}",
+            )
+        self.assertNotRegex(upk_text, r"\bfifo_clr\b")
+        self.assertEqual(
+            6, upk_text.count("else if (!upk_vld)"),
+            "every UPK sequential context owner must give upk_vld clear priority",
+        )
+        self.assertRegex(
+            upk_text,
+            r"assign\s+ddc_pair_wr\s*=\s*ddc_q_upd\s*&&\s*fifo_has_two_space\s*;",
+        )
+        self.assertRegex(
+            upk_text,
+            r"assign\s+data_drop_set\s*=\s*ddc_q_upd\s*&&\s*!fifo_has_two_space\s*;",
+        )
+
+        channel_text = (RTL_ROOT / "ADC_CHN.v").read_text(encoding="utf-8")
+        self.assertRegex(
+            channel_text,
+            r"assign\s+fifo_rst_n\s*=\s*afe_rst_n\s*&\s*adc_rst_n\s*&\s*~fifo_clr\s*;",
+        )
+        self.assertRegex(channel_text, r"\.winc\s*\(fifo_wr_valid\s*\)")
+
+        top_text = (RTL_ROOT / "ADC_TOP.v").read_text(encoding="utf-8")
+        for channel in range(8):
+            self.assertRegex(top_text, rf"\bADC_CHN\s+adc_chn{channel}\s*\(")
+            self.assertRegex(top_text, rf"\bafe{channel}_rx_data\b")
+            self.assertRegex(top_text, rf"\bm_axis_afe{channel}_tdata\b")
+            self.assertRegex(top_text, rf"\btgc{channel}_slope\b")
+            instance = top_text.split(f"ADC_CHN adc_chn{channel}(", 1)[1].split(");", 1)[0]
+            self.assertRegex(instance, rf"\.afe_id\s*\(3'd{channel}\s*\)")
+            self.assertRegex(instance, rf"\.phy_rx_data\s*\(afe{channel}_rx_data\s*\)")
+            self.assertRegex(
+                instance,
+                rf"\.m_axis_tdata\s*\(m_axis_afe{channel}_tdata\s*\)",
+            )
+            self.assertRegex(
+                top_text,
+                rf"assign\s+tgc{channel}_slope\s*=\s*tgc_slope_vec\[{channel}\]\s*;",
+            )
+        self.assertNotRegex(top_text, r"\bAFE_NUM\b")
+        self.assertNotRegex(top_text, r"\b(generate|genvar)\b")
 
 
 if __name__ == "__main__":
