@@ -1,29 +1,25 @@
-# ADC_TOP constraint dependency manifest v1.32 -- UTF-8/LF, deterministic row order
-# classification=DEFERRED_TO_TOP; scope=EXTERNAL_ONLY; XDC=NONE
+# ADC_TOP v0.2 constraint dependency manifest (UTF-8/LF; deterministic order)
+# classification=DEFERRED_TO_TOP; dependency_scope=EXTERNAL_ONLY; module_xdc=NONE
 KIND	IDENTIFIER	DETAIL
-DESIGN	ADC_TOP_Design.md	SHA256=cae9039ce6a84641a4b08518de40540a7c3d1ef7436d7d844e60d65cf62caa71; RTL_MODULE_CONTRACT_V1; VERILOG_2001_EXPLICIT_V1
-RTL	ADC_RXD.v	SHA256=81514341dfdf8b7b781a9c2dbdff933569f66e85dd8f4fede488cf43c6a20e63; ADI wrapper, JESD-to-AFE decoded link level and local AFE tuple
-RTL	ADC_UPK.v	SHA256=1fa684525b8660fd6c188adc6c22513291896d0448cd2ccd5d33a522865079d0; AFE-only region, DDC and FIFO-request anchor; no FIFO_CLR input
-RTL	ADC_CHN.v	SHA256=fe216aa25fdb8c62006f30c6a60ab17c83ccbb47ee858f44c14fa7933895e242; FIFO reset/CDC and wrapper-to-UPK connection
-RTL	ADC_TOP.v	SHA256=103c3c4babb8e02422bcdc3730eb8f4333162d49160d1cf92a12668ebdfc9535; complete public-port anchor
-RTL	ADC_REG.v	SHA256=7440d413ecee434b9d22ac81085ed01bea9d9d9a7cc74ca7f8c7df5c393b5d94; SYS register/static-configuration anchor
-RTL	ADC_SYNC.v	SHA256=b06c74987eeb0065e1c5522b9147fe5c023c84cffc79215ee91ac918ae064f64; SYS/ADC/AFE CDC anchor
-RTL	CHN_SYNC.v	SHA256=205b53fd0d08e27a485f883008c07502ca20afa67d80a6c5ee8a54f0388f4dc7; status/event CDC anchor
-RTL	ADC_PKT.v	SHA256=4fabdf8d617c5cd0b7da026ea682f749c7462c723047178a558044911c55b18d; ADC packet/AXIS anchor
-RTL	ADC_TGC.v	SHA256=5dfb412f5dde0eb56e524d6d49f7fc7859f37618b64693ee2f7e31b3e86435e7; AFE TGC anchor
-FILELIST	filelist.f	SHA256=40e978eda070cfc5952f1ec410d59da15aba2510db4aa04107dbbfc572f0dae9; deterministic source order
-PUB_RTL	D:/Codex/RTL/PUB/lib.v	level_sync/levels_sync/pulse_sync2 trusted dependency; official-IP replacement boundary applies
-PUB_RTL	D:/Codex/RTL/PUB/cell.v	FWFT async FIFO trusted dependency; official-IP replacement boundary applies
-CLOCK	sys_clk	EXTERNAL REGISTER_CLOCK; source/period/relationship owner=Detector_v1 integration; reset=sys_rst_n
-CLOCK	adc_clk	EXTERNAL REGISTER_CLOCK; source/period/relationship owner=Detector_v1 integration; reset=adc_rst_n
-CLOCK	afe_clk	EXTERNAL REGISTER_CLOCK; source/period/relationship owner=Detector_v1 integration; reset=afe_rst_n
-CLOCK	jesd_clk[7:0]	EXTERNAL recovered PHY clocks; topology/relationship owner=JESD PHY and Detector_v1 integration; reset=jesd_rst_n[7:0]
-RESET	sys_rst_n|adc_rst_n|afe_rst_n|jesd_rst_n[7:0]	EXTERNAL RMU asynchronous assertion/synchronous release owner
-EVENT	sysref_in	EXTERNAL SAMPLED_SIGNAL; timing/capture owner=Detector_v1/JESD PHY integration
-PORT_SET	ADC_TOP public interface	AXI4-Lite, PHY/JESD, AXIS and TGC port timing owner=Detector_v1 integration
-STRUCTURAL_ANCHOR	ADC_RXD link tuple	link_ready_afe=link_ready_sync & adi_rx_valid; source is AFE-local after the documented level sync
-STRUCTURAL_ANCHOR	ADC_UPK clear boundary	upk_vld clears UPK context; FIFO_CLR is absent from ADC_UPK and only resets FIFO in ADC_CHN
-STRUCTURAL_ANCHOR	ADC_UPK pair boundary	ddc_i_sta/ddc_q_sta and ddc_wr_sel implement local source-atomic I/Q admission, not timing exceptions
-INTERNAL_OBJECT	NONE	No module XDC pin/cell/generated-clock/exception endpoint is justified
-EXCEPTION	NONE	No false path or asynchronous clock group is justified before integration topology/object resolution
-VENDOR_XDC	JESD PHY/GTH and official FIFO	DEFERRED_TO_VENDOR_IP; scope/order/precedence/conflict checks are later integration evidence
+DESIGN	ADC_TOP_Design.md	SHA256=6f25849d110ac136168c9463795b1bf20786f0ac551562b3238b29d7804bb9db; spec=v0.2
+RTL	ADC_REG.v	SHA256=dfb8933fe22c8f5f82324ddc8a833dcb4409c520f30e96d9944ce873ee25a148; SYS AXI/TGC-run owner
+RTL	ADC_SYNC.v	SHA256=afe1110b18d8929f9a02ed45fe134d194232e554a59ac6c2bcb06cb921ccb97d; SYS/ADC/AFE CDC owner
+RTL	CHN_SYNC.v	SHA256=c77bc5c523dbe765edeb82b5e99bd2ae423863ae6f5e6bd5f6b126bb564e383e; local event/level CDC owner
+RTL	ADC_TGC.v	SHA256=52e0b34194321886e2d3f8598377f1a480a41c9d8eba905546a02c48b0409c6d; AFE TGC action FSM
+RTL	CRC16.v	SHA256=196029100b85e62bc1b23c05192662b2d4ef19f0052aad9d1f5cb10db77656b1; ADC CRC pipeline
+RTL	ADC_PKT.v	SHA256=c98afbea432f60709deea28ef5a36791f4ff3d3d2ca9d9ece0331eb7394a1832; ADC packet/AXIS
+RTL	ADC_RXD.v	SHA256=5f4d144a67314f30a17abd22ba9beaf53656dd961eafcb197f125f5b51de96b8; AFE receive tuple / delayed event edge
+RTL	ADC_UPK.v	SHA256=4ec39ec0bd610bf824a1979ab9130cb5300e1fc50d5e266ecb713d0629a07240; AFE UPK/DDC admission
+RTL	ADC_CHN.v	SHA256=b9d277dc898b13952edf03dfb209d843882c3f4acd3474daabd1d099f9cf6401; FIFO boundary/channel composition
+RTL	ADC_TOP.v	SHA256=b1b3bb7f74acdc237f6e6078a845bb61b250123a6356a5d602f65102199a57a1; fixed external interface
+FILELIST	filelist.f	SHA256=fb7f312367bfdc28d5d678f2ea3ff5eb89288a674dab30789c1870f46f1c373c
+PUB	ADI_JESD204/jesd204_rx.v	immutable SHA256=3b30e702ef440d19fb04656be61f0fc088103f3823846c4f6825b8163f873fc7
+PUB	pub_filelist.f	SHA256=5b598ccd8fb78fe9360b960b14f0139bc738596d87783245421fab573af1d34c
+CLOCK	sys_clk	EXTERNAL REGISTER_CLOCK; top integration owns source/period/reset/sys_rst_n
+CLOCK	adc_clk	EXTERNAL REGISTER_CLOCK; top integration owns source/period/reset/adc_rst_n
+CLOCK	afe_clk	EXTERNAL REGISTER_CLOCK; top integration owns source/period/reset/afe_rst_n
+CLOCK	jesd_clk[7:0]	EXTERNAL recovered clocks; JESD/integration owns topology/reset
+RESET	sys_rst_n|adc_rst_n|afe_rst_n|jesd_rst_n[7:0]	EXTERNAL reset architecture owner
+PORT_SET	ADC_TOP public boundary	AXI-Lite, PHY/JESD, AXIS, external TGC timing owner=system top
+INTERNAL_OBJECT	NONE	No module-local pin/cell/generated-clock/exception endpoint is justified
+EXCEPTION	NONE	No asynchronous grouping/false path justified before integrated topology resolution
