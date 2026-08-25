@@ -1,40 +1,33 @@
 ---
 type: module_constraint_review
 module_name: ADC_TOP
-date: 2026-08-19
-reviewer: /root/adc_rework_verdesign
-design_sha256: cae9039ce6a84641a4b08518de40540a7c3d1ef7436d7d844e60d65cf62caa71
-accepted_design_review_sha256: 3886dbe87503af9de61c32c3ee7837b29d1919cbf0a2415fe3837d7050536269
+date: 2026-08-25
+reviewer: /root/adc_v02_verification
+design_sha256: 6F25849D110AC136168C9463795B1BF20786F0AC551562B3238B29D7804BB9DB
 classification: DEFERRED_TO_TOP
 dependency_scope: EXTERNAL_ONLY
 static_review_status: NOT_APPLICABLE
 vivado_resolution_status: VIVADO_RESOLUTION_NOT_RUN
 ---
 
-# ADC_TOP Constraint Review
+# ADC_TOP v0.2 Constraint Review
 
-## Decision
+Classification is `DEFERRED_TO_TOP`. The owning system-integration project
+must constrain SYS/ADC/AFE/JESD clock sources and relationships, reset release,
+PHY/GTH and board interfaces, AXI/AXIS I/O timing, external TGC setup/hold and
+the selected vendor FIFO/IP implementation. No module XDC is emitted.
 
-- Classification: `DEFERRED_TO_TOP`.
-- Top-level owner: Detector_v1 system-integration owner, including CMU/RMU, JESD PHY/GTH, board I/O and official FIFO/IP owners.
-- Module XDC: none; `ADC_TOP.xdc` is not required.
-- Dependency scope: `EXTERNAL_ONLY`.
-- Static XDC review: `NOT_APPLICABLE`; Vivado object resolution: `VIVADO_RESOLUTION_NOT_RUN`.
+The v0.2 structural anchors and their exact source hashes are frozen in
+`ADC_TOP_Constraint_Dependency_Manifest.tsv`. They retain external clocks and
+public ports only; no module-local pin, cell, generated-clock or timing
+exception endpoint is justified. `VIVADO_RESOLUTION_NOT_RUN`: object resolution,
+vendor-XDC interaction, order, timing and clock-interaction evidence remain
+integration-phase work.
 
-ADC_TOP has external SYS/ADC/AFE/JESD clocks and resets. Their periods, sources, relationships, board I/O, recovered-clock topology, FIFO implementation constraints, generated clocks and vendor-XDC ordering are unavailable at this project-independent boundary. No module-local physical, clock, generated-clock or exception constraint is justified.
+The v0.2 VMware sanity pass does not resolve Vivado objects or alter this
+classification; `VIVADO_RESOLUTION_NOT_RUN` remains binding.
 
-## v1.32 Structural Audit
-
-`ADC_RXD` is only the ADI/JESD wrapper. It crosses the decoded single-bit link level to AFE and forms `link_ready_afe = link_ready_sync & adi_rx_valid`. `ADC_UPK` consumes the local AFE tuple, owns region/FIFO-request behavior, and contains no clock generator or module-XDC endpoint. `fifo_clr` reaches only the asynchronous FIFO reset expression in `ADC_CHN`; it does not enter `ADC_UPK`.
-
-The CDC/FIFO topology is unchanged in kind: status/event CDC is owned by CHN_SYNC/ADC_SYNC; data crosses through the PUB FWFT async FIFO with AFE write and ADC read clocks. Precise CDC exceptions and vendor interaction require resolved integrated objects and remain top-level work.
-
-## Dependency Manifest
-
-`D:\Codex\RTL_Temp\ADC_TOP\.work\docs\ADC_TOP_Constraint_Dependency_Manifest.tsv` records external clocks, resets, public port scope, source anchors and the absence of module constraint objects. Reuse requires unchanged anchor hashes and rows.
-
-- Manifest SHA256: `f93d3fcc8f66704fd7803879241a69c7cce1df62e82e841edd5ace0b9312b0ff`.
-
-## Residual Risks
-
-No Vivado processing-order, endpoint-resolution, syntax, clock-interaction or vendor-XDC evidence has been run. Future integration must establish actual clock definitions/relationships, I/O delays, vendor-XDC precedence and precise CDC timing constraints.
+The dependency manifest was refreshed for the current RTL hashes. The required
+fresh VMware batch passed for fingerprint
+`32f8341ca9fcbc81c6c4e97360a31ead8a41d55e9f20b48c210cc1e54381e2da`;
+historical VMware evidence was not reused.

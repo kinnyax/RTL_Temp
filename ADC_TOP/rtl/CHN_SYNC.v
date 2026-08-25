@@ -1,68 +1,178 @@
 `timescale 1ns / 1ps
 
-// Per-channel status and event clock-domain crossings.
 module CHN_SYNC(
-    // Destination and source clock domains
-    input  wire                             adc_clk                                      ,
-    input  wire                             adc_rst_n                                    ,
-    input  wire                             afe_clk                                      ,
-    input  wire                             afe_rst_n                                    ,
-    input  wire                             jesd_clk                                     ,
-    input  wire                             jesd_rst_n                                   ,
+    input  wire                             adc_clk                                     ,
+    input  wire                             adc_rst_n                                   ,
+    input  wire                             afe_clk                                     ,
+    input  wire                             afe_rst_n                                   ,
+    input  wire                             jesd_clk                                    ,
+    input  wire                             jesd_rst_n                                  ,
 
-    // JESD status and events
-    input  wire                             link_ready                                   ,
-    input  wire [1:0]                       lane_ready                                   ,
-    input  wire [1:0]                       byte_aligned                                 ,
-    input  wire [1:0]                       comma_detected                               ,
-    input  wire                             pll_lock                                     ,
-    input  wire                             rx_reset_done                                ,
-    input  wire                             link_error_evt                               ,
-    input  wire [1:0]                       disparity_evt                                ,
-    input  wire [1:0]                       notintable_evt                               ,
+    input  wire                             phy_rx_reset_done                          ,
+    output wire                             phy_rx_reset_done_sync                     ,
+    input  wire                             phy_pll_lock                               ,
+    output wire                             phy_pll_lock_sync                          ,
+    input  wire [ 1:0]                      phy_byte_aligned                           ,
+    output wire [ 1:0]                      phy_byte_align_sync                        ,
 
-    // AFE status and events
-    input  wire                             sysref_error_evt                             ,
-    input  wire                             sysref_seen_evt                              ,
-    input  wire                             fifo_full_afe                                ,
-    input  wire                             data_drop_evt_afe                            ,
+    input  wire                             sysref_error                               ,
+    input  wire                             sysref_seen                                ,
+    output wire                             sysref_seen_sync                           ,
+    input  wire                             link_ready                                 ,
+    output wire                             link_ready_sync                            ,
+    input  wire [ 1:0]                      lane_ready                                 ,
+    output wire [ 1:0]                      lane_ready_sync                            ,
+    input  wire [ 1:0]                      cgs_ready                                  ,
+    output wire [ 1:0]                      cgs_ready_sync                             ,
+    input  wire [ 1:0]                      phy_disparity                              ,
+    output wire [ 1:0]                      phy_disparity_sync                         ,
+    input  wire [ 1:0]                      phy_notintable                             ,
+    output wire [ 1:0]                      phy_notintable_sync                        ,
+    input  wire                             link_error                                 ,
+    output wire                             link_error_sync                            ,
 
-    // ADC-domain status and events
-    output wire                             link_ready_adc                               ,
-    output wire [1:0]                       lane_ready_adc                               ,
-    output wire [1:0]                       byte_aligned_adc                             ,
-    output wire [1:0]                       comma_detected_adc                           ,
-    output wire                             pll_lock_adc                                 ,
-    output wire                             rx_reset_done_adc                            ,
-    output wire                             link_error_evt_adc                           ,
-    output wire                             sysref_seen_evt_adc                          ,
-    output wire [1:0]                       disparity_evt_adc                            ,
-    output wire [1:0]                       notintable_evt_adc                           ,
-    output wire                             fifo_full_adc                                ,
-    output wire                             data_drop_evt_adc
+    input  wire                             fifo_sta                                   ,
+    output wire                             fifo_sta_sync                              ,
+    input  wire                             upk_idle                                   ,
+    output wire                             upk_idle_sync                              ,
+    input  wire                             tgc_idle                                   ,
+    output wire                             tgc_idle_sync
 );
 
-wire                                        link_error_evt_adc_jesd                      ;
-wire                                        sysref_error_evt_adc_afe                     ;
+parameter                                   UDLY                        = 1             ;
 
-assign link_error_evt_adc = link_error_evt_adc_jesd | sysref_error_evt_adc_afe;
+wire                                        sysref_error_sync                           ;
+wire                                        jesd_link_error_sync                        ;
 
-level_sync link_ready_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(link_ready), .out(link_ready_adc));
-levels_sync #(.DS(2)) lane_ready_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(lane_ready), .out(lane_ready_adc));
-levels_sync #(.DS(2)) byte_aligned_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(byte_aligned), .out(byte_aligned_adc));
-levels_sync #(.DS(2)) comma_detected_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(comma_detected), .out(comma_detected_adc));
-level_sync pll_lock_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(pll_lock), .out(pll_lock_adc));
-level_sync rx_reset_done_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(rx_reset_done), .out(rx_reset_done_adc));
-level_sync fifo_full_to_adc(.clk(adc_clk), .rst_n(adc_rst_n), .in(fifo_full_afe), .out(fifo_full_adc));
+// JESD and AFE status levels converge in ADC for status and packet admission.
+level_sync rx_reset_done_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (phy_rx_reset_done                             ),
+    .out                                (phy_rx_reset_done_sync                        )
+);
 
-pulse_sync2 link_error_to_adc(.clka(jesd_clk), .clkb(adc_clk), .rst_n_a(jesd_rst_n), .rst_n_b(adc_rst_n), .in(link_error_evt), .out(link_error_evt_adc_jesd));
-pulse_sync2 sysref_error_to_adc(.clka(afe_clk), .clkb(adc_clk), .rst_n_a(afe_rst_n), .rst_n_b(adc_rst_n), .in(sysref_error_evt), .out(sysref_error_evt_adc_afe));
-pulse_sync2 sysref_seen_to_adc(.clka(afe_clk), .clkb(adc_clk), .rst_n_a(afe_rst_n), .rst_n_b(adc_rst_n), .in(sysref_seen_evt), .out(sysref_seen_evt_adc));
-pulse_sync2 disparity0_to_adc(.clka(jesd_clk), .clkb(adc_clk), .rst_n_a(jesd_rst_n), .rst_n_b(adc_rst_n), .in(disparity_evt[0]), .out(disparity_evt_adc[0]));
-pulse_sync2 disparity1_to_adc(.clka(jesd_clk), .clkb(adc_clk), .rst_n_a(jesd_rst_n), .rst_n_b(adc_rst_n), .in(disparity_evt[1]), .out(disparity_evt_adc[1]));
-pulse_sync2 notintable0_to_adc(.clka(jesd_clk), .clkb(adc_clk), .rst_n_a(jesd_rst_n), .rst_n_b(adc_rst_n), .in(notintable_evt[0]), .out(notintable_evt_adc[0]));
-pulse_sync2 notintable1_to_adc(.clka(jesd_clk), .clkb(adc_clk), .rst_n_a(jesd_rst_n), .rst_n_b(adc_rst_n), .in(notintable_evt[1]), .out(notintable_evt_adc[1]));
-pulse_sync2 data_drop_to_adc(.clka(afe_clk), .clkb(adc_clk), .rst_n_a(afe_rst_n), .rst_n_b(adc_rst_n), .in(data_drop_evt_afe), .out(data_drop_evt_adc));
+level_sync pll_lock_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (phy_pll_lock                                  ),
+    .out                                (phy_pll_lock_sync                             )
+);
+
+levels_sync #(.DS(2)) byte_aligned_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (phy_byte_aligned                              ),
+    .out                                (phy_byte_align_sync                           )
+);
+
+level_sync link_ready_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (link_ready                                    ),
+    .out                                (link_ready_sync                               )
+);
+
+levels_sync #(.DS(2)) lane_ready_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (lane_ready                                    ),
+    .out                                (lane_ready_sync                               )
+);
+
+levels_sync #(.DS(2)) cgs_ready_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (cgs_ready                                     ),
+    .out                                (cgs_ready_sync                                )
+);
+
+level_sync fifo_sta_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (fifo_sta                                      ),
+    .out                                (fifo_sta_sync                                 )
+);
+
+// Quiescence is safe on reset, so idle synchronizers reset high.
+level_sync #(.RV(1'b1)) upk_idle_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (upk_idle                                      ),
+    .out                                (upk_idle_sync                                 )
+);
+
+level_sync #(.RV(1'b1)) tgc_idle_cdc(
+    .clk                                (adc_clk                                       ),
+    .rst_n                              (adc_rst_n                                     ),
+    .in                                 (tgc_idle                                      ),
+    .out                                (tgc_idle_sync                                 )
+);
+
+// Occurrence signals retain event semantics across their single CDC hop.
+pulse_sync2 sysref_seen_cdc(
+    .clka                               (afe_clk                                       ),
+    .clkb                               (adc_clk                                       ),
+    .rst_n_a                            (afe_rst_n                                     ),
+    .rst_n_b                            (adc_rst_n                                     ),
+    .in                                 (sysref_seen                                   ),
+    .out                                (sysref_seen_sync                              )
+);
+
+pulse_sync2 sysref_error_cdc(
+    .clka                               (afe_clk                                       ),
+    .clkb                               (adc_clk                                       ),
+    .rst_n_a                            (afe_rst_n                                     ),
+    .rst_n_b                            (adc_rst_n                                     ),
+    .in                                 (sysref_error                                  ),
+    .out                                (sysref_error_sync                             )
+);
+
+pulse_sync2 disparity0_cdc(
+    .clka                               (jesd_clk                                      ),
+    .clkb                               (adc_clk                                       ),
+    .rst_n_a                            (jesd_rst_n                                    ),
+    .rst_n_b                            (adc_rst_n                                     ),
+    .in                                 (phy_disparity[0]                              ),
+    .out                                (phy_disparity_sync[0]                         )
+);
+
+pulse_sync2 disparity1_cdc(
+    .clka                               (jesd_clk                                      ),
+    .clkb                               (adc_clk                                       ),
+    .rst_n_a                            (jesd_rst_n                                    ),
+    .rst_n_b                            (adc_rst_n                                     ),
+    .in                                 (phy_disparity[1]                              ),
+    .out                                (phy_disparity_sync[1]                         )
+);
+
+pulse_sync2 notintable0_cdc(
+    .clka                               (jesd_clk                                      ),
+    .clkb                               (adc_clk                                       ),
+    .rst_n_a                            (jesd_rst_n                                    ),
+    .rst_n_b                            (adc_rst_n                                     ),
+    .in                                 (phy_notintable[0]                             ),
+    .out                                (phy_notintable_sync[0]                        )
+);
+
+pulse_sync2 notintable1_cdc(
+    .clka                               (jesd_clk                                      ),
+    .clkb                               (adc_clk                                       ),
+    .rst_n_a                            (jesd_rst_n                                    ),
+    .rst_n_b                            (adc_rst_n                                     ),
+    .in                                 (phy_notintable[1]                             ),
+    .out                                (phy_notintable_sync[1]                        )
+);
+
+pulse_sync2 link_error_cdc(
+    .clka                               (jesd_clk                                      ),
+    .clkb                               (adc_clk                                       ),
+    .rst_n_a                            (jesd_rst_n                                    ),
+    .rst_n_b                            (adc_rst_n                                     ),
+    .in                                 (link_error                                    ),
+    .out                                (jesd_link_error_sync                          )
+);
+
+assign link_error_sync = sysref_error_sync | jesd_link_error_sync;
 
 endmodule
-
