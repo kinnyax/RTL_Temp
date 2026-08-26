@@ -1,0 +1,10 @@
+rtl/support/CMU_Cell.v
+rtl/support/CMU_Lib.v
+rtl/CMU_READY.v
+rtl/CMU_REG.v
+rtl/CMU_CLK.v
+rtl/CMU_SYS_REFCLK.v
+rtl/CMU_AFE_CLK.v
+rtl/CMU_JESD_REFCLK.v
+rtl/CMU_PCIE_REFCLK.v
+rtl/CMU_CORE.v

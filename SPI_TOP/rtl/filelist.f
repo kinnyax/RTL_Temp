@@ -1,0 +1,9 @@
+rtl/support/SPI_Lib.v
+rtl/integration/SPI_FIFO_256X32.v
+rtl/SPI_CDC.v
+rtl/SPI_REG.v
+rtl/SPI_SYNC.v
+rtl/SPI_TXD.v
+rtl/SPI_RXD.v
+rtl/SPI_CTL.v
+rtl/SPI_TOP.v
