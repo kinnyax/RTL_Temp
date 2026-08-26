@@ -1,52 +1,55 @@
 `timescale 1ns / 1ps
 
 module ADC_PKT(
-    input  wire         adc_clk       ,
-    input  wire         adc_rst_n     ,
-    input  wire [2:0]   chn_id        ,
-    input  wire         chn_en        ,
-    input  wire [1:0]   smp_prec      ,
-    input  wire [1:0]   smp_mode      ,
-    input  wire [7:0]   dec_m         ,
-    input  wire         link_ready    ,
-    input  wire [511:0] rx_fifo_rdat  ,
-    input  wire         rx_fifo_empty ,
-    input  wire [9:0]   rx_fifo_rlevel,
-    output reg          rx_fifo_rinc  ,
-    output reg  [511:0] m_axis_tdata  ,
-    output reg  [63:0]  m_axis_tkeep  ,
-    output reg          m_axis_tvalid ,
-    output reg          m_axis_tlast  ,
-    input  wire         m_axis_tready ,
-    output wire         chn_idle      ,
-    input  wire         fifo_sta
+    input                                   adc_clk                                        ,
+    input                                   adc_rst_n                                      ,
+    input               [2:0]               chn_id                                         ,
+    input                                   chn_en                                         ,
+    input               [1:0]               smp_prec                                       ,
+    input               [1:0]               smp_mode                                       ,
+    input               [7:0]               dec_m                                          ,
+    input                                   link_ready                                     ,
+    input               [511:0]             rx_fifo_rdat                                   ,
+    input                                   rx_fifo_empty                                  ,
+    input               [9:0]               rx_fifo_rlevel                                 ,
+    output    reg                           rx_fifo_rinc                                   ,
+    output    reg       [511:0]             m_axis_tdata                                   ,
+    output    reg       [63:0]              m_axis_tkeep                                   ,
+    output    reg                           m_axis_tvalid                                  ,
+    output    reg                           m_axis_tlast                                   ,
+    input                                   m_axis_tready                                  ,
+    output    wire                          chn_idle                                       ,
+    input                                   fifo_sta
 );
 
-parameter                                   UDLY                        = 1             ;
+parameter                                   UDLY                     = 1                   ;
 
-localparam [1:0]   PKT_IDLE       = 2'd0;
-localparam [1:0]   PKT_CRC        = 2'd1;
-localparam [1:0]   PKT_HEADER     = 2'd2;
-localparam [1:0]   PKT_PAYLOAD    = 2'd3;
+localparam              [1:0]               PKT_IDLE                 = 2'd0                ;
+localparam              [1:0]               PKT_CRC                  = 2'd1                ;
+localparam              [1:0]               PKT_HEADER               = 2'd2                ;
+localparam              [1:0]               PKT_PAYLOAD              = 2'd3                ;
 
-reg        [1:0]   pkt_fsm       ;
-reg        [1:0]   pkt_fsm_nx    ;
-reg                chn_en_eff    ;
-reg        [2:0]   crc_wait_cnt  ;
-reg        [8:0]   payload_cnt   ;
-reg        [495:0] header_buff   ;
-reg        [495:0] header_image  ;
+reg                     [1:0]               pkt_fsm                                        ;
+reg                     [1:0]               pkt_fsm_nx                                     ;
+reg                                         chn_en_eff                                     ;
+reg                     [2:0]               crc_wait_cnt                                   ;
+reg                     [8:0]               payload_cnt                                    ;
+reg                     [495:0]             header_buff                                    ;
+reg                     [495:0]             header_image                                   ;
 
-wire       [7:0]   precision_byte;
-wire               packet_admit  ;
-wire               axis_handshake;
-wire               crc_wait_last ;
-wire               payload_done  ;
-wire               chn_en_eff_upd;
-wire               payload_clr   ;
-wire               payload_inc   ;
-wire       [15:0]  crc           ;
-wire               crc_done      ;
+wire                    [7:0]               precision_byte                                 ;
+wire                                        packet_admit                                   ;
+wire                                        axis_handshake                                 ;
+wire                                        crc_wait_last                                  ;
+wire                                        payload_done                                   ;
+wire                                        chn_en_eff_upd                                 ;
+wire                                        payload_clr                                    ;
+wire                                        payload_inc                                    ;
+wire                    [15:0]              crc                                            ;
+/* verilator lint_off UNUSEDSIGNAL */
+wire                                        crc_busy                                       ;
+wire                                        crc_done                                       ;
+/* verilator lint_on UNUSEDSIGNAL */
 assign packet_admit   = (pkt_fsm == PKT_IDLE) & chn_en_eff & link_ready & (rx_fifo_rlevel >= 10'd256);
 assign axis_handshake = m_axis_tvalid & m_axis_tready;
 assign crc_wait_last  = (crc_wait_cnt == 3'd7);
@@ -59,7 +62,7 @@ CRC16 #(
     .adc_rst_n                           (adc_rst_n),
     .start                               (packet_admit),
     .header_data                         (header_buff),
-    .busy                                (),
+    .busy                                (crc_busy),
     .done                                (crc_done),
     .crc                                 (crc)
 );

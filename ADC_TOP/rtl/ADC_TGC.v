@@ -1,32 +1,32 @@
 `timescale 1ns / 1ps
 
 module ADC_TGC(
-    input  wire                             afe_clk                                     ,
-    input  wire                             afe_rst_n                                   ,
+    input                                   afe_clk                                        ,
+    input                                   afe_rst_n                                      ,
 
-    input  wire                             chn_en                                      ,
-    input  wire                             tgc_cmd_evt                                 ,
-    input  wire [ 1:0]                      profile_sel                                 ,
-    input  wire                             up_dn                                       ,
+    input                                   chn_en                                         ,
+    input                                   tgc_cmd_evt                                    ,
+    input               [ 1:0]              profile_sel                                    ,
+    input                                   up_dn                                          ,
 
-    output reg                              tgc_done_evt                                ,
-    output wire                             tgc_idle                                    ,
-    output reg                              tgc_slope                                   ,
-    output reg                              tgc_up_dn                                   ,
-    output reg                              tgc_prof1                                   ,
-    output reg                              tgc_prof2
+    output    reg                           tgc_done_evt                                   ,
+    output    wire                          tgc_idle                                       ,
+    output    reg                           tgc_slope                                      ,
+    output    reg                           tgc_up_dn                                      ,
+    output    reg                           tgc_prof1                                      ,
+    output    reg                           tgc_prof2
 );
 
-parameter                                   UDLY                        = 1             ;
+parameter                                   UDLY                     = 1                   ;
 
-localparam [2:0]                            TGC_IDLE                    = 3'd0          ;
-localparam [2:0]                            TGC_APPLY                   = 3'd1          ;
-localparam [2:0]                            TGC_SLOPE                   = 3'd2          ;
-localparam [2:0]                            TGC_DONE                    = 3'd3          ;
-localparam [2:0]                            TGC_CANCEL                  = 3'd4          ;
+localparam              [2:0]               TGC_IDLE                 = 3'd0                ;
+localparam              [2:0]               TGC_APPLY                = 3'd1                ;
+localparam              [2:0]               TGC_SLOPE                = 3'd2                ;
+localparam              [2:0]               TGC_DONE                 = 3'd3                ;
+localparam              [2:0]               TGC_CANCEL               = 3'd4                ;
 
-reg        [2:0]                            tgc_fsm                                     ;
-reg        [2:0]                            tgc_fsm_nx                                  ;
+reg                     [2:0]               tgc_fsm                                        ;
+reg                     [2:0]               tgc_fsm_nx                                     ;
 
 assign tgc_idle = (tgc_fsm == TGC_IDLE) & !tgc_cmd_evt;
 

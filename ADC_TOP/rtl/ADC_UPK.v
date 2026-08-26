@@ -1,73 +1,75 @@
 `timescale 1ns / 1ps
 
 module ADC_UPK(
-    input  wire                             afe_clk                                     ,
-    input  wire                             afe_rst_n                                   ,
+    input                                   afe_clk                                        ,
+    input                                   afe_rst_n                                      ,
 
-    input  wire                             chn_en                                      ,
-    input  wire                             rxd_data_vld                                ,
-    input  wire [255:0]                     rxd_data                                    ,
-    input  wire [15:0]                      rxd_somf                                    ,
-    input  wire [31:0]                      adc_ctl                                     ,
-    input  wire [31:0]                      frm_cfg                                     ,
-    input  wire [ 9:0]                      rx_fifo_wlevel                              ,
+    input                                   chn_en                                         ,
+    input                                   rxd_data_vld                                   ,
+    input               [255:0]             rxd_data                                       ,
+    /* verilator lint_off UNUSEDSIGNAL */
+    input               [15:0]              rxd_somf                                       ,
+    input               [31:0]              adc_ctl                                        ,
+    input               [31:0]              frm_cfg                                        ,
+    /* verilator lint_on UNUSEDSIGNAL */
+    input               [ 9:0]              rx_fifo_wlevel                                 ,
 
-    output reg  [511:0]                     rx_fifo_wdat                                ,
-    output reg                              rx_fifo_winc                                ,
-    output reg                              data_error_evt                              ,
-    output wire                             upk_idle
+    output    reg       [511:0]             rx_fifo_wdat                                   ,
+    output    reg                           rx_fifo_winc                                   ,
+    output    reg                           data_error_evt                                 ,
+    output    wire                          upk_idle
 );
 
-parameter                                   UDLY                        = 1             ;
+parameter                                   UDLY                     = 1                   ;
 
-localparam [1:0]                            UPK_IDLE                    = 2'd0          ;
-localparam [1:0]                            UPK_PREFIX                  = 2'd1          ;
-localparam [1:0]                            UPK_VALID                   = 2'd2          ;
-localparam [1:0]                            UPK_ZERO                    = 2'd3          ;
+localparam              [1:0]               UPK_IDLE                 = 2'd0                ;
+localparam              [1:0]               UPK_PREFIX               = 2'd1                ;
+localparam              [1:0]               UPK_VALID                = 2'd2                ;
+localparam              [1:0]               UPK_ZERO                 = 2'd3                ;
 
-reg        [1:0]                            upk_fsm                                     ;
-reg        [1:0]                            upk_fsm_nx                                  ;
-reg        [11:0]                           prefix_cnt                                  ;
-reg        [ 8:0]                           region_cnt                                  ;
+reg                     [1:0]               upk_fsm                                        ;
+reg                     [1:0]               upk_fsm_nx                                     ;
+reg                     [11:0]              prefix_cnt                                     ;
+reg                     [ 8:0]              region_cnt                                     ;
 
-reg        [255:0]                          candidate_half                              ;
-reg                                         candidate_half_vld                          ;
-reg        [511:0]                          mapped_raw                                  ;
-reg        [511:0]                          mapped_data                                 ;
+reg                     [255:0]             candidate_half                                 ;
+reg                                         candidate_half_vld                             ;
+reg                     [511:0]             mapped_raw                                     ;
+reg                     [511:0]             mapped_data                                    ;
 
-reg        [511:0]                          ddc_i_data                                  ;
-reg                                         ddc_i_vld                                   ;
-reg        [511:0]                          ddc_q_data                                  ;
-reg                                         ddc_q_pending                               ;
+reg                     [511:0]             ddc_i_data                                     ;
+reg                                         ddc_i_vld                                      ;
+reg                     [511:0]             ddc_q_data                                     ;
+reg                                         ddc_q_pending                                  ;
 
-wire       [1:0]                            smp_prec                                    ;
-wire       [1:0]                            smp_mode                                    ;
-wire                                        frame_fmt                                  ;
-wire       [5:0]                            dec_int                                     ;
-wire       [1:0]                            dec_fra                                     ;
-wire       [1:0]                            del_mode                                    ;
-wire       [7:0]                            dec_m                                       ;
+wire                    [1:0]               smp_prec                                       ;
+wire                    [1:0]               smp_mode                                       ;
+wire                                        frame_fmt                                      ;
+wire                    [5:0]               dec_int                                        ;
+wire                    [1:0]               dec_fra                                        ;
+wire                    [1:0]               del_mode                                       ;
+wire                    [7:0]               dec_m                                          ;
 
-wire       [11:0]                           prefix_base                                 ;
-wire       [11:0]                           prefix_delete                               ;
-wire       [11:0]                           prefix_beats                                ;
-wire       [ 8:0]                           valid_beats                                 ;
-wire       [ 8:0]                           zero_beats                                  ;
+wire                    [11:0]              prefix_base                                    ;
+wire                    [11:0]              prefix_delete                                  ;
+wire                    [11:0]              prefix_beats                                   ;
+wire                    [ 8:0]              valid_beats                                    ;
+wire                    [ 8:0]              zero_beats                                     ;
 
-wire                                        epoch_start                                ;
-wire                                        context_error                               ;
-wire                                        prefix_last                                ;
-wire                                        valid_last                                 ;
-wire                                        zero_last                                  ;
-wire                                        candidate_first                            ;
-wire                                        candidate_done                             ;
-wire                                        ddc_i_candidate                            ;
-wire                                        ddc_q_candidate                            ;
-wire                                        direct_accept                              ;
-wire                                        ddc_pair_accept                            ;
+wire                                        epoch_start                                    ;
+wire                                        context_error                                  ;
+wire                                        prefix_last                                    ;
+wire                                        valid_last                                     ;
+wire                                        zero_last                                      ;
+wire                                        candidate_first                                ;
+wire                                        candidate_done                                 ;
+wire                                        ddc_i_candidate                                ;
+wire                                        ddc_q_candidate                                ;
+wire                                        direct_accept                                  ;
+wire                                        ddc_pair_accept                                ;
 
-integer                                     raw_index                                   ;
-integer                                     format_index                                ;
+integer raw_index;
+integer format_index;
 
 assign smp_prec  = adc_ctl[31:30];
 assign smp_mode  = adc_ctl[27:26];
@@ -118,8 +120,8 @@ assign zero_last    = rxd_data_vld & (upk_fsm == UPK_ZERO) &
 assign candidate_first = rxd_data_vld & (upk_fsm == UPK_VALID) & !region_cnt[0];
 assign candidate_done  = rxd_data_vld & (upk_fsm == UPK_VALID) &
                          region_cnt[0] & candidate_half_vld;
-assign ddc_i_candidate = candidate_done & !region_cnt[1];
-assign ddc_q_candidate = candidate_done & region_cnt[1];
+assign ddc_i_candidate = candidate_done & (smp_mode == 2'd2) & !region_cnt[1];
+assign ddc_q_candidate = candidate_done & (smp_mode == 2'd2) & region_cnt[1];
 assign direct_accept   = candidate_done & (smp_mode != 2'd2) & (rx_fifo_wlevel >= 10'd1);
 assign ddc_pair_accept = ddc_q_candidate & ddc_i_vld & (rx_fifo_wlevel >= 10'd2);
 

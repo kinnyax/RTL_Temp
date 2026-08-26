@@ -1,32 +1,35 @@
 `timescale 1ns / 1ps
 
 module CRC16(
-    input  wire                             adc_clk                                     ,
-    input  wire                             adc_rst_n                                   ,
+    input                                   adc_clk                                        ,
+    input                                   adc_rst_n                                      ,
 
-    input  wire                             start                                       ,
-    input  wire [495:0]                     header_data                                 ,
+    input                                   start                                          ,
+    input               [495:0]             header_data                                    ,
 
-    output reg                              busy                                        ,
-    output reg                              done                                        ,
-    output reg  [15:0]                      crc
+    output    reg                           busy                                           ,
+    output    reg                           done                                           ,
+    output    reg       [15:0]              crc
 );
 
-parameter                                   UDLY                        = 1             ;
+parameter                                   UDLY                     = 1                   ;
 
-reg        [15:0]                           crc_work                                    ;
-reg        [15:0]                           crc_step                                    ;
-reg        [ 5:0]                           byte_cnt                                    ;
+reg                     [15:0]              crc_work                                       ;
+reg                     [15:0]              crc_step                                       ;
+reg                     [ 5:0]              byte_cnt                                       ;
 
-integer                                     byte_index                                  ;
-integer                                     bit_index                                   ;
+integer byte_index;
+integer bit_index;
+integer header_index;
 
 always @(*) begin
     crc_step = crc_work;
 
     for(byte_index = 0; byte_index < 8; byte_index = byte_index + 1) begin
-        if((byte_cnt + byte_index) < 62) begin
-            crc_step = crc_step ^ {header_data[(byte_cnt + byte_index)*8 +: 8], 8'd0};
+        header_index = {26'd0, byte_cnt} + byte_index;
+
+        if(header_index < 62) begin
+            crc_step = crc_step ^ {header_data[header_index*8 +: 8], 8'd0};
 
             for(bit_index = 0; bit_index < 8; bit_index = bit_index + 1) begin
                 if(crc_step[15])
