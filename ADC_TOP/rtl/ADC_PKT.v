@@ -3,192 +3,161 @@
 module ADC_PKT(
     input                                   adc_clk                                        ,
     input                                   adc_rst_n                                      ,
-    input               [2:0]               chn_id                                         ,
+
+    input               [ 2:0]              chn_id                                         ,
     input                                   chn_en                                         ,
-    input               [1:0]               smp_prec                                       ,
-    input               [1:0]               smp_mode                                       ,
-    input               [7:0]               dec_m                                          ,
+    input               [ 1:0]              smp_prec                                       ,
+    input               [ 1:0]              smp_mode                                       ,
+    input               [ 7:0]              dec_m                                          ,
     input                                   link_ready                                     ,
+    input                                   fifo_sta                                       ,
+
     input               [511:0]             rx_fifo_rdat                                   ,
     input                                   rx_fifo_empty                                  ,
-    input               [9:0]               rx_fifo_rlevel                                 ,
-    output    reg                           rx_fifo_rinc                                   ,
-    output    reg       [511:0]             m_axis_tdata                                   ,
-    output    reg       [63:0]              m_axis_tkeep                                   ,
-    output    reg                           m_axis_tvalid                                  ,
-    output    reg                           m_axis_tlast                                   ,
+    input               [ 9:0]              rx_fifo_rlevel                                 ,
+    output    wire                          rx_fifo_rinc                                   ,
+
+    output    wire      [511:0]             m_axis_tdata                                   ,
+    output    wire      [63:0]              m_axis_tkeep                                   ,
+    output    wire                          m_axis_tvalid                                  ,
+    output    wire                          m_axis_tlast                                   ,
     input                                   m_axis_tready                                  ,
-    output    wire                          chn_idle                                       ,
-    input                                   fifo_sta
+
+    output    wire                          chn_idle
 );
 
 parameter                                   UDLY                     = 1                   ;
 
-localparam              [1:0]               PKT_IDLE                 = 2'd0                ;
-localparam              [1:0]               PKT_CRC                  = 2'd1                ;
-localparam              [1:0]               PKT_HEADER               = 2'd2                ;
-localparam              [1:0]               PKT_PAYLOAD              = 2'd3                ;
+localparam                                  PACKET_IDLE              = 2'd0                ;
+localparam                                  PACKET_CRC               = 2'd1                ;
+localparam                                  PACKET_HEADER            = 2'd2                ;
+localparam                                  PACKET_PAYLOAD           = 2'd3                ;
 
-reg                     [1:0]               pkt_fsm                                        ;
-reg                     [1:0]               pkt_fsm_nx                                     ;
-reg                                         chn_en_eff                                     ;
-reg                     [2:0]               crc_wait_cnt                                   ;
-reg                     [8:0]               payload_cnt                                    ;
-reg                     [495:0]             header_buff                                    ;
-reg                     [495:0]             header_image                                   ;
-
-wire                    [7:0]               precision_byte                                 ;
 wire                                        packet_admit                                   ;
 wire                                        axis_handshake                                 ;
-wire                                        crc_wait_last                                  ;
-wire                                        payload_done                                   ;
-wire                                        chn_en_eff_upd                                 ;
-wire                                        payload_clr                                    ;
-wire                                        payload_inc                                    ;
-wire                    [15:0]              crc                                            ;
-/* verilator lint_off UNUSEDSIGNAL */
+wire                                        payload_last                                   ;
 wire                                        crc_busy                                       ;
 wire                                        crc_done                                       ;
-/* verilator lint_on UNUSEDSIGNAL */
-assign packet_admit   = (pkt_fsm == PKT_IDLE) & chn_en_eff & link_ready & (rx_fifo_rlevel >= 10'd256);
-assign axis_handshake = m_axis_tvalid & m_axis_tready;
-assign crc_wait_last  = (crc_wait_cnt == 3'd7);
-assign payload_done   = (pkt_fsm == PKT_PAYLOAD) & axis_handshake & (payload_cnt == 9'd255);
+wire                    [15:0]              crc_value                                      ;
+wire                    [ 1:0]              smp_mode_eff                                   ;
+wire                    [ 1:0]              smp_prec_eff                                   ;
+wire                    [ 7:0]              smp_prec_value                                 ;
 
-CRC16 #(
-    .UDLY                               (UDLY                                         )
-) crc16(
-    .adc_clk                             (adc_clk),
-    .adc_rst_n                           (adc_rst_n),
-    .start                               (packet_admit),
-    .header_data                         (header_buff),
-    .busy                                (crc_busy),
-    .done                                (crc_done),
-    .crc                                 (crc)
-);
+reg                     [ 1:0]              packet_fsm                                     ;
+reg                     [ 1:0]              packet_fsm_nx                                  ;
+reg                     [ 7:0]              payload_cnt                                    ;
+reg                                         effective_en                                   ;
+reg                     [495:0]             header_data                                    ;
+reg                     [495:0]             header_data_r                                  ;
+
+
+assign smp_mode_eff   = (smp_mode==2'd3) ? 2'd0 : smp_mode;
+assign smp_prec_eff   = (smp_prec==2'd3) ? 2'd0 : smp_prec;
+assign smp_prec_value = (smp_prec_eff==2'd0) ? 8'd10 :
+                        (smp_prec_eff==2'd1) ? 8'd12 : 8'd14;
+
+assign packet_admit   = (packet_fsm==PACKET_IDLE) & effective_en & link_ready &
+                        !rx_fifo_empty & (rx_fifo_rlevel>=10'd256);
+assign axis_handshake = m_axis_tvalid & m_axis_tready;
+assign payload_last   = (payload_cnt==8'd255);
+assign chn_idle       = (packet_fsm==PACKET_IDLE) && !crc_busy;
+
+always @(*) begin
+    header_data          = 496'd0;
+    header_data[31:0]    = 32'h31525444;
+    header_data[39:32]   = 8'd1;
+    header_data[47:40]   = 8'd64;
+    header_data[71:64]   = {5'd0,chn_id};
+    header_data[79:72]   = {6'd0,smp_mode_eff};
+    header_data[87:80]   = smp_prec_value;
+    header_data[143:136] = 8'd1;
+    header_data[239:232] = 8'h40;
+    header_data[263:256] = dec_m;
+    header_data[271:264] = (smp_mode_eff==2'd2) ? 8'd1 : 8'd0;
+    header_data[279:272] = {7'd0,fifo_sta};
+end
 
 always @(posedge adc_clk or negedge adc_rst_n) begin
-    if(!adc_rst_n)
-        pkt_fsm <= #UDLY PKT_IDLE;
+    if(adc_rst_n==1'b0)
+        packet_fsm <= #UDLY PACKET_IDLE;
     else
-        pkt_fsm <= #UDLY pkt_fsm_nx;
+        packet_fsm <= #UDLY packet_fsm_nx;
 end
 
 always @(*) begin
-    pkt_fsm_nx = pkt_fsm;
-
-    case(pkt_fsm)
-        PKT_IDLE: begin
+    case(packet_fsm)
+        PACKET_IDLE : begin
             if(packet_admit)
-                pkt_fsm_nx = PKT_CRC;
+                packet_fsm_nx = PACKET_CRC;
             else
-                pkt_fsm_nx = PKT_IDLE;
+                packet_fsm_nx = PACKET_IDLE;
         end
-        PKT_CRC: begin
-            if(crc_wait_last)
-                pkt_fsm_nx = PKT_HEADER;
+        PACKET_CRC : begin
+            if(crc_done)
+                packet_fsm_nx = PACKET_HEADER;
             else
-                pkt_fsm_nx = PKT_CRC;
+                packet_fsm_nx = PACKET_CRC;
         end
-        PKT_HEADER: begin
+        PACKET_HEADER : begin
             if(axis_handshake)
-                pkt_fsm_nx = PKT_PAYLOAD;
+                packet_fsm_nx = PACKET_PAYLOAD;
             else
-                pkt_fsm_nx = PKT_HEADER;
+                packet_fsm_nx = PACKET_HEADER;
         end
-        PKT_PAYLOAD: begin
-            if(payload_done)
-                pkt_fsm_nx = PKT_IDLE;
+        PACKET_PAYLOAD : begin
+            if(axis_handshake && payload_last)
+                packet_fsm_nx = PACKET_IDLE;
             else
-                pkt_fsm_nx = PKT_PAYLOAD;
+                packet_fsm_nx = PACKET_PAYLOAD;
         end
-        default: begin
-            pkt_fsm_nx = PKT_IDLE;
+        default : begin
+            packet_fsm_nx = PACKET_IDLE;
         end
     endcase
 end
 
-// Admission edge N is cycle zero; the N+8 edge completes the CRC phase.
 always @(posedge adc_clk or negedge adc_rst_n) begin
-    if(!adc_rst_n)
-        crc_wait_cnt <= #UDLY 3'd0;
+    if(adc_rst_n==1'b0)
+        effective_en <= #UDLY 1'b0;
+    else if(packet_fsm==PACKET_IDLE)
+        effective_en <= #UDLY chn_en;
+    else if((packet_fsm==PACKET_PAYLOAD) && axis_handshake && payload_last)
+        effective_en <= #UDLY chn_en;
+end
+
+always @(posedge adc_clk or negedge adc_rst_n) begin
+    if(adc_rst_n==1'b0)
+        header_data_r <= #UDLY 496'd0;
     else if(packet_admit)
-        crc_wait_cnt <= #UDLY 3'd0;
-    else if(pkt_fsm == PKT_CRC) begin
-        if(crc_wait_last)
-            crc_wait_cnt <= #UDLY 3'd0;
-        else
-            crc_wait_cnt <= #UDLY crc_wait_cnt + 3'd1;
-    end
-end
-
-assign chn_en_eff_upd = (pkt_fsm == PKT_IDLE) | payload_done;
-
-always @(posedge adc_clk or negedge adc_rst_n) begin
-    if(!adc_rst_n)
-        chn_en_eff <= #UDLY 1'b0;
-    else if(chn_en_eff_upd)
-        chn_en_eff <= #UDLY chn_en;
-end
-
-assign chn_idle = (pkt_fsm == PKT_IDLE) & !chn_en_eff;
-
-assign payload_clr = (pkt_fsm == PKT_HEADER) & axis_handshake;
-assign payload_inc = (pkt_fsm == PKT_PAYLOAD) & axis_handshake & !payload_done;
-
-always @(posedge adc_clk or negedge adc_rst_n) begin
-    if(!adc_rst_n)
-        payload_cnt <= #UDLY 9'd0;
-    else if(payload_clr)
-        payload_cnt <= #UDLY 9'd0;
-    else if(payload_inc)
-        payload_cnt <= #UDLY payload_cnt + 9'd1;
-end
-
-assign precision_byte = (smp_prec == 2'd0) ? 8'd10 :
-                        (smp_prec == 2'd1) ? 8'd12 :
-                        (smp_prec == 2'd2) ? 8'd14 : 8'd0;
-
-always @(*) begin
-    header_image          = 496'd0;
-    header_image[31:0]    = 32'h3152_5444;
-    header_image[39:32]   = 8'd1;
-    header_image[47:40]   = 8'd64;
-    header_image[71:64]   = {5'd0, chn_id};
-    header_image[79:72]   = {6'd0, smp_mode};
-    header_image[87:80]   = precision_byte;
-    header_image[143:136] = 8'd1;
-    header_image[239:232] = 8'h40;
-    header_image[263:256] = dec_m;
-    header_image[271:264] = {7'd0, (smp_mode == 2'd2)};
-    header_image[279:272] = {7'd0, fifo_sta};
+        header_data_r <= #UDLY header_data;
 end
 
 always @(posedge adc_clk or negedge adc_rst_n) begin
-    if(!adc_rst_n)
-        header_buff <= #UDLY 496'd0;
-    else if(packet_admit)
-        header_buff <= #UDLY header_image;
+    if(adc_rst_n==1'b0)
+        payload_cnt <= #UDLY 8'd0;
+    else if(packet_fsm!=PACKET_PAYLOAD)
+        payload_cnt <= #UDLY 8'd0;
+    else if(axis_handshake)
+        payload_cnt <= #UDLY payload_cnt + 8'd1;
 end
 
-always @(*) begin
-    m_axis_tdata = 512'd0;
-    m_axis_tkeep = 64'd0;
-    m_axis_tvalid = 1'b0;
-    m_axis_tlast = 1'b0;
-    rx_fifo_rinc = 1'b0;
-    if(pkt_fsm == PKT_HEADER) begin
-        m_axis_tdata = {crc,header_buff};
-        m_axis_tkeep = 64'hffff_ffff_ffff_ffff;
-        m_axis_tvalid = 1'b1;
-    end
-    else if(pkt_fsm == PKT_PAYLOAD) begin
-        m_axis_tdata = rx_fifo_rdat;
-        m_axis_tkeep = 64'hffff_ffff_ffff_ffff;
-        m_axis_tvalid = !rx_fifo_empty;
-        m_axis_tlast = (payload_cnt == 9'd255);
-        rx_fifo_rinc = m_axis_tvalid & m_axis_tready;
-    end
-end
+assign m_axis_tdata  = (packet_fsm==PACKET_HEADER) ?
+                       {crc_value[15:8],crc_value[7:0],header_data_r} :
+                       (packet_fsm==PACKET_PAYLOAD) ? rx_fifo_rdat : 512'd0;
+assign m_axis_tkeep  = ((packet_fsm==PACKET_HEADER) ||
+                        (packet_fsm==PACKET_PAYLOAD)) ? 64'hffffffffffffffff : 64'd0;
+assign m_axis_tvalid = (packet_fsm==PACKET_HEADER) || (packet_fsm==PACKET_PAYLOAD);
+assign m_axis_tlast  = (packet_fsm==PACKET_PAYLOAD) && payload_last;
+assign rx_fifo_rinc  = (packet_fsm==PACKET_PAYLOAD) && axis_handshake;
+
+CRC16 crc16(
+    .adc_clk                             (adc_clk                                      ),
+    .adc_rst_n                           (adc_rst_n                                    ),
+    .start                               (packet_admit                                 ),
+    .header_data                         (header_data                                  ),
+    .busy                                (crc_busy                                     ),
+    .done                                (crc_done                                     ),
+    .crc                                 (crc_value                                    )
+);
 
 endmodule

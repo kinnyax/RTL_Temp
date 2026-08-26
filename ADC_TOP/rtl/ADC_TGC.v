@@ -19,51 +19,59 @@ module ADC_TGC(
 
 parameter                                   UDLY                     = 1                   ;
 
-localparam              [2:0]               TGC_IDLE                 = 3'd0                ;
-localparam              [2:0]               TGC_APPLY                = 3'd1                ;
-localparam              [2:0]               TGC_SLOPE                = 3'd2                ;
-localparam              [2:0]               TGC_DONE                 = 3'd3                ;
-localparam              [2:0]               TGC_CANCEL               = 3'd4                ;
+localparam                                  TGC_IDLE                 = 3'd0                ;
+localparam                                  TGC_APPLY                = 3'd1                ;
+localparam                                  TGC_SLOPE                = 3'd2                ;
+localparam                                  TGC_DONE                 = 3'd3                ;
+localparam                                  TGC_CANCEL               = 3'd4                ;
 
-reg                     [2:0]               tgc_fsm                                        ;
-reg                     [2:0]               tgc_fsm_nx                                     ;
+reg                     [ 2:0]              tgc_fsm                                        ;
+reg                     [ 2:0]              tgc_fsm_nx                                     ;
 
-assign tgc_idle = (tgc_fsm == TGC_IDLE) & !tgc_cmd_evt;
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(!afe_rst_n)
+    if(afe_rst_n==1'b0)
         tgc_fsm <= #UDLY TGC_IDLE;
     else
         tgc_fsm <= #UDLY tgc_fsm_nx;
 end
 
 always @(*) begin
-    tgc_fsm_nx = tgc_fsm;
-
     case(tgc_fsm)
-        TGC_IDLE:
-            if(tgc_cmd_evt)
-                tgc_fsm_nx = chn_en ? TGC_APPLY : TGC_CANCEL;
-
-        TGC_APPLY:
-            tgc_fsm_nx = chn_en ? TGC_SLOPE : TGC_CANCEL;
-
-        TGC_SLOPE:
-            tgc_fsm_nx = chn_en ? TGC_DONE : TGC_CANCEL;
-
-        TGC_DONE:
+        TGC_IDLE : begin
+            if(chn_en && tgc_cmd_evt)
+                tgc_fsm_nx = TGC_APPLY;
+            else
+                tgc_fsm_nx = TGC_IDLE;
+        end
+        TGC_APPLY : begin
+            if(!chn_en)
+                tgc_fsm_nx = TGC_CANCEL;
+            else
+                tgc_fsm_nx = TGC_SLOPE;
+        end
+        TGC_SLOPE : begin
+            if(!chn_en)
+                tgc_fsm_nx = TGC_CANCEL;
+            else
+                tgc_fsm_nx = TGC_DONE;
+        end
+        TGC_DONE : begin
             tgc_fsm_nx = TGC_IDLE;
-
-        TGC_CANCEL:
+        end
+        TGC_CANCEL : begin
             tgc_fsm_nx = TGC_IDLE;
-
-        default:
+        end
+        default : begin
             tgc_fsm_nx = TGC_IDLE;
+        end
     endcase
 end
 
+assign tgc_idle = (tgc_fsm==TGC_IDLE);
+
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(!afe_rst_n) begin
+    if(afe_rst_n==1'b0) begin
         tgc_done_evt <= #UDLY 1'b0;
         tgc_slope    <= #UDLY 1'b0;
         tgc_up_dn    <= #UDLY 1'b0;
@@ -72,44 +80,42 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
     end
     else begin
         tgc_done_evt <= #UDLY 1'b0;
-
         if(!chn_en) begin
             tgc_slope <= #UDLY 1'b0;
             tgc_up_dn <= #UDLY 1'b0;
             tgc_prof1 <= #UDLY 1'b0;
             tgc_prof2 <= #UDLY 1'b0;
+            if((tgc_fsm==TGC_APPLY) || (tgc_fsm==TGC_SLOPE))
+                tgc_done_evt <= #UDLY 1'b1;
         end
-
-        case(tgc_fsm)
-            TGC_IDLE:
-                if(tgc_cmd_evt & chn_en) begin
-                    tgc_slope <= #UDLY 1'b0;
-                    tgc_up_dn <= #UDLY up_dn;
-                    tgc_prof1 <= #UDLY profile_sel[0];
-                    tgc_prof2 <= #UDLY profile_sel[1];
+        else begin
+            case(tgc_fsm)
+                TGC_IDLE : begin
+                    if(tgc_cmd_evt) begin
+                        tgc_slope <= #UDLY 1'b0;
+                        tgc_up_dn <= #UDLY up_dn;
+                        tgc_prof1 <= #UDLY profile_sel[0];
+                        tgc_prof2 <= #UDLY profile_sel[1];
+                    end
                 end
-
-            TGC_APPLY:
-                if(chn_en)
+                TGC_APPLY : begin
                     tgc_slope <= #UDLY 1'b1;
-
-            TGC_SLOPE:
-                if(chn_en) begin
+                end
+                TGC_SLOPE : begin
                     tgc_slope    <= #UDLY 1'b0;
                     tgc_done_evt <= #UDLY 1'b1;
                 end
-
-            TGC_CANCEL: begin
-                tgc_slope    <= #UDLY 1'b0;
-                tgc_up_dn    <= #UDLY 1'b0;
-                tgc_prof1    <= #UDLY 1'b0;
-                tgc_prof2    <= #UDLY 1'b0;
-                tgc_done_evt <= #UDLY 1'b1;
-            end
-
-            default: begin
-            end
-        endcase
+                TGC_CANCEL : begin
+                    tgc_slope <= #UDLY 1'b0;
+                    tgc_up_dn <= #UDLY 1'b0;
+                    tgc_prof1 <= #UDLY 1'b0;
+                    tgc_prof2 <= #UDLY 1'b0;
+                end
+                default : begin
+                    tgc_slope <= #UDLY tgc_slope;
+                end
+            endcase
+        end
     end
 end
 
