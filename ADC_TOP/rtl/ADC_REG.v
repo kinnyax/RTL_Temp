@@ -6,20 +6,20 @@ module ADC_REG(
 
     input               [15:0]              s_axi_awaddr                                   ,
     input                                   s_axi_awvalid                                  ,
-    output    wire                          s_axi_awready                                  ,
+    output    reg                           s_axi_awready                                  ,
     input               [31:0]              s_axi_wdata                                    ,
     input               [ 3:0]              s_axi_wstrb                                    ,
     input                                   s_axi_wvalid                                   ,
-    output    wire                          s_axi_wready                                   ,
-    output    wire      [ 1:0]              s_axi_bresp                                    ,
-    output    wire                          s_axi_bvalid                                   ,
+    output    reg                           s_axi_wready                                   ,
+    output    reg       [ 1:0]              s_axi_bresp                                    ,
+    output    reg                           s_axi_bvalid                                   ,
     input                                   s_axi_bready                                   ,
     input               [15:0]              s_axi_araddr                                   ,
     input                                   s_axi_arvalid                                  ,
-    output    wire                          s_axi_arready                                  ,
-    output    wire      [31:0]              s_axi_rdata                                    ,
-    output    wire      [ 1:0]              s_axi_rresp                                    ,
-    output    wire                          s_axi_rvalid                                   ,
+    output    reg                           s_axi_arready                                  ,
+    output    reg       [31:0]              s_axi_rdata                                    ,
+    output    reg       [ 1:0]              s_axi_rresp                                    ,
+    output    reg                           s_axi_rvalid                                   ,
     input                                   s_axi_rready                                   ,
 
     input               [ 7:0]              link_ready                                     ,
@@ -32,438 +32,397 @@ module ADC_REG(
     input               [15:0]              byte_aligned                                   ,
     input               [15:0]              comma_detected                                 ,
     input                                   sysref_level                                   ,
-    input               [ 7:0]              fifo_overflow_evt                              ,
-    input               [ 7:0]              data_error_evt                                 ,
-    input               [ 7:0]              link_error_evt                                 ,
-    input               [ 7:0]              sysref_seen_evt                                ,
-    input               [15:0]              disparity_evt                                  ,
-    input               [15:0]              notintable_evt                                 ,
-    input               [ 7:0]              tgc_done_evt                                   ,
+    input               [ 7:0]              fifo_overflow_sync                             ,
+    input               [ 7:0]              data_error_sync                                ,
+    input               [ 7:0]              link_error_sync                                ,
+    input               [ 7:0]              sysref_seen_sync                               ,
+    input               [15:0]              disparity_sync                                 ,
+    input               [15:0]              notintable_sync                                ,
 
-    output    wire      [31:0]              adc_ctl                                        ,
-    output    wire      [31:0]              frm_cfg                                        ,
-    output    reg       [ 7:0]              tgc_cmd_evt                                    ,
-    output    wire      [15:0]              tgc_profile                                    ,
-    output    wire      [ 7:0]              tgc_up_dn
+    output    reg       [31:0]              adc_ctl                                        ,
+    output    reg       [31:0]              frm_cfg                                        ,
+    output    reg       [31:0]              tgc_chn
 );
 
 parameter                                   UDLY                     = 1                   ;
 
-wire                                        clk                                            ;
-wire                                        rst_n                                          ;
-wire                    [15:0]              axi_awaddr                                     ;
-wire                                        axi_awvalid                                    ;
-wire                    [31:0]              axi_wdata                                      ;
-wire                    [ 3:0]              axi_wstrb                                      ;
-wire                                        axi_wvalid                                     ;
-wire                                        axi_bready                                     ;
-wire                    [15:0]              axi_araddr                                     ;
-wire                                        axi_arvalid                                    ;
-wire                                        axi_rready                                     ;
 wire                    [31:0]              io_rdata                                       ;
 wire                                        wr_access                                      ;
 wire                                        wr_addr                                        ;
 wire                                        wr_data                                        ;
 wire                                        wr_done                                        ;
-wire                                        data_accept                                    ;
+wire                                        w_ready                                        ;
 wire                                        rd_access                                      ;
-wire                                        ar_ready_en                                    ;
-wire                                        static_write_en                                ;
+wire                                        ar_idle                                        ;
+wire                                        reg_0000h_wr                                   ;
+wire                                        reg_0004h_wr                                   ;
+wire                                        reg_0008h_wr                                   ;
+wire                                        reg_000ch_wr                                   ;
+wire                                        reg_0010h_wr                                   ;
+wire                                        reg_0014h_wr                                   ;
+wire                                        reg_0018h_wr                                   ;
+wire                                        reg_001ch_wr                                   ;
+wire                                        reg_0020h_wr                                   ;
+wire                                        reg_0024h_wr                                   ;
+wire                                        reg_002ch_wr                                   ;
+wire                                        reg_0034h_wr                                   ;
+wire                                        reg_0040h_wr                                   ;
+wire                                        reg_0000h_rd                                   ;
+wire                                        reg_0004h_rd                                   ;
+wire                                        reg_0008h_rd                                   ;
+wire                                        reg_000ch_rd                                   ;
+wire                                        reg_0010h_rd                                   ;
+wire                                        reg_0014h_rd                                   ;
+wire                                        reg_0018h_rd                                   ;
+wire                                        reg_001ch_rd                                   ;
+wire                                        reg_0020h_rd                                   ;
+wire                                        reg_0024h_rd                                   ;
+wire                                        reg_0028h_rd                                   ;
+wire                                        reg_002ch_rd                                   ;
+wire                                        reg_0030h_rd                                   ;
+wire                                        reg_0034h_rd                                   ;
+wire                                        reg_0038h_rd                                   ;
+wire                                        reg_003ch_rd                                   ;
+wire                                        reg_0040h_rd                                   ;
+wire                    [31:0]              reg_0000h                                      ;
+wire                    [31:0]              reg_0004h                                      ;
+wire                    [31:0]              reg_0008h                                      ;
+wire                    [31:0]              reg_000ch                                      ;
+wire                    [31:0]              reg_0010h                                      ;
+wire                    [31:0]              reg_0014h                                      ;
+wire                    [31:0]              reg_0018h                                      ;
+wire                    [31:0]              reg_001ch                                      ;
+wire                    [31:0]              reg_0020h                                      ;
+wire                    [31:0]              reg_0024h                                      ;
+wire                    [31:0]              reg_0028h                                      ;
+wire                    [31:0]              reg_002ch                                      ;
+wire                    [31:0]              reg_0030h                                      ;
+wire                    [31:0]              reg_0034h                                      ;
+wire                    [31:0]              reg_0038h                                      ;
+wire                    [31:0]              reg_003ch                                      ;
+wire                    [31:0]              reg_0040h                                      ;
 
-reg                                         axi_awready                                    ;
-reg                                         axi_wready                                     ;
-reg                     [ 1:0]              axi_bresp                                      ;
-reg                                         axi_bvalid                                     ;
-reg                                         axi_arready                                    ;
-reg                     [31:0]              axi_rdata                                      ;
-reg                     [ 1:0]              axi_rresp                                      ;
-reg                                         axi_rvalid                                     ;
 reg                     [15:0]              axi_awaddr_r                                   ;
 reg                     [15:0]              axi_araddr_r                                   ;
-reg                                         aw_en                                          ;
+reg                                         aw_busy                                        ;
 reg                                         wait_data                                      ;
-reg                     [ 7:0]              afe_en                                         ;
-reg                     [ 7:0]              fifo_clr                                       ;
-reg                                         frame_fmt                                      ;
-reg                     [ 1:0]              smp_mode                                       ;
-reg                     [ 1:0]              smp_prec                                       ;
-reg                     [ 7:0]              dec_m                                          ;
-reg                     [ 1:0]              dec_del_mode                                   ;
-reg                     [ 7:0]              tgc_run                                        ;
-reg                     [15:0]              tgc_profile_r                                  ;
-reg                     [ 7:0]              tgc_up_dn_r                                    ;
-reg                     [ 7:0]              fifo_overflow                                  ;
-reg                     [ 7:0]              data_error                                     ;
-reg                     [ 7:0]              link_error                                     ;
+reg                     [23:0]              adc_pd                                         ;
 reg                     [ 7:0]              sysref_seen                                    ;
-reg                     [15:0]              sysref_count                                   ;
-reg                     [15:0]              disparity                                      ;
-reg                     [15:0]              notintable                                     ;
+reg                     [31:0]              lane_pd                                        ;
 
 integer i;
+integer j;
+integer k;
 
-
-assign clk           = sys_clk;
-assign rst_n         = sys_rst_n;
-assign axi_awaddr    = s_axi_awaddr;
-assign axi_awvalid   = s_axi_awvalid;
-assign axi_wdata     = s_axi_wdata;
-assign axi_wstrb     = s_axi_wstrb;
-assign axi_wvalid    = s_axi_wvalid;
-assign axi_bready    = s_axi_bready;
-assign axi_araddr    = s_axi_araddr;
-assign axi_arvalid   = s_axi_arvalid;
-assign axi_rready    = s_axi_rready;
-assign s_axi_awready = axi_awready;
-assign s_axi_wready  = axi_wready;
-assign s_axi_bresp   = axi_bresp;
-assign s_axi_bvalid  = axi_bvalid;
-assign s_axi_arready = axi_arready;
-assign s_axi_rdata   = axi_rdata;
-assign s_axi_rresp   = axi_rresp;
-assign s_axi_rvalid  = axi_rvalid;
-
-
-/* verilator lint_off WIDTHEXPAND */
 //////////////////////////////////////////////////
 //1. AXI Protocol
 //////////////////////////////////////////////////
-assign wr_access = axi_wready & axi_wvalid;
+assign wr_access = s_axi_wready & s_axi_wvalid;
+assign wr_addr   = ~s_axi_awready & s_axi_awvalid & ~aw_busy;
+assign wr_data   = wr_access & ~s_axi_bvalid;
+assign wr_done   = s_axi_bready & s_axi_bvalid;
 
-assign wr_addr = ~axi_awready & axi_awvalid & ~aw_en;
-assign wr_data = wr_access & ~axi_bvalid;
-assign wr_done = axi_bready & axi_bvalid;
-
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n) begin
-        axi_awready <= #UDLY 1'd0;
-        aw_en       <= #UDLY 1'd0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_awready <= #UDLY 1'd0;
+        aw_busy       <= #UDLY 1'd0;
     end
     else if(wr_addr) begin
-        axi_awready <= #UDLY 1'd1;
-        aw_en       <= #UDLY 1'd1;
+        s_axi_awready <= #UDLY 1'd1;
+        aw_busy       <= #UDLY 1'd1;
     end
     else if(wr_done) begin
-        axi_awready <= #UDLY 1'd0;
-        aw_en       <= #UDLY 1'd0;
+        s_axi_awready <= #UDLY 1'd0;
+        aw_busy       <= #UDLY 1'd0;
     end
     else
-        axi_awready <= #UDLY 1'd0;
+        s_axi_awready <= #UDLY 1'd0;
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n)
-        axi_awaddr_r <= #UDLY 8'd0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        axi_awaddr_r <= #UDLY 16'd0;
     else if(wr_addr)
-        axi_awaddr_r <= #UDLY axi_awaddr;
+        axi_awaddr_r <= #UDLY s_axi_awaddr;
 end
 
-assign data_accept = ~axi_wready & axi_wvalid & (wait_data | wr_addr);
+assign w_ready = ~s_axi_wready & s_axi_wvalid & (wait_data | wr_addr);
 
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n) begin
-        axi_wready <= #UDLY 1'd0;
-        wait_data  <= #UDLY 1'd0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_wready <= #UDLY 1'd0;
+        wait_data    <= #UDLY 1'd0;
     end
-    else if(data_accept) begin
-        axi_wready <= #UDLY 1'd1;
-        wait_data  <= #UDLY 1'd0;
+    else if(w_ready) begin
+        s_axi_wready <= #UDLY 1'd1;
+        wait_data    <= #UDLY 1'd0;
     end
     else if(wr_addr) begin
         wait_data <= #UDLY 1'd1;
     end
     else begin
-        axi_wready <= #UDLY 1'd0;
+        s_axi_wready <= #UDLY 1'd0;
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n) begin
-        axi_bvalid <= #UDLY 1'd0;
-        axi_bresp  <= #UDLY 2'd0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_bvalid <= #UDLY 1'd0;
+        s_axi_bresp  <= #UDLY 2'd0;
     end
     else if(wr_data) begin
-        axi_bvalid <= #UDLY 1'd1;
-        axi_bresp  <= #UDLY 2'd0;
+        s_axi_bvalid <= #UDLY 1'd1;
+        s_axi_bresp  <= #UDLY 2'd0;
     end
     else if(wr_done)
-        axi_bvalid <= #UDLY 1'd0;
+        s_axi_bvalid <= #UDLY 1'd0;
 end
 
-assign ar_ready_en = ~axi_rvalid | (axi_rvalid & axi_rready);
-assign rd_access   = axi_arready & axi_arvalid;
+assign ar_idle   = ~s_axi_rvalid | (s_axi_rvalid & s_axi_rready);
+assign rd_access = s_axi_arready & s_axi_arvalid;
 
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n) begin
-        axi_arready  <= #UDLY 1'd0;
-        axi_araddr_r <= #UDLY 8'd0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_arready <= #UDLY 1'd0;
+        axi_araddr_r  <= #UDLY 16'd0;
     end
-    else if(~axi_arready & axi_arvalid & ar_ready_en) begin
-        axi_arready  <= #UDLY 1'd1;
-        axi_araddr_r <= #UDLY axi_araddr;
+    else if(~s_axi_arready & s_axi_arvalid & ar_idle) begin
+        s_axi_arready <= #UDLY 1'd1;
+        axi_araddr_r  <= #UDLY s_axi_araddr;
     end
     else
-        axi_arready <= #UDLY 1'd0;
+        s_axi_arready <= #UDLY 1'd0;
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n) begin
-        axi_rvalid <= #UDLY 1'd0;
-        axi_rdata  <= #UDLY 32'd0;
-        axi_rresp  <= #UDLY 2'd0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_rvalid <= #UDLY 1'd0;
+        s_axi_rdata  <= #UDLY 32'd0;
+        s_axi_rresp  <= #UDLY 2'd0;
     end
     else if(rd_access) begin
-        axi_rvalid <= #UDLY 1'd1;
-        axi_rdata  <= #UDLY io_rdata;
-        axi_rresp  <= #UDLY 2'd0;
+        s_axi_rvalid <= #UDLY 1'd1;
+        s_axi_rdata  <= #UDLY io_rdata;
+        s_axi_rresp  <= #UDLY 2'd0;
     end
-    else if(axi_rready & axi_rvalid)
-        axi_rvalid <= #UDLY 1'd0;
+    else if(s_axi_rready & s_axi_rvalid)
+        s_axi_rvalid <= #UDLY 1'd0;
 end
 
 //////////////////////////////////////////////////
 //2. Address Decode
 //////////////////////////////////////////////////
-/* verilator lint_on WIDTHEXPAND */
-wire  reg_0000h_wr = (axi_awaddr_r==16'h0000) & wr_access;
-wire  reg_0004h_wr = (axi_awaddr_r==16'h0004) & wr_access;
-wire  reg_0008h_wr = (axi_awaddr_r==16'h0008) & wr_access;
-wire  reg_000ch_wr = (axi_awaddr_r==16'h000c) & wr_access;
-wire  reg_0010h_wr = (axi_awaddr_r==16'h0010) & wr_access;
-wire  reg_0014h_wr = (axi_awaddr_r==16'h0014) & wr_access;
-wire  reg_0018h_wr = (axi_awaddr_r==16'h0018) & wr_access;
-wire  reg_001ch_wr = (axi_awaddr_r==16'h001c) & wr_access;
-wire  reg_0020h_wr = (axi_awaddr_r==16'h0020) & wr_access;
-wire  reg_0024h_wr = (axi_awaddr_r==16'h0024) & wr_access;
-wire  reg_002ch_wr = (axi_awaddr_r==16'h002c) & wr_access;
-wire  reg_0034h_wr = (axi_awaddr_r==16'h0034) & wr_access;
-wire  reg_0040h_wr = (axi_awaddr_r==16'h0040) & wr_access;
+assign reg_0000h_wr = (axi_awaddr_r == 16'h0000) & wr_access;
+assign reg_0004h_wr = (axi_awaddr_r == 16'h0004) & wr_access;
+assign reg_0008h_wr = (axi_awaddr_r == 16'h0008) & wr_access;
+assign reg_000ch_wr = (axi_awaddr_r == 16'h000c) & wr_access;
+assign reg_0010h_wr = (axi_awaddr_r == 16'h0010) & wr_access;
+assign reg_0014h_wr = (axi_awaddr_r == 16'h0014) & wr_access;
+assign reg_0018h_wr = (axi_awaddr_r == 16'h0018) & wr_access;
+assign reg_001ch_wr = (axi_awaddr_r == 16'h001c) & wr_access;
+assign reg_0020h_wr = (axi_awaddr_r == 16'h0020) & wr_access;
+assign reg_0024h_wr = (axi_awaddr_r == 16'h0024) & wr_access;
+assign reg_002ch_wr = (axi_awaddr_r == 16'h002c) & wr_access;
+assign reg_0034h_wr = (axi_awaddr_r == 16'h0034) & wr_access;
+assign reg_0040h_wr = (axi_awaddr_r == 16'h0040) & wr_access;
 
-wire  reg_0000h_rd = (axi_araddr_r==16'h0000) & rd_access;
-wire  reg_0004h_rd = (axi_araddr_r==16'h0004) & rd_access;
-wire  reg_0008h_rd = (axi_araddr_r==16'h0008) & rd_access;
-wire  reg_000ch_rd = (axi_araddr_r==16'h000c) & rd_access;
-wire  reg_0010h_rd = (axi_araddr_r==16'h0010) & rd_access;
-wire  reg_0014h_rd = (axi_araddr_r==16'h0014) & rd_access;
-wire  reg_0018h_rd = (axi_araddr_r==16'h0018) & rd_access;
-wire  reg_001ch_rd = (axi_araddr_r==16'h001c) & rd_access;
-wire  reg_0020h_rd = (axi_araddr_r==16'h0020) & rd_access;
-wire  reg_0024h_rd = (axi_araddr_r==16'h0024) & rd_access;
-wire  reg_0028h_rd = (axi_araddr_r==16'h0028) & rd_access;
-wire  reg_002ch_rd = (axi_araddr_r==16'h002c) & rd_access;
-wire  reg_0030h_rd = (axi_araddr_r==16'h0030) & rd_access;
-wire  reg_0034h_rd = (axi_araddr_r==16'h0034) & rd_access;
-wire  reg_0038h_rd = (axi_araddr_r==16'h0038) & rd_access;
-wire  reg_003ch_rd = (axi_araddr_r==16'h003c) & rd_access;
-wire  reg_0040h_rd = (axi_araddr_r==16'h0040) & rd_access;
+assign reg_0000h_rd = (axi_araddr_r == 16'h0000) & rd_access;
+assign reg_0004h_rd = (axi_araddr_r == 16'h0004) & rd_access;
+assign reg_0008h_rd = (axi_araddr_r == 16'h0008) & rd_access;
+assign reg_000ch_rd = (axi_araddr_r == 16'h000c) & rd_access;
+assign reg_0010h_rd = (axi_araddr_r == 16'h0010) & rd_access;
+assign reg_0014h_rd = (axi_araddr_r == 16'h0014) & rd_access;
+assign reg_0018h_rd = (axi_araddr_r == 16'h0018) & rd_access;
+assign reg_001ch_rd = (axi_araddr_r == 16'h001c) & rd_access;
+assign reg_0020h_rd = (axi_araddr_r == 16'h0020) & rd_access;
+assign reg_0024h_rd = (axi_araddr_r == 16'h0024) & rd_access;
+assign reg_0028h_rd = (axi_araddr_r == 16'h0028) & rd_access;
+assign reg_002ch_rd = (axi_araddr_r == 16'h002c) & rd_access;
+assign reg_0030h_rd = (axi_araddr_r == 16'h0030) & rd_access;
+assign reg_0034h_rd = (axi_araddr_r == 16'h0034) & rd_access;
+assign reg_0038h_rd = (axi_araddr_r == 16'h0038) & rd_access;
+assign reg_003ch_rd = (axi_araddr_r == 16'h003c) & rd_access;
+assign reg_0040h_rd = (axi_araddr_r == 16'h0040) & rd_access;
 
 //////////////////////////////////////////////////
 //3. Write & Read REG
 //////////////////////////////////////////////////
-// s_axi_wstrb is intentionally ignored; every register write updates all 32 bits.
-assign static_write_en = (afe_en==8'd0) && (chn_idle==8'hff) &&
-                         ((|axi_wstrb) || !(|axi_wstrb));
-
 always @(posedge sys_clk or negedge sys_rst_n) begin
-    if(!sys_rst_n) begin
-        afe_en       <= #UDLY 8'd0;
-        fifo_clr     <= #UDLY 8'd0;
-        frame_fmt    <= #UDLY 1'b0;
-        smp_mode     <= #UDLY 2'd0;
-        smp_prec     <= #UDLY 2'd0;
-        dec_m        <= #UDLY 8'd0;
-        dec_del_mode <= #UDLY 2'd0;
+    if(~sys_rst_n) begin
+        adc_ctl <= #UDLY 32'd0;
+        frm_cfg <= #UDLY 32'd0;
     end
     else begin
-        if(reg_0000h_wr) begin
-            afe_en   <= #UDLY axi_wdata[7:0];
-            fifo_clr <= #UDLY axi_wdata[15:8];
-            if(static_write_en) begin
-                frame_fmt <= #UDLY axi_wdata[25];
-                smp_mode  <= #UDLY (axi_wdata[27:26]==2'd3) ? 2'd0 : axi_wdata[27:26];
-                smp_prec  <= #UDLY (axi_wdata[31:30]==2'd3) ? 2'd0 : axi_wdata[31:30];
-            end
-        end
-        if(reg_0004h_wr && static_write_en) begin
-            dec_m        <= #UDLY axi_wdata[7:0];
-            dec_del_mode <= #UDLY (axi_wdata[9:8]==2'd3) ? 2'd0 : axi_wdata[9:8];
+        if(reg_0000h_wr)
+            adc_ctl <= #UDLY s_axi_wdata & 32'hce00ffff;
+        if(reg_0004h_wr)
+            frm_cfg <= #UDLY s_axi_wdata & 32'h000003ff;
+    end
+end
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        tgc_chn <= #UDLY 32'd0;
+    end
+    else begin
+        tgc_chn[0]  <= #UDLY 1'd0;
+        tgc_chn[4]  <= #UDLY 1'd0;
+        tgc_chn[8]  <= #UDLY 1'd0;
+        tgc_chn[12] <= #UDLY 1'd0;
+        tgc_chn[16] <= #UDLY 1'd0;
+        tgc_chn[20] <= #UDLY 1'd0;
+        tgc_chn[24] <= #UDLY 1'd0;
+        tgc_chn[28] <= #UDLY 1'd0;
+        if(reg_0008h_wr)
+            tgc_chn[3:0]   <= #UDLY s_axi_wdata[3:0];
+        if(reg_000ch_wr)
+            tgc_chn[7:4]   <= #UDLY s_axi_wdata[3:0];
+        if(reg_0010h_wr)
+            tgc_chn[11:8]  <= #UDLY s_axi_wdata[3:0];
+        if(reg_0014h_wr)
+            tgc_chn[15:12] <= #UDLY s_axi_wdata[3:0];
+        if(reg_0018h_wr)
+            tgc_chn[19:16] <= #UDLY s_axi_wdata[3:0];
+        if(reg_001ch_wr)
+            tgc_chn[23:20] <= #UDLY s_axi_wdata[3:0];
+        if(reg_0020h_wr)
+            tgc_chn[27:24] <= #UDLY s_axi_wdata[3:0];
+        if(reg_0024h_wr)
+            tgc_chn[31:28] <= #UDLY s_axi_wdata[3:0];
+    end
+end
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        adc_pd <= #UDLY 24'd0;
+    else begin
+        if(fifo_overflow_sync[0]) adc_pd[0]  <= #UDLY 1'd1;
+        if(fifo_overflow_sync[1]) adc_pd[1]  <= #UDLY 1'd1;
+        if(fifo_overflow_sync[2]) adc_pd[2]  <= #UDLY 1'd1;
+        if(fifo_overflow_sync[3]) adc_pd[3]  <= #UDLY 1'd1;
+        if(fifo_overflow_sync[4]) adc_pd[4]  <= #UDLY 1'd1;
+        if(fifo_overflow_sync[5]) adc_pd[5]  <= #UDLY 1'd1;
+        if(fifo_overflow_sync[6]) adc_pd[6]  <= #UDLY 1'd1;
+        if(fifo_overflow_sync[7]) adc_pd[7]  <= #UDLY 1'd1;
+        if(data_error_sync[0])    adc_pd[8]  <= #UDLY 1'd1;
+        if(data_error_sync[1])    adc_pd[9]  <= #UDLY 1'd1;
+        if(data_error_sync[2])    adc_pd[10] <= #UDLY 1'd1;
+        if(data_error_sync[3])    adc_pd[11] <= #UDLY 1'd1;
+        if(data_error_sync[4])    adc_pd[12] <= #UDLY 1'd1;
+        if(data_error_sync[5])    adc_pd[13] <= #UDLY 1'd1;
+        if(data_error_sync[6])    adc_pd[14] <= #UDLY 1'd1;
+        if(data_error_sync[7])    adc_pd[15] <= #UDLY 1'd1;
+        if(link_error_sync[0])    adc_pd[16] <= #UDLY 1'd1;
+        if(link_error_sync[1])    adc_pd[17] <= #UDLY 1'd1;
+        if(link_error_sync[2])    adc_pd[18] <= #UDLY 1'd1;
+        if(link_error_sync[3])    adc_pd[19] <= #UDLY 1'd1;
+        if(link_error_sync[4])    adc_pd[20] <= #UDLY 1'd1;
+        if(link_error_sync[5])    adc_pd[21] <= #UDLY 1'd1;
+        if(link_error_sync[6])    adc_pd[22] <= #UDLY 1'd1;
+        if(link_error_sync[7])    adc_pd[23] <= #UDLY 1'd1;
+        for(i=0;i<24;i=i+1) begin
+            if(reg_002ch_wr & s_axi_wdata[i])
+                adc_pd[i] <= #UDLY 1'd0;
         end
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
-    if(!sys_rst_n) begin
-        tgc_run       <= #UDLY 8'd0;
-        tgc_profile_r <= #UDLY 16'd0;
-        tgc_up_dn_r   <= #UDLY 8'd0;
-        tgc_cmd_evt   <= #UDLY 8'd0;
-    end
+    if(~sys_rst_n)
+        sysref_seen <= #UDLY 8'd0;
     else begin
-        tgc_cmd_evt <= #UDLY 8'd0;
-        for(i=0;i<8;i=i+1) begin
-            if(!afe_en[i])
-                tgc_run[i] <= #UDLY 1'b0;
-            else if(tgc_done_evt[i])
-                tgc_run[i] <= #UDLY 1'b0;
-        end
-        if(reg_0008h_wr && !tgc_run[0]) begin
-            tgc_profile_r[1:0] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[0]     <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[0]) begin
-                tgc_run[0]     <= #UDLY 1'b1;
-                tgc_cmd_evt[0] <= #UDLY 1'b1;
-            end
-        end
-        if(reg_000ch_wr && !tgc_run[1]) begin
-            tgc_profile_r[3:2] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[1]     <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[1]) begin
-                tgc_run[1]     <= #UDLY 1'b1;
-                tgc_cmd_evt[1] <= #UDLY 1'b1;
-            end
-        end
-        if(reg_0010h_wr && !tgc_run[2]) begin
-            tgc_profile_r[5:4] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[2]     <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[2]) begin
-                tgc_run[2]     <= #UDLY 1'b1;
-                tgc_cmd_evt[2] <= #UDLY 1'b1;
-            end
-        end
-        if(reg_0014h_wr && !tgc_run[3]) begin
-            tgc_profile_r[7:6] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[3]     <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[3]) begin
-                tgc_run[3]     <= #UDLY 1'b1;
-                tgc_cmd_evt[3] <= #UDLY 1'b1;
-            end
-        end
-        if(reg_0018h_wr && !tgc_run[4]) begin
-            tgc_profile_r[9:8] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[4]     <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[4]) begin
-                tgc_run[4]     <= #UDLY 1'b1;
-                tgc_cmd_evt[4] <= #UDLY 1'b1;
-            end
-        end
-        if(reg_001ch_wr && !tgc_run[5]) begin
-            tgc_profile_r[11:10] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[5]       <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[5]) begin
-                tgc_run[5]     <= #UDLY 1'b1;
-                tgc_cmd_evt[5] <= #UDLY 1'b1;
-            end
-        end
-        if(reg_0020h_wr && !tgc_run[6]) begin
-            tgc_profile_r[13:12] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[6]       <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[6]) begin
-                tgc_run[6]     <= #UDLY 1'b1;
-                tgc_cmd_evt[6] <= #UDLY 1'b1;
-            end
-        end
-        if(reg_0024h_wr && !tgc_run[7]) begin
-            tgc_profile_r[15:14] <= #UDLY axi_wdata[2:1];
-            tgc_up_dn_r[7]       <= #UDLY axi_wdata[3];
-            if(axi_wdata[0] && afe_en[7]) begin
-                tgc_run[7]     <= #UDLY 1'b1;
-                tgc_cmd_evt[7] <= #UDLY 1'b1;
-            end
+        if(sysref_seen_sync[0]) sysref_seen[0] <= #UDLY 1'd1;
+        if(sysref_seen_sync[1]) sysref_seen[1] <= #UDLY 1'd1;
+        if(sysref_seen_sync[2]) sysref_seen[2] <= #UDLY 1'd1;
+        if(sysref_seen_sync[3]) sysref_seen[3] <= #UDLY 1'd1;
+        if(sysref_seen_sync[4]) sysref_seen[4] <= #UDLY 1'd1;
+        if(sysref_seen_sync[5]) sysref_seen[5] <= #UDLY 1'd1;
+        if(sysref_seen_sync[6]) sysref_seen[6] <= #UDLY 1'd1;
+        if(sysref_seen_sync[7]) sysref_seen[7] <= #UDLY 1'd1;
+        for(j=0;j<8;j=j+1) begin
+            if(reg_0034h_wr & s_axi_wdata[j])
+                sysref_seen[j] <= #UDLY 1'd0;
         end
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
-    if(!sys_rst_n) begin
-        fifo_overflow <= #UDLY 8'd0;
-        data_error    <= #UDLY 8'd0;
-        link_error    <= #UDLY 8'd0;
-    end
+    if(~sys_rst_n)
+        lane_pd <= #UDLY 32'd0;
     else begin
-        if(reg_002ch_wr) begin
-            fifo_overflow <= #UDLY (fifo_overflow & ~axi_wdata[7:0]) | fifo_overflow_evt;
-            data_error    <= #UDLY (data_error & ~axi_wdata[15:8]) | data_error_evt;
-            link_error    <= #UDLY (link_error & ~axi_wdata[23:16]) | link_error_evt;
-        end
-        else begin
-            fifo_overflow <= #UDLY fifo_overflow | fifo_overflow_evt;
-            data_error    <= #UDLY data_error | data_error_evt;
-            link_error    <= #UDLY link_error | link_error_evt;
+        if(disparity_sync[0])   lane_pd[0]  <= #UDLY 1'd1;
+        if(disparity_sync[1])   lane_pd[1]  <= #UDLY 1'd1;
+        if(disparity_sync[2])   lane_pd[2]  <= #UDLY 1'd1;
+        if(disparity_sync[3])   lane_pd[3]  <= #UDLY 1'd1;
+        if(disparity_sync[4])   lane_pd[4]  <= #UDLY 1'd1;
+        if(disparity_sync[5])   lane_pd[5]  <= #UDLY 1'd1;
+        if(disparity_sync[6])   lane_pd[6]  <= #UDLY 1'd1;
+        if(disparity_sync[7])   lane_pd[7]  <= #UDLY 1'd1;
+        if(disparity_sync[8])   lane_pd[8]  <= #UDLY 1'd1;
+        if(disparity_sync[9])   lane_pd[9]  <= #UDLY 1'd1;
+        if(disparity_sync[10])  lane_pd[10] <= #UDLY 1'd1;
+        if(disparity_sync[11])  lane_pd[11] <= #UDLY 1'd1;
+        if(disparity_sync[12])  lane_pd[12] <= #UDLY 1'd1;
+        if(disparity_sync[13])  lane_pd[13] <= #UDLY 1'd1;
+        if(disparity_sync[14])  lane_pd[14] <= #UDLY 1'd1;
+        if(disparity_sync[15])  lane_pd[15] <= #UDLY 1'd1;
+        if(notintable_sync[0])  lane_pd[16] <= #UDLY 1'd1;
+        if(notintable_sync[1])  lane_pd[17] <= #UDLY 1'd1;
+        if(notintable_sync[2])  lane_pd[18] <= #UDLY 1'd1;
+        if(notintable_sync[3])  lane_pd[19] <= #UDLY 1'd1;
+        if(notintable_sync[4])  lane_pd[20] <= #UDLY 1'd1;
+        if(notintable_sync[5])  lane_pd[21] <= #UDLY 1'd1;
+        if(notintable_sync[6])  lane_pd[22] <= #UDLY 1'd1;
+        if(notintable_sync[7])  lane_pd[23] <= #UDLY 1'd1;
+        if(notintable_sync[8])  lane_pd[24] <= #UDLY 1'd1;
+        if(notintable_sync[9])  lane_pd[25] <= #UDLY 1'd1;
+        if(notintable_sync[10]) lane_pd[26] <= #UDLY 1'd1;
+        if(notintable_sync[11]) lane_pd[27] <= #UDLY 1'd1;
+        if(notintable_sync[12]) lane_pd[28] <= #UDLY 1'd1;
+        if(notintable_sync[13]) lane_pd[29] <= #UDLY 1'd1;
+        if(notintable_sync[14]) lane_pd[30] <= #UDLY 1'd1;
+        if(notintable_sync[15]) lane_pd[31] <= #UDLY 1'd1;
+        for(k=0;k<32;k=k+1) begin
+            if(reg_0040h_wr & s_axi_wdata[k])
+                lane_pd[k] <= #UDLY 1'd0;
         end
     end
 end
 
-always @(posedge sys_clk or negedge sys_rst_n) begin
-    if(!sys_rst_n) begin
-        sysref_seen  <= #UDLY 8'd0;
-        sysref_count <= #UDLY 16'd0;
-    end
-    else begin
-        if(reg_0034h_wr)
-            sysref_seen <= #UDLY (sysref_seen & ~axi_wdata[7:0]) | sysref_seen_evt;
-        else
-            sysref_seen <= #UDLY sysref_seen | sysref_seen_evt;
-        if(|sysref_seen_evt)
-            sysref_count <= #UDLY sysref_count + 16'd1;
-    end
-end
+assign reg_0000h = adc_ctl;
+assign reg_0004h = frm_cfg;
+assign reg_0008h = {28'd0,tgc_chn[3:1],1'd0};
+assign reg_000ch = {28'd0,tgc_chn[7:5],1'd0};
+assign reg_0010h = {28'd0,tgc_chn[11:9],1'd0};
+assign reg_0014h = {28'd0,tgc_chn[15:13],1'd0};
+assign reg_0018h = {28'd0,tgc_chn[19:17],1'd0};
+assign reg_001ch = {28'd0,tgc_chn[23:21],1'd0};
+assign reg_0020h = {28'd0,tgc_chn[27:25],1'd0};
+assign reg_0024h = {28'd0,tgc_chn[31:29],1'd0};
+assign reg_0028h = {chn_idle,fifo_full,fifo_empty,link_ready};
+assign reg_002ch = {8'd0,adc_pd};
+assign reg_0030h = {rx_reset_done,pll_lock,8'd0,link_ready};
+assign reg_0034h = {23'd0,sysref_level,sysref_seen};
+assign reg_0038h = {byte_aligned,lane_ready};
+assign reg_003ch = {16'd0,comma_detected};
+assign reg_0040h = lane_pd;
 
-always @(posedge sys_clk or negedge sys_rst_n) begin
-    if(!sys_rst_n) begin
-        disparity  <= #UDLY 16'd0;
-        notintable <= #UDLY 16'd0;
-    end
-    else begin
-        if(reg_0040h_wr) begin
-            disparity  <= #UDLY (disparity & ~axi_wdata[15:0]) | disparity_evt;
-            notintable <= #UDLY (notintable & ~axi_wdata[31:16]) | notintable_evt;
-        end
-        else begin
-            disparity  <= #UDLY disparity | disparity_evt;
-            notintable <= #UDLY notintable | notintable_evt;
-        end
-    end
-end
-
-assign adc_ctl     = {smp_prec,2'd0,smp_mode,frame_fmt,9'd0,fifo_clr,afe_en};
-assign frm_cfg     = {22'd0,dec_del_mode,dec_m};
-assign tgc_profile = tgc_profile_r;
-assign tgc_up_dn   = tgc_up_dn_r;
-
-wire [31:0] reg_0000h = adc_ctl;
-wire [31:0] reg_0004h = frm_cfg;
-wire [31:0] reg_0008h = {28'd0,tgc_up_dn_r[0],tgc_profile_r[1:0],tgc_run[0]};
-wire [31:0] reg_000ch = {28'd0,tgc_up_dn_r[1],tgc_profile_r[3:2],tgc_run[1]};
-wire [31:0] reg_0010h = {28'd0,tgc_up_dn_r[2],tgc_profile_r[5:4],tgc_run[2]};
-wire [31:0] reg_0014h = {28'd0,tgc_up_dn_r[3],tgc_profile_r[7:6],tgc_run[3]};
-wire [31:0] reg_0018h = {28'd0,tgc_up_dn_r[4],tgc_profile_r[9:8],tgc_run[4]};
-wire [31:0] reg_001ch = {28'd0,tgc_up_dn_r[5],tgc_profile_r[11:10],tgc_run[5]};
-wire [31:0] reg_0020h = {28'd0,tgc_up_dn_r[6],tgc_profile_r[13:12],tgc_run[6]};
-wire [31:0] reg_0024h = {28'd0,tgc_up_dn_r[7],tgc_profile_r[15:14],tgc_run[7]};
-wire [31:0] reg_0028h = {chn_idle,fifo_full,fifo_empty,link_ready};
-wire [31:0] reg_002ch = {8'd0,link_error,data_error,fifo_overflow};
-wire [31:0] reg_0030h = {rx_reset_done,pll_lock,8'd0,link_ready};
-wire [31:0] reg_0034h = {sysref_count,7'd0,sysref_level,sysref_seen};
-wire [31:0] reg_0038h = {byte_aligned,lane_ready};
-wire [31:0] reg_003ch = {16'd0,comma_detected};
-wire [31:0] reg_0040h = {notintable,disparity};
-
-assign io_rdata = ({32{reg_0000h_rd}} & reg_0000h)|
-                  ({32{reg_0004h_rd}} & reg_0004h)|
-                  ({32{reg_0008h_rd}} & reg_0008h)|
-                  ({32{reg_000ch_rd}} & reg_000ch)|
-                  ({32{reg_0010h_rd}} & reg_0010h)|
-                  ({32{reg_0014h_rd}} & reg_0014h)|
-                  ({32{reg_0018h_rd}} & reg_0018h)|
-                  ({32{reg_001ch_rd}} & reg_001ch)|
-                  ({32{reg_0020h_rd}} & reg_0020h)|
-                  ({32{reg_0024h_rd}} & reg_0024h)|
-                  ({32{reg_0028h_rd}} & reg_0028h)|
-                  ({32{reg_002ch_rd}} & reg_002ch)|
-                  ({32{reg_0030h_rd}} & reg_0030h)|
-                  ({32{reg_0034h_rd}} & reg_0034h)|
-                  ({32{reg_0038h_rd}} & reg_0038h)|
-                  ({32{reg_003ch_rd}} & reg_003ch)|
+assign io_rdata = ({32{reg_0000h_rd}} & reg_0000h) |
+                  ({32{reg_0004h_rd}} & reg_0004h) |
+                  ({32{reg_0008h_rd}} & reg_0008h) |
+                  ({32{reg_000ch_rd}} & reg_000ch) |
+                  ({32{reg_0010h_rd}} & reg_0010h) |
+                  ({32{reg_0014h_rd}} & reg_0014h) |
+                  ({32{reg_0018h_rd}} & reg_0018h) |
+                  ({32{reg_001ch_rd}} & reg_001ch) |
+                  ({32{reg_0020h_rd}} & reg_0020h) |
+                  ({32{reg_0024h_rd}} & reg_0024h) |
+                  ({32{reg_0028h_rd}} & reg_0028h) |
+                  ({32{reg_002ch_rd}} & reg_002ch) |
+                  ({32{reg_0030h_rd}} & reg_0030h) |
+                  ({32{reg_0034h_rd}} & reg_0034h) |
+                  ({32{reg_0038h_rd}} & reg_0038h) |
+                  ({32{reg_003ch_rd}} & reg_003ch) |
                   ({32{reg_0040h_rd}} & reg_0040h);
 
 endmodule

@@ -173,20 +173,11 @@ module ADC_TOP(
     output    wire                          tgc7_prof2
 );
 
-/* verilator lint_off UNUSEDPARAM */
 parameter                                   UDLY                     = 1                   ;
-/* verilator lint_on UNUSEDPARAM */
 
 wire                    [31:0]              adc_ctl                                        ;
 wire                    [31:0]              frm_cfg                                        ;
-wire                    [ 7:0]              tgc_cmd_evt_sys                                ;
-wire                    [15:0]              tgc_profile_sys                                ;
-wire                    [ 7:0]              tgc_up_dn_sys                                  ;
-wire                    [ 7:0]              tgc_cmd_evt_afe                                ;
-wire                    [15:0]              tgc_profile_afe                                ;
-wire                    [ 7:0]              tgc_up_dn_afe                                  ;
-wire                    [ 7:0]              tgc_done_evt_afe                               ;
-wire                    [ 7:0]              tgc_done_evt_sys                               ;
+wire                    [31:0]              tgc_chn                                        ;
 wire                    [ 7:0]              link_ready_adc                                 ;
 wire                    [ 7:0]              fifo_empty_adc                                 ;
 wire                    [ 7:0]              afe_idle_adc                                   ;
@@ -195,31 +186,33 @@ wire                    [ 7:0]              rx_reset_done_adc                   
 wire                    [15:0]              lane_ready_adc                                 ;
 wire                    [15:0]              byte_aligned_adc                               ;
 wire                    [15:0]              comma_detected_adc                             ;
-wire                    [ 7:0]              link_error_evt_adc                             ;
-wire                    [ 7:0]              sysref_seen_evt_adc                            ;
-wire                    [15:0]              disparity_evt_adc                              ;
-wire                    [15:0]              notintable_evt_adc                             ;
-wire                    [ 7:0]              fifo_overflow_evt_afe                          ;
+wire                    [ 7:0]              link_error_adc                                 ;
+wire                    [ 7:0]              sysref_seen_adc                                ;
+wire                    [15:0]              disparity_adc                                  ;
+wire                    [15:0]              notintable_adc                                 ;
+wire                    [ 7:0]              fifo_overflow_afe                              ;
 wire                    [ 7:0]              fifo_full_afe                                  ;
-wire                    [ 7:0]              data_error_evt_afe                             ;
-wire                    [ 7:0]              link_ready_sys                                 ;
-wire                    [ 7:0]              fifo_empty_sys                                 ;
-wire                    [ 7:0]              fifo_full_sys                                  ;
-wire                    [ 7:0]              afe_idle_sys                                   ;
-wire                    [ 7:0]              pll_lock_sys                                   ;
-wire                    [ 7:0]              rx_reset_done_sys                              ;
-wire                    [15:0]              lane_ready_sys                                 ;
-wire                    [15:0]              byte_aligned_sys                               ;
-wire                    [15:0]              comma_detected_sys                             ;
-wire                                        sysref_level_sys                               ;
-wire                    [ 7:0]              fifo_overflow_evt_sys                          ;
-wire                    [ 7:0]              data_error_evt_sys                             ;
-wire                    [ 7:0]              link_error_evt_sys                             ;
-wire                    [ 7:0]              sysref_seen_evt_sys                            ;
-wire                    [15:0]              disparity_evt_sys                              ;
-wire                    [15:0]              notintable_evt_sys                             ;
+wire                    [ 7:0]              data_error_afe                                 ;
+wire                    [ 7:0]              link_ready_sync                                ;
+wire                    [ 7:0]              fifo_empty_sync                                ;
+wire                    [ 7:0]              fifo_full_sync                                 ;
+wire                    [ 7:0]              afe_idle_sync                                  ;
+wire                    [ 7:0]              pll_lock_sync                                  ;
+wire                    [ 7:0]              rx_reset_done_sync                             ;
+wire                    [15:0]              lane_ready_sync                                ;
+wire                    [15:0]              byte_aligned_sync                              ;
+wire                    [15:0]              comma_detected_sync                            ;
+wire                                        sysref_sync                                    ;
+wire                    [ 7:0]              fifo_overflow_sync                             ;
+wire                    [ 7:0]              data_error_sync                                ;
+wire                    [ 7:0]              link_error_sync                                ;
+wire                    [ 7:0]              sysref_seen_sync                               ;
+wire                    [15:0]              disparity_sync                                 ;
+wire                    [15:0]              notintable_sync                                ;
 
-
+//////////////////////////////////////////////////
+//1. Register And CDC Concentration
+//////////////////////////////////////////////////
 ADC_REG adc_reg(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
@@ -240,28 +233,25 @@ ADC_REG adc_reg(
     .s_axi_rresp                         (s_axi_rresp                                  ),
     .s_axi_rvalid                        (s_axi_rvalid                                 ),
     .s_axi_rready                        (s_axi_rready                                 ),
-    .link_ready                          (link_ready_sys                               ),
-    .fifo_empty                          (fifo_empty_sys                               ),
-    .fifo_full                           (fifo_full_sys                                ),
-    .chn_idle                            (afe_idle_sys                                 ),
-    .pll_lock                            (pll_lock_sys                                 ),
-    .rx_reset_done                       (rx_reset_done_sys                            ),
-    .lane_ready                          (lane_ready_sys                               ),
-    .byte_aligned                        (byte_aligned_sys                             ),
-    .comma_detected                      (comma_detected_sys                           ),
-    .sysref_level                        (sysref_level_sys                             ),
-    .fifo_overflow_evt                   (fifo_overflow_evt_sys                        ),
-    .data_error_evt                      (data_error_evt_sys                           ),
-    .link_error_evt                      (link_error_evt_sys                           ),
-    .sysref_seen_evt                     (sysref_seen_evt_sys                          ),
-    .disparity_evt                       (disparity_evt_sys                            ),
-    .notintable_evt                      (notintable_evt_sys                           ),
-    .tgc_done_evt                        (tgc_done_evt_sys                             ),
+    .link_ready                          (link_ready_sync                              ),
+    .fifo_empty                          (fifo_empty_sync                              ),
+    .fifo_full                           (fifo_full_sync                               ),
+    .chn_idle                            (afe_idle_sync                                ),
+    .pll_lock                            (pll_lock_sync                                ),
+    .rx_reset_done                       (rx_reset_done_sync                           ),
+    .lane_ready                          (lane_ready_sync                              ),
+    .byte_aligned                        (byte_aligned_sync                            ),
+    .comma_detected                      (comma_detected_sync                          ),
+    .sysref_level                        (sysref_sync                                  ),
+    .fifo_overflow_sync                  (fifo_overflow_sync                           ),
+    .data_error_sync                     (data_error_sync                              ),
+    .link_error_sync                     (link_error_sync                              ),
+    .sysref_seen_sync                    (sysref_seen_sync                             ),
+    .disparity_sync                      (disparity_sync                               ),
+    .notintable_sync                     (notintable_sync                              ),
     .adc_ctl                             (adc_ctl                                      ),
     .frm_cfg                             (frm_cfg                                      ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_sys                              ),
-    .tgc_profile                         (tgc_profile_sys                              ),
-    .tgc_up_dn                           (tgc_up_dn_sys                                )
+    .tgc_chn                             (tgc_chn                                      )
 );
 
 ADC_SYNC adc_sync(
@@ -272,55 +262,51 @@ ADC_SYNC adc_sync(
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .sysref                              (sysref_in                                    ),
-    .link_ready_adc                      (link_ready_adc                               ),
-    .fifo_empty_adc                      (fifo_empty_adc                               ),
-    .afe_idle_adc                        (afe_idle_adc                                 ),
-    .pll_lock_adc                        (pll_lock_adc                                 ),
-    .rx_reset_done_adc                   (rx_reset_done_adc                            ),
-    .lane_ready_adc                      (lane_ready_adc                               ),
-    .byte_aligned_adc                    (byte_aligned_adc                             ),
-    .comma_detected_adc                  (comma_detected_adc                           ),
-    .link_error_evt_adc                  (link_error_evt_adc                           ),
-    .sysref_seen_evt_adc                 (sysref_seen_evt_adc                          ),
-    .disparity_evt_adc                   (disparity_evt_adc                            ),
-    .notintable_evt_adc                  (notintable_evt_adc                           ),
-    .fifo_overflow_evt_afe               (fifo_overflow_evt_afe                        ),
-    .fifo_full_afe                       (fifo_full_afe                                ),
-    .data_error_evt_afe                  (data_error_evt_afe                           ),
-    .link_ready_sys                      (link_ready_sys                               ),
-    .fifo_empty_sys                      (fifo_empty_sys                               ),
-    .fifo_full_sys                       (fifo_full_sys                                ),
-    .afe_idle_sys                        (afe_idle_sys                                 ),
-    .pll_lock_sys                        (pll_lock_sys                                 ),
-    .rx_reset_done_sys                   (rx_reset_done_sys                            ),
-    .lane_ready_sys                      (lane_ready_sys                               ),
-    .byte_aligned_sys                    (byte_aligned_sys                             ),
-    .comma_detected_sys                  (comma_detected_sys                           ),
-    .sysref_level_sys                    (sysref_level_sys                             ),
-    .fifo_overflow_evt_sys               (fifo_overflow_evt_sys                        ),
-    .data_error_evt_sys                  (data_error_evt_sys                           ),
-    .link_error_evt_sys                  (link_error_evt_sys                           ),
-    .sysref_seen_evt_sys                 (sysref_seen_evt_sys                          ),
-    .disparity_evt_sys                   (disparity_evt_sys                            ),
-    .notintable_evt_sys                  (notintable_evt_sys                           ),
-    .tgc_cmd_evt_sys                     (tgc_cmd_evt_sys                              ),
-    .tgc_profile_sys                     (tgc_profile_sys                              ),
-    .tgc_up_dn_sys                       (tgc_up_dn_sys                                ),
-    .tgc_done_evt_afe                    (tgc_done_evt_afe                             ),
-    .tgc_cmd_evt_afe                     (tgc_cmd_evt_afe                              ),
-    .tgc_profile_afe                     (tgc_profile_afe                              ),
-    .tgc_up_dn_afe                       (tgc_up_dn_afe                                ),
-    .tgc_done_evt_sys                    (tgc_done_evt_sys                             )
+    .sysref_sync                         (sysref_sync                                  ),
+    .link_ready                          (link_ready_adc                               ),
+    .link_ready_sync                     (link_ready_sync                              ),
+    .fifo_empty                          (fifo_empty_adc                               ),
+    .fifo_empty_sync                     (fifo_empty_sync                              ),
+    .fifo_full                           (fifo_full_afe                                ),
+    .fifo_full_sync                      (fifo_full_sync                               ),
+    .afe_idle                            (afe_idle_adc                                 ),
+    .afe_idle_sync                       (afe_idle_sync                                ),
+    .pll_lock                            (pll_lock_adc                                 ),
+    .pll_lock_sync                       (pll_lock_sync                                ),
+    .rx_reset_done                       (rx_reset_done_adc                            ),
+    .rx_reset_done_sync                  (rx_reset_done_sync                           ),
+    .lane_ready                          (lane_ready_adc                               ),
+    .lane_ready_sync                     (lane_ready_sync                              ),
+    .byte_aligned                        (byte_aligned_adc                             ),
+    .byte_aligned_sync                   (byte_aligned_sync                            ),
+    .comma_detected                      (comma_detected_adc                           ),
+    .comma_detected_sync                 (comma_detected_sync                          ),
+    .fifo_overflow                       (fifo_overflow_afe                            ),
+    .fifo_overflow_sync                  (fifo_overflow_sync                           ),
+    .data_error                          (data_error_afe                               ),
+    .data_error_sync                     (data_error_sync                              ),
+    .link_error                          (link_error_adc                               ),
+    .link_error_sync                     (link_error_sync                              ),
+    .sysref_seen                         (sysref_seen_adc                              ),
+    .sysref_seen_sync                    (sysref_seen_sync                             ),
+    .disparity                           (disparity_adc                                ),
+    .disparity_sync                      (disparity_sync                               ),
+    .notintable                          (notintable_adc                               ),
+    .notintable_sync                     (notintable_sync                              )
 );
 
+//////////////////////////////////////////////////
+//2. Acquisition Channels
+//////////////////////////////////////////////////
 ADC_CHN adc_chn0(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[0]                                  ),
     .jesd_rst_n                          (jesd_rst_n[0]                                ),
-    .chn_id                              (3'd0                                         ),
     .chn_en                              (adc_ctl[0]                                   ),
     .fifo_clr                            (adc_ctl[8]                                   ),
     .sysref                              (sysref_in                                    ),
@@ -348,31 +334,29 @@ ADC_CHN adc_chn0(
     .lane_ready_sync                     (lane_ready_adc[0 +: 2]                       ),
     .phy_byte_aligned_sync               (byte_aligned_adc[0 +: 2]                     ),
     .cgs_ready_sync                      (comma_detected_adc[0 +: 2]                   ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[0]                     ),
-    .link_error_sync                     (link_error_evt_adc[0]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[0]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[0 +: 2]                    ),
-    .phy_notintable_sync                 (notintable_evt_adc[0 +: 2]                   ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[0]                           ),
-    .tgc_profile                         (tgc_profile_afe[0 +: 2]                      ),
-    .tgc_up_dn                           (tgc_up_dn_afe[0]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[0]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[0]                         ),
+    .link_error_sync                     (link_error_adc[0]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[0]                           ),
+    .phy_disparity_sync                  (disparity_adc[0 +: 2]                        ),
+    .phy_notintable_sync                 (notintable_adc[0 +: 2]                       ),
+    .tgc_chn                             (tgc_chn[0 +: 4]                              ),
     .tgc_slope                           (tgc0_slope                                   ),
-    .tgc_up_dn_o                         (tgc0_up_dn                                   ),
+    .tgc_up_dn                           (tgc0_up_dn                                   ),
     .tgc_prof1                           (tgc0_prof1                                   ),
     .tgc_prof2                           (tgc0_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[0]                             ),
-    .data_error_evt                      (data_error_evt_afe[0]                        )
+    .data_error                          (data_error_afe[0]                            )
 );
 
 ADC_CHN adc_chn1(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[1]                                  ),
     .jesd_rst_n                          (jesd_rst_n[1]                                ),
-    .chn_id                              (3'd1                                         ),
     .chn_en                              (adc_ctl[1]                                   ),
     .fifo_clr                            (adc_ctl[9]                                   ),
     .sysref                              (sysref_in                                    ),
@@ -400,31 +384,29 @@ ADC_CHN adc_chn1(
     .lane_ready_sync                     (lane_ready_adc[2 +: 2]                       ),
     .phy_byte_aligned_sync               (byte_aligned_adc[2 +: 2]                     ),
     .cgs_ready_sync                      (comma_detected_adc[2 +: 2]                   ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[1]                     ),
-    .link_error_sync                     (link_error_evt_adc[1]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[1]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[2 +: 2]                    ),
-    .phy_notintable_sync                 (notintable_evt_adc[2 +: 2]                   ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[1]                           ),
-    .tgc_profile                         (tgc_profile_afe[2 +: 2]                      ),
-    .tgc_up_dn                           (tgc_up_dn_afe[1]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[1]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[1]                         ),
+    .link_error_sync                     (link_error_adc[1]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[1]                           ),
+    .phy_disparity_sync                  (disparity_adc[2 +: 2]                        ),
+    .phy_notintable_sync                 (notintable_adc[2 +: 2]                       ),
+    .tgc_chn                             (tgc_chn[4 +: 4]                              ),
     .tgc_slope                           (tgc1_slope                                   ),
-    .tgc_up_dn_o                         (tgc1_up_dn                                   ),
+    .tgc_up_dn                           (tgc1_up_dn                                   ),
     .tgc_prof1                           (tgc1_prof1                                   ),
     .tgc_prof2                           (tgc1_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[1]                             ),
-    .data_error_evt                      (data_error_evt_afe[1]                        )
+    .data_error                          (data_error_afe[1]                            )
 );
 
 ADC_CHN adc_chn2(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[2]                                  ),
     .jesd_rst_n                          (jesd_rst_n[2]                                ),
-    .chn_id                              (3'd2                                         ),
     .chn_en                              (adc_ctl[2]                                   ),
     .fifo_clr                            (adc_ctl[10]                                  ),
     .sysref                              (sysref_in                                    ),
@@ -452,31 +434,29 @@ ADC_CHN adc_chn2(
     .lane_ready_sync                     (lane_ready_adc[4 +: 2]                       ),
     .phy_byte_aligned_sync               (byte_aligned_adc[4 +: 2]                     ),
     .cgs_ready_sync                      (comma_detected_adc[4 +: 2]                   ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[2]                     ),
-    .link_error_sync                     (link_error_evt_adc[2]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[2]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[4 +: 2]                    ),
-    .phy_notintable_sync                 (notintable_evt_adc[4 +: 2]                   ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[2]                           ),
-    .tgc_profile                         (tgc_profile_afe[4 +: 2]                      ),
-    .tgc_up_dn                           (tgc_up_dn_afe[2]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[2]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[2]                         ),
+    .link_error_sync                     (link_error_adc[2]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[2]                           ),
+    .phy_disparity_sync                  (disparity_adc[4 +: 2]                        ),
+    .phy_notintable_sync                 (notintable_adc[4 +: 2]                       ),
+    .tgc_chn                             (tgc_chn[8 +: 4]                              ),
     .tgc_slope                           (tgc2_slope                                   ),
-    .tgc_up_dn_o                         (tgc2_up_dn                                   ),
+    .tgc_up_dn                           (tgc2_up_dn                                   ),
     .tgc_prof1                           (tgc2_prof1                                   ),
     .tgc_prof2                           (tgc2_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[2]                             ),
-    .data_error_evt                      (data_error_evt_afe[2]                        )
+    .data_error                          (data_error_afe[2]                            )
 );
 
 ADC_CHN adc_chn3(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[3]                                  ),
     .jesd_rst_n                          (jesd_rst_n[3]                                ),
-    .chn_id                              (3'd3                                         ),
     .chn_en                              (adc_ctl[3]                                   ),
     .fifo_clr                            (adc_ctl[11]                                  ),
     .sysref                              (sysref_in                                    ),
@@ -504,31 +484,29 @@ ADC_CHN adc_chn3(
     .lane_ready_sync                     (lane_ready_adc[6 +: 2]                       ),
     .phy_byte_aligned_sync               (byte_aligned_adc[6 +: 2]                     ),
     .cgs_ready_sync                      (comma_detected_adc[6 +: 2]                   ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[3]                     ),
-    .link_error_sync                     (link_error_evt_adc[3]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[3]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[6 +: 2]                    ),
-    .phy_notintable_sync                 (notintable_evt_adc[6 +: 2]                   ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[3]                           ),
-    .tgc_profile                         (tgc_profile_afe[6 +: 2]                      ),
-    .tgc_up_dn                           (tgc_up_dn_afe[3]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[3]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[3]                         ),
+    .link_error_sync                     (link_error_adc[3]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[3]                           ),
+    .phy_disparity_sync                  (disparity_adc[6 +: 2]                        ),
+    .phy_notintable_sync                 (notintable_adc[6 +: 2]                       ),
+    .tgc_chn                             (tgc_chn[12 +: 4]                             ),
     .tgc_slope                           (tgc3_slope                                   ),
-    .tgc_up_dn_o                         (tgc3_up_dn                                   ),
+    .tgc_up_dn                           (tgc3_up_dn                                   ),
     .tgc_prof1                           (tgc3_prof1                                   ),
     .tgc_prof2                           (tgc3_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[3]                             ),
-    .data_error_evt                      (data_error_evt_afe[3]                        )
+    .data_error                          (data_error_afe[3]                            )
 );
 
 ADC_CHN adc_chn4(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[4]                                  ),
     .jesd_rst_n                          (jesd_rst_n[4]                                ),
-    .chn_id                              (3'd4                                         ),
     .chn_en                              (adc_ctl[4]                                   ),
     .fifo_clr                            (adc_ctl[12]                                  ),
     .sysref                              (sysref_in                                    ),
@@ -556,31 +534,29 @@ ADC_CHN adc_chn4(
     .lane_ready_sync                     (lane_ready_adc[8 +: 2]                       ),
     .phy_byte_aligned_sync               (byte_aligned_adc[8 +: 2]                     ),
     .cgs_ready_sync                      (comma_detected_adc[8 +: 2]                   ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[4]                     ),
-    .link_error_sync                     (link_error_evt_adc[4]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[4]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[8 +: 2]                    ),
-    .phy_notintable_sync                 (notintable_evt_adc[8 +: 2]                   ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[4]                           ),
-    .tgc_profile                         (tgc_profile_afe[8 +: 2]                      ),
-    .tgc_up_dn                           (tgc_up_dn_afe[4]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[4]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[4]                         ),
+    .link_error_sync                     (link_error_adc[4]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[4]                           ),
+    .phy_disparity_sync                  (disparity_adc[8 +: 2]                        ),
+    .phy_notintable_sync                 (notintable_adc[8 +: 2]                       ),
+    .tgc_chn                             (tgc_chn[16 +: 4]                             ),
     .tgc_slope                           (tgc4_slope                                   ),
-    .tgc_up_dn_o                         (tgc4_up_dn                                   ),
+    .tgc_up_dn                           (tgc4_up_dn                                   ),
     .tgc_prof1                           (tgc4_prof1                                   ),
     .tgc_prof2                           (tgc4_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[4]                             ),
-    .data_error_evt                      (data_error_evt_afe[4]                        )
+    .data_error                          (data_error_afe[4]                            )
 );
 
 ADC_CHN adc_chn5(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[5]                                  ),
     .jesd_rst_n                          (jesd_rst_n[5]                                ),
-    .chn_id                              (3'd5                                         ),
     .chn_en                              (adc_ctl[5]                                   ),
     .fifo_clr                            (adc_ctl[13]                                  ),
     .sysref                              (sysref_in                                    ),
@@ -608,31 +584,29 @@ ADC_CHN adc_chn5(
     .lane_ready_sync                     (lane_ready_adc[10 +: 2]                      ),
     .phy_byte_aligned_sync               (byte_aligned_adc[10 +: 2]                    ),
     .cgs_ready_sync                      (comma_detected_adc[10 +: 2]                  ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[5]                     ),
-    .link_error_sync                     (link_error_evt_adc[5]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[5]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[10 +: 2]                   ),
-    .phy_notintable_sync                 (notintable_evt_adc[10 +: 2]                  ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[5]                           ),
-    .tgc_profile                         (tgc_profile_afe[10 +: 2]                     ),
-    .tgc_up_dn                           (tgc_up_dn_afe[5]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[5]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[5]                         ),
+    .link_error_sync                     (link_error_adc[5]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[5]                           ),
+    .phy_disparity_sync                  (disparity_adc[10 +: 2]                       ),
+    .phy_notintable_sync                 (notintable_adc[10 +: 2]                      ),
+    .tgc_chn                             (tgc_chn[20 +: 4]                             ),
     .tgc_slope                           (tgc5_slope                                   ),
-    .tgc_up_dn_o                         (tgc5_up_dn                                   ),
+    .tgc_up_dn                           (tgc5_up_dn                                   ),
     .tgc_prof1                           (tgc5_prof1                                   ),
     .tgc_prof2                           (tgc5_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[5]                             ),
-    .data_error_evt                      (data_error_evt_afe[5]                        )
+    .data_error                          (data_error_afe[5]                            )
 );
 
 ADC_CHN adc_chn6(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[6]                                  ),
     .jesd_rst_n                          (jesd_rst_n[6]                                ),
-    .chn_id                              (3'd6                                         ),
     .chn_en                              (adc_ctl[6]                                   ),
     .fifo_clr                            (adc_ctl[14]                                  ),
     .sysref                              (sysref_in                                    ),
@@ -660,31 +634,29 @@ ADC_CHN adc_chn6(
     .lane_ready_sync                     (lane_ready_adc[12 +: 2]                      ),
     .phy_byte_aligned_sync               (byte_aligned_adc[12 +: 2]                    ),
     .cgs_ready_sync                      (comma_detected_adc[12 +: 2]                  ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[6]                     ),
-    .link_error_sync                     (link_error_evt_adc[6]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[6]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[12 +: 2]                   ),
-    .phy_notintable_sync                 (notintable_evt_adc[12 +: 2]                  ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[6]                           ),
-    .tgc_profile                         (tgc_profile_afe[12 +: 2]                     ),
-    .tgc_up_dn                           (tgc_up_dn_afe[6]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[6]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[6]                         ),
+    .link_error_sync                     (link_error_adc[6]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[6]                           ),
+    .phy_disparity_sync                  (disparity_adc[12 +: 2]                       ),
+    .phy_notintable_sync                 (notintable_adc[12 +: 2]                      ),
+    .tgc_chn                             (tgc_chn[24 +: 4]                             ),
     .tgc_slope                           (tgc6_slope                                   ),
-    .tgc_up_dn_o                         (tgc6_up_dn                                   ),
+    .tgc_up_dn                           (tgc6_up_dn                                   ),
     .tgc_prof1                           (tgc6_prof1                                   ),
     .tgc_prof2                           (tgc6_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[6]                             ),
-    .data_error_evt                      (data_error_evt_afe[6]                        )
+    .data_error                          (data_error_afe[6]                            )
 );
 
 ADC_CHN adc_chn7(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk[7]                                  ),
     .jesd_rst_n                          (jesd_rst_n[7]                                ),
-    .chn_id                              (3'd7                                         ),
     .chn_en                              (adc_ctl[7]                                   ),
     .fifo_clr                            (adc_ctl[15]                                  ),
     .sysref                              (sysref_in                                    ),
@@ -712,21 +684,18 @@ ADC_CHN adc_chn7(
     .lane_ready_sync                     (lane_ready_adc[14 +: 2]                      ),
     .phy_byte_aligned_sync               (byte_aligned_adc[14 +: 2]                    ),
     .cgs_ready_sync                      (comma_detected_adc[14 +: 2]                  ),
-    .rx_fifo_of                          (fifo_overflow_evt_afe[7]                     ),
-    .link_error_sync                     (link_error_evt_adc[7]                        ),
-    .sysref_seen_sync                    (sysref_seen_evt_adc[7]                       ),
-    .phy_disparity_sync                  (disparity_evt_adc[14 +: 2]                   ),
-    .phy_notintable_sync                 (notintable_evt_adc[14 +: 2]                  ),
-    .tgc_cmd_evt                         (tgc_cmd_evt_afe[7]                           ),
-    .tgc_profile                         (tgc_profile_afe[14 +: 2]                     ),
-    .tgc_up_dn                           (tgc_up_dn_afe[7]                             ),
-    .tgc_done_evt                        (tgc_done_evt_afe[7]                          ),
+    .fifo_overflow                       (fifo_overflow_afe[7]                         ),
+    .link_error_sync                     (link_error_adc[7]                            ),
+    .sysref_seen_sync                    (sysref_seen_adc[7]                           ),
+    .phy_disparity_sync                  (disparity_adc[14 +: 2]                       ),
+    .phy_notintable_sync                 (notintable_adc[14 +: 2]                      ),
+    .tgc_chn                             (tgc_chn[28 +: 4]                             ),
     .tgc_slope                           (tgc7_slope                                   ),
-    .tgc_up_dn_o                         (tgc7_up_dn                                   ),
+    .tgc_up_dn                           (tgc7_up_dn                                   ),
     .tgc_prof1                           (tgc7_prof1                                   ),
     .tgc_prof2                           (tgc7_prof2                                   ),
     .fifo_full_afe                       (fifo_full_afe[7]                             ),
-    .data_error_evt                      (data_error_evt_afe[7]                        )
+    .data_error                          (data_error_afe[7]                            )
 );
 
 endmodule

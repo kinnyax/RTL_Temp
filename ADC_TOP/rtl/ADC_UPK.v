@@ -5,138 +5,105 @@ module ADC_UPK(
     input                                   afe_rst_n                                      ,
 
     input                                   chn_en                                         ,
+    input               [127:0]             rxd_data                                       ,
     input                                   rxd_data_vld                                   ,
-    input               [255:0]             rxd_data                                       ,
-/* verilator lint_off UNUSEDSIGNAL */
-    input               [15:0]              rxd_somf                                       ,
+    input                                   rxd_ready                                      ,
     input               [31:0]              adc_ctl                                        ,
     input               [31:0]              frm_cfg                                        ,
-/* verilator lint_on UNUSEDSIGNAL */
-    input               [ 9:0]              rx_fifo_wlevel                                 ,
 
     output    reg       [511:0]             rx_fifo_wdat                                   ,
     output    reg                           rx_fifo_winc                                   ,
-    output    reg                           data_error_evt                                 ,
+    output    reg                           data_error                                     ,
     output    wire                          upk_idle
 );
 
 parameter                                   UDLY                     = 1                   ;
 
 localparam                                  UPK_IDLE                 = 2'd0                ;
-localparam                                  UPK_PREFIX               = 2'd1                ;
-localparam                                  UPK_VALID                = 2'd2                ;
-localparam                                  UPK_ZERO                 = 2'd3                ;
+localparam                                  UPK_SYNC                 = 2'd1                ;
+localparam                                  UPK_DATA                 = 2'd2                ;
 
-wire                                        somf_seen                                      ;
 wire                    [ 1:0]              smp_mode                                       ;
 wire                    [ 1:0]              smp_prec                                       ;
 wire                                        frame_fmt                                      ;
 wire                    [ 5:0]              dec_n                                          ;
 wire                    [ 1:0]              dec_f                                          ;
 wire                    [ 1:0]              del_mode                                       ;
-wire                    [10:0]              del_beats                                      ;
-wire                    [10:0]              prefix_base                                    ;
-wire                    [10:0]              prefix_beats                                   ;
-wire                                        prefix_done                                    ;
-wire                                        valid_beat                                     ;
-wire                    [ 7:0]              valid_beats                                    ;
+wire                    [11:0]              prefix_base                                    ;
+wire                    [11:0]              delete_beats                                   ;
+wire                    [11:0]              prefix_beats                                   ;
+wire                    [ 5:0]              valid_beats                                    ;
 wire                    [ 9:0]              zero_beats                                     ;
-wire                                        valid_last                                     ;
-wire                                        zero_last                                      ;
-wire                    [255:0]             aligned_data                                   ;
-wire                    [511:0]             candidate_data                                 ;
+wire                    [ 9:0]              period_beats                                   ;
+wire                                        sync_match                                     ;
+wire                                        sync_check                                     ;
+wire                                        sync_last                                      ;
+wire                                        data_region                                    ;
+wire                                        data_accept                                    ;
+wire                                        data_vld                                       ;
+wire                                        rx_discontinuity                               ;
+wire                                        sync_mismatch                                  ;
+wire                                        sync_error                                     ;
+wire                                        data_error_set                                 ;
+wire                                        upk_end                                        ;
+wire                                        upk_start                                      ;
+wire                                        upk_fsm_idle                                   ;
+wire                                        upk_fsm_sync                                   ;
+wire                                        upk_fsm_data                                   ;
+wire                                        pack_last                                      ;
 
 reg                     [ 1:0]              upk_fsm                                        ;
 reg                     [ 1:0]              upk_fsm_nx                                     ;
-reg                     [10:0]              prefix_cnt                                     ;
-reg                     [ 7:0]              valid_cnt                                      ;
-reg                     [ 9:0]              zero_cnt                                       ;
-reg                     [127:0]             align_tail                                     ;
-reg                                         half_vld                                       ;
-reg                     [255:0]             half_data                                      ;
-reg                                         ddc_i_vld                                      ;
-reg                     [511:0]             ddc_i_data                                     ;
-reg                                         q_pending                                      ;
-reg                     [511:0]             q_data                                         ;
-reg                     [255:0]             rxd_data_fmt                                   ;
+reg                     [11:0]              sync_cnt                                       ;
+reg                     [ 9:0]              region_cnt                                     ;
+reg                     [ 1:0]              pack_cnt                                       ;
+reg                     [383:0]             pack_data                                      ;
+reg                     [127:0]             formatted_data                                 ;
 reg                     [15:0]              sample_word                                    ;
-
 integer i;
 
-
-assign somf_seen = rxd_somf[0];
-assign smp_mode  = ((adc_ctl[27:26]==2'd3) ||
-                    ((adc_ctl[27:26]==2'd2) && (frm_cfg[7:2]<6'd2))) ?
-                   2'd0 : adc_ctl[27:26];
-assign smp_prec  = (adc_ctl[31:30]==2'd3) ? 2'd0 : adc_ctl[31:30];
+//////////////////////////////////////////////////
+//1. Configuration Decode
+//////////////////////////////////////////////////
+assign smp_mode = (adc_ctl[27:26] == 2'd3) ? 2'd0 : adc_ctl[27:26];
+assign smp_prec = (adc_ctl[31:30] == 2'd3) ? 2'd0 : adc_ctl[31:30];
 assign frame_fmt = adc_ctl[25];
-assign dec_n     = (frm_cfg[7:2]==6'd0) ? 6'd1 : frm_cfg[7:2];
+assign dec_n     = frm_cfg[7:2];
 assign dec_f     = frm_cfg[1:0];
-assign del_mode  = (frm_cfg[9:8]==2'd3) ? 2'd0 : frm_cfg[9:8];
+assign del_mode  = (frm_cfg[9:8] == 2'd3) ? 2'd0 : frm_cfg[9:8];
 
-assign del_beats = (del_mode==2'd1) ? ({5'd0,dec_n}*11'd8+{7'd0,dec_f,1'b0}) :
-                   (del_mode==2'd2) ? ({5'd0,dec_n}*11'd16+{6'd0,dec_f,2'b0}) :
-                                      11'd0;
+assign prefix_base = (dec_f == 2'd0) ? ({6'd0,dec_n} * 12'd2 + 12'd27) :
+                     (dec_f == 2'd1) ? ({6'd0,dec_n} * 12'd8 + 12'd29) :
+                     (dec_f == 2'd2) ? ({6'd0,dec_n} * 12'd4 + 12'd29) :
+                                      ({6'd0,dec_n} * 12'd8 + 12'd33);
+assign delete_beats = (del_mode == 2'd1) ?
+                      ({6'd0,dec_n} * 12'd16 + {8'd0,dec_f,2'd0}) :
+                      (del_mode == 2'd2) ?
+                      ({6'd0,dec_n} * 12'd32 + {7'd0,dec_f,3'd0}) : 12'd0;
+assign prefix_beats = (smp_mode == 2'd0) ? 12'd20 : prefix_base + delete_beats;
 
-assign prefix_base = (dec_f==2'd0) ? ({5'd0,dec_n}+11'd11) :
-                     (dec_f==2'd1) ? ({5'd0,dec_n}*11'd4+11'd12) :
-                     (dec_f==2'd2) ? ({5'd0,dec_n}*11'd2+11'd12) :
-                                      ({5'd0,dec_n}*11'd4+11'd14);
-assign prefix_beats = (smp_mode==2'd0) ? 11'd8 : prefix_base + del_beats;
-assign prefix_done  = (prefix_cnt==prefix_beats);
-assign valid_beat   = ((upk_fsm==UPK_PREFIX) && prefix_done && (smp_mode==2'd0)) ||
-                      (upk_fsm==UPK_VALID);
+assign valid_beats = (smp_mode == 2'd1) ?
+                     ((dec_f == 2'd0) ? 6'd4  :
+                      (dec_f == 2'd2) ? 6'd8  : 6'd16) :
+                     ((dec_f == 2'd0) ? 6'd8  : 6'd32);
+assign zero_beats = (smp_mode == 2'd1) ?
+                    ((dec_f == 2'd0) ? ({4'd0,dec_n} * 10'd4  - 10'd4)  :
+                     (dec_f == 2'd1) ? ({4'd0,dec_n} * 10'd16 - 10'd12) :
+                     (dec_f == 2'd2) ? ({4'd0,dec_n} * 10'd8  - 10'd4)  :
+                                      ({4'd0,dec_n} * 10'd16 - 10'd4)) :
+                    ((dec_f == 2'd0) ? ({4'd0,dec_n} * 10'd4  - 10'd8)  :
+                     (dec_f == 2'd1) ? ({4'd0,dec_n} * 10'd16 - 10'd28) :
+                     (dec_f == 2'd2) ? ({4'd0,dec_n} * 10'd8  - 10'd12) :
+                                      ({4'd0,dec_n} * 10'd16 - 10'd20));
+assign period_beats = {4'd0,valid_beats} + zero_beats;
 
-assign valid_beats = (smp_mode==2'd0) ? 8'd2 :
-                     (smp_mode==2'd1) ?
-                         ((dec_f==2'd0) ? 8'd2 :
-                          (dec_f==2'd2) ? 8'd4 : 8'd8) :
-                         ((dec_f==2'd0) ? 8'd4 : 8'd16);
-
-assign zero_beats = (smp_mode==2'd0) ? 10'd0 :
-                    (smp_mode==2'd1) ?
-                        ((dec_f==2'd0) ? ({4'd0,dec_n}*10'd2-10'd2) :
-                         (dec_f==2'd1) ? ({4'd0,dec_n}*10'd8-10'd6) :
-                         (dec_f==2'd2) ? ({4'd0,dec_n}*10'd4-10'd2) :
-                                        ({4'd0,dec_n}*10'd8-10'd2)) :
-                        ((dec_f==2'd0) ? ({4'd0,dec_n}*10'd2-10'd4) :
-                         (dec_f==2'd1) ? ({4'd0,dec_n}*10'd8-10'd14) :
-                         (dec_f==2'd2) ? ({4'd0,dec_n}*10'd4-10'd6) :
-                                        ({4'd0,dec_n}*10'd8-10'd10));
-
-assign valid_last    = (valid_cnt==valid_beats-8'd1);
-assign zero_last     = (zero_cnt==zero_beats-10'd1);
-assign aligned_data  = (smp_mode==2'd0) ? rxd_data :
-                       {rxd_data[191:128],align_tail[127:64],
-                        rxd_data[63:0],align_tail[63:0]};
-assign candidate_data = {rxd_data_fmt,half_data};
-assign upk_idle      = (upk_fsm==UPK_IDLE) && !half_vld && !ddc_i_vld &&
-                       !q_pending && !rx_fifo_winc;
-
-always @(*) begin
-    rxd_data_fmt = 256'd0;
-    sample_word  = 16'd0;
-    for(i=0;i<16;i=i+1) begin
-        sample_word = aligned_data[i*16 +: 16];
-        if(frame_fmt)
-            rxd_data_fmt[i*16 +: 16] = sample_word;
-        else begin
-            case(smp_prec)
-                2'd0 : rxd_data_fmt[i*16 +: 16] = {{6{sample_word[15]}},sample_word[15:6]};
-                2'd1 : rxd_data_fmt[i*16 +: 16] = {{4{sample_word[15]}},sample_word[15:4]};
-                2'd2 : rxd_data_fmt[i*16 +: 16] = {{2{sample_word[15]}},sample_word[15:2]};
-                default : rxd_data_fmt[i*16 +: 16] = {{6{sample_word[15]}},sample_word[15:6]};
-            endcase
-        end
-    end
-end
-
+//////////////////////////////////////////////////
+//2. State Machine
+//////////////////////////////////////////////////
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0)
+    if(~afe_rst_n)
         upk_fsm <= #UDLY UPK_IDLE;
-    else if(!chn_en)
-        upk_fsm <= #UDLY UPK_IDLE;
-    else if((upk_fsm!=UPK_IDLE) && !rxd_data_vld)
+    else if(upk_end)
         upk_fsm <= #UDLY UPK_IDLE;
     else
         upk_fsm <= #UDLY upk_fsm_nx;
@@ -145,28 +112,19 @@ end
 always @(*) begin
     case(upk_fsm)
         UPK_IDLE : begin
-            if(rxd_data_vld && somf_seen)
-                upk_fsm_nx = UPK_PREFIX;
+            if(upk_start)
+                upk_fsm_nx = UPK_SYNC;
             else
                 upk_fsm_nx = UPK_IDLE;
         end
-        UPK_PREFIX : begin
-            if(prefix_done)
-                upk_fsm_nx = UPK_VALID;
+        UPK_SYNC : begin
+            if(sync_last)
+                upk_fsm_nx = UPK_DATA;
             else
-                upk_fsm_nx = UPK_PREFIX;
+                upk_fsm_nx = UPK_SYNC;
         end
-        UPK_VALID : begin
-            if(valid_last && (zero_beats!=10'd0))
-                upk_fsm_nx = UPK_ZERO;
-            else
-                upk_fsm_nx = UPK_VALID;
-        end
-        UPK_ZERO : begin
-            if(zero_last)
-                upk_fsm_nx = UPK_VALID;
-            else
-                upk_fsm_nx = UPK_ZERO;
+        UPK_DATA : begin
+            upk_fsm_nx = UPK_DATA;
         end
         default : begin
             upk_fsm_nx = UPK_IDLE;
@@ -174,154 +132,144 @@ always @(*) begin
     endcase
 end
 
+//////////////////////////////////////////////////
+//3. State Decode
+//////////////////////////////////////////////////
+assign upk_fsm_idle = (upk_fsm == UPK_IDLE);
+assign upk_fsm_sync = (upk_fsm == UPK_SYNC);
+assign upk_fsm_data = (upk_fsm == UPK_DATA);
+assign upk_idle     = upk_fsm_idle & (pack_cnt == 2'd0) & ~rx_fifo_winc;
+
+//////////////////////////////////////////////////
+//4. Input Qualification
+//////////////////////////////////////////////////
+assign sync_match = (rxd_data[15:0]    == 16'h2772) &
+                    (rxd_data[31:16]   == 16'h2772) &
+                    (rxd_data[47:32]   == 16'h2772) &
+                    (rxd_data[63:48]   == 16'h2772) &
+                    (rxd_data[79:64]   == 16'h2772) &
+                    (rxd_data[95:80]   == 16'h2772) &
+                    (rxd_data[111:96]  == 16'h2772) &
+                    (rxd_data[127:112] == 16'h2772);
+assign sync_check = (sync_cnt < 12'd4) | (sync_cnt >= (prefix_beats - 12'd4));
+assign sync_last  = (sync_cnt == (prefix_beats - 12'd1));
+assign data_region = (smp_mode == 2'd0) | (region_cnt < {4'd0,valid_beats});
+assign data_vld    = rxd_ready & rxd_data_vld;
+assign data_accept = upk_fsm_data & data_vld & data_region;
+assign rx_discontinuity = ~upk_fsm_idle & ~data_vld;
+assign upk_start = upk_fsm_idle & chn_en & data_vld & sync_match;
+assign sync_mismatch = upk_fsm_idle & data_vld & ~sync_match;
+assign sync_error = upk_fsm_sync & data_vld & sync_check & ~sync_match;
+assign data_error_set = chn_en & (rx_discontinuity | sync_error | sync_mismatch);
+assign upk_end = ~chn_en | rx_discontinuity | sync_error;
+
+//////////////////////////////////////////////////
+//5. Synchronization And Region Counters
+//////////////////////////////////////////////////
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0)
-        prefix_cnt <= #UDLY 11'd0;
-    else if(!chn_en || !rxd_data_vld)
-        prefix_cnt <= #UDLY 11'd0;
-    else if((upk_fsm==UPK_IDLE) && somf_seen)
-        prefix_cnt <= #UDLY 11'd1;
-    else if(upk_fsm==UPK_PREFIX) begin
-        if(prefix_done)
-            prefix_cnt <= #UDLY 11'd0;
-        else
-            prefix_cnt <= #UDLY prefix_cnt + 11'd1;
-    end
+    if(~afe_rst_n)
+        sync_cnt <= #UDLY 12'd0;
+    else if(upk_end)
+        sync_cnt <= #UDLY 12'd0;
+    else if(upk_fsm_idle)
+        sync_cnt <= #UDLY upk_start ? 12'd1 : 12'd0;
+    else if(upk_fsm_sync)
+        sync_cnt <= #UDLY sync_last ? 12'd0 : sync_cnt + 12'd1;
+    else
+        sync_cnt <= #UDLY 12'd0;
 end
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0)
-        align_tail <= #UDLY 128'd0;
-    else if(!chn_en || !rxd_data_vld || (smp_mode==2'd0))
-        align_tail <= #UDLY 128'd0;
-    else if(((upk_fsm==UPK_PREFIX) && prefix_done) || (upk_fsm==UPK_VALID))
-        align_tail <= #UDLY {rxd_data[255:192],rxd_data[127:64]};
+    if(~afe_rst_n)
+        region_cnt <= #UDLY 10'd0;
+    else if(upk_end)
+        region_cnt <= #UDLY 10'd0;
+    else if(upk_fsm_sync & sync_last)
+        region_cnt <= #UDLY 10'd0;
+    else if(upk_fsm_data & data_vld & (smp_mode != 2'd0))
+        region_cnt <= #UDLY (region_cnt == (period_beats - 10'd1)) ?
+                      10'd0 : region_cnt + 10'd1;
 end
 
-always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0) begin
-        valid_cnt <= #UDLY 8'd0;
-        zero_cnt  <= #UDLY 10'd0;
-    end
-    else if(!chn_en || !rxd_data_vld) begin
-        valid_cnt <= #UDLY 8'd0;
-        zero_cnt  <= #UDLY 10'd0;
-    end
-    else begin
-        if(valid_beat) begin
-            if(valid_last)
-                valid_cnt <= #UDLY 8'd0;
-            else
-                valid_cnt <= #UDLY valid_cnt + 8'd1;
-        end
-        else if(upk_fsm==UPK_ZERO) begin
-            if(zero_last)
-                zero_cnt <= #UDLY 10'd0;
-            else
-                zero_cnt <= #UDLY zero_cnt + 10'd1;
-        end
-    end
-end
-
-always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0) begin
-        half_vld  <= #UDLY 1'b0;
-        half_data <= #UDLY 256'd0;
-    end
-    else if(!chn_en || !rxd_data_vld) begin
-        half_vld  <= #UDLY 1'b0;
-        half_data <= #UDLY 256'd0;
-    end
-    else if(valid_beat) begin
-        if(!half_vld) begin
-            half_vld  <= #UDLY 1'b1;
-            half_data <= #UDLY rxd_data_fmt;
-        end
+//////////////////////////////////////////////////
+//6. Sample Formatting
+//////////////////////////////////////////////////
+always @(*) begin
+    formatted_data = 128'd0;
+    sample_word    = 16'd0;
+    for(i=0;i<8;i=i+1) begin
+        sample_word = rxd_data[i*16 +: 16];
+        if(frame_fmt)
+            formatted_data[i*16 +: 16] = sample_word;
         else begin
-            half_vld <= #UDLY 1'b0;
-        end
-    end
-    else if(upk_fsm==UPK_ZERO) begin
-        if(!half_vld) begin
-            half_vld  <= #UDLY 1'b1;
-            half_data <= #UDLY 256'd0;
-        end
-        else begin
-            half_vld <= #UDLY 1'b0;
+            case(smp_prec)
+                2'd0 : formatted_data[i*16 +: 16] = {{6{sample_word[15]}},sample_word[15:6]};
+                2'd1 : formatted_data[i*16 +: 16] = {{4{sample_word[15]}},sample_word[15:4]};
+                2'd2 : formatted_data[i*16 +: 16] = {{2{sample_word[15]}},sample_word[15:2]};
+                default : formatted_data[i*16 +: 16] = {{6{sample_word[15]}},sample_word[15:6]};
+            endcase
         end
     end
 end
 
+//////////////////////////////////////////////////
+//7. Candidate Packing
+//////////////////////////////////////////////////
+assign pack_last = (pack_cnt == 2'd3);
+
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0) begin
-        ddc_i_vld <= #UDLY 1'b0;
-        ddc_i_data <= #UDLY 512'd0;
-    end
-    else if(!chn_en || !rxd_data_vld || (smp_mode!=2'd2)) begin
-        ddc_i_vld <= #UDLY 1'b0;
-        ddc_i_data <= #UDLY 512'd0;
-    end
-    else if(valid_beat && half_vld) begin
-        if(!ddc_i_vld) begin
-            ddc_i_vld  <= #UDLY 1'b1;
-            ddc_i_data <= #UDLY candidate_data;
-        end
-        else begin
-            ddc_i_vld <= #UDLY 1'b0;
-        end
-    end
+    if(~afe_rst_n)
+        pack_cnt <= #UDLY 2'd0;
+    else if(upk_end)
+        pack_cnt <= #UDLY 2'd0;
+    else if(data_accept)
+        pack_cnt <= #UDLY pack_cnt + 2'd1;
 end
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0) begin
+    if(~afe_rst_n)
+        pack_data <= #UDLY 384'd0;
+    else if(upk_end)
+        pack_data <= #UDLY 384'd0;
+    else if(data_accept & (pack_cnt == 2'd0))
+        pack_data[127:0] <= #UDLY formatted_data;
+    else if(data_accept & (pack_cnt == 2'd1))
+        pack_data[255:128] <= #UDLY formatted_data;
+    else if(data_accept & (pack_cnt == 2'd2))
+        pack_data[383:256] <= #UDLY formatted_data;
+end
+
+//////////////////////////////////////////////////
+//8. FIFO Write
+//////////////////////////////////////////////////
+always @(posedge afe_clk or negedge afe_rst_n) begin
+    if(~afe_rst_n) begin
         rx_fifo_wdat <= #UDLY 512'd0;
-        rx_fifo_winc <= #UDLY 1'b0;
-        q_pending    <= #UDLY 1'b0;
-        q_data       <= #UDLY 512'd0;
+        rx_fifo_winc <= #UDLY 1'd0;
     end
-    else if(!chn_en || !rxd_data_vld) begin
+    else if(upk_end) begin
         rx_fifo_wdat <= #UDLY 512'd0;
-        rx_fifo_winc <= #UDLY 1'b0;
-        q_pending    <= #UDLY 1'b0;
-        q_data       <= #UDLY 512'd0;
+        rx_fifo_winc <= #UDLY 1'd0;
     end
     else begin
-        rx_fifo_winc <= #UDLY 1'b0;
-        if(q_pending) begin
-            rx_fifo_wdat <= #UDLY q_data;
-            rx_fifo_winc <= #UDLY 1'b1;
-            q_pending    <= #UDLY 1'b0;
-        end
-        else if(valid_beat && rxd_data_vld && half_vld) begin
-            if(smp_mode!=2'd2) begin
-                if(rx_fifo_wlevel>=10'd1) begin
-                    rx_fifo_wdat <= #UDLY candidate_data;
-                    rx_fifo_winc <= #UDLY 1'b1;
-                end
-            end
-            else if(ddc_i_vld && (rx_fifo_wlevel>=10'd2)) begin
-                rx_fifo_wdat <= #UDLY ddc_i_data;
-                rx_fifo_winc <= #UDLY 1'b1;
-                q_pending    <= #UDLY 1'b1;
-                q_data       <= #UDLY candidate_data;
-            end
-        end
-        else if((upk_fsm==UPK_ZERO) && rxd_data_vld && half_vld &&
-                (rx_fifo_wlevel>=10'd1)) begin
-            rx_fifo_wdat <= #UDLY 512'd0;
-            rx_fifo_winc <= #UDLY 1'b1;
+        rx_fifo_winc <= #UDLY 1'd0;
+        if(data_accept & pack_last) begin
+            rx_fifo_wdat <= #UDLY {formatted_data,pack_data};
+            rx_fifo_winc <= #UDLY 1'd1;
         end
     end
 end
 
+//////////////////////////////////////////////////
+//9. Error Event
+//////////////////////////////////////////////////
 always @(posedge afe_clk or negedge afe_rst_n) begin
-    if(afe_rst_n==1'b0)
-        data_error_evt <= #UDLY 1'b0;
-    else begin
-        data_error_evt <= #UDLY 1'b0;
-        if(chn_en && (upk_fsm!=UPK_IDLE) && !rxd_data_vld)
-            data_error_evt <= #UDLY 1'b1;
-    end
+    if(~afe_rst_n)
+        data_error <= #UDLY 1'd0;
+    else if(data_error_set)
+        data_error <= #UDLY 1'd1;
+    else
+        data_error <= #UDLY 1'd0;
 end
 
 endmodule
