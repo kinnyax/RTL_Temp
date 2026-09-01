@@ -1,97 +1,87 @@
 `timescale 1ns / 1ps
-`default_nettype none
 
-module SPI_RXD #(
-    parameter integer       UDLY                        = 1
-)(
-    input   wire            SPI_CLK                                     ,
-    input   wire            SPI_RST_N                                   ,
-    input   wire            pack_reset                                  ,
-    input   wire            unit_is_16bit                               ,
-    input   wire            unit_valid                                  ,
-    input   wire            unit_last                                   ,
-    input   wire    [15:0]  unit_data                                   ,
-    input   wire            fifo_full                                   ,
-    output  reg             fifo_wen                                    ,
-    output  reg     [31:0]  fifo_wdata                                  ,
-    output  reg             overflow_pulse
+module SPI_RXD(
+    input                                   spi_clk                                        ,
+    input                                   rst_n                                          ,
+
+    input                                   spi_en                                         ,
+    input               [31:0]              spi_ctl                                        ,
+    input                                   sample_trig                                    ,
+    input                                   bit_end                                        ,
+    input                                   spi_busy                                       ,
+    input                                   spi_miso_in                                    ,
+    input                                   spi_mosi_in                                    ,
+
+    output    wire      [31:0]              rx_fifo_wdata                                  ,
+    output    wire                          rx_fifo_winc
 );
 
-reg         [31:0]          pack_word                                   ;
-reg         [1:0]           unit_index                                  ;
-reg         [31:0]          assembled_word                              ;
+parameter                                   UDLY                     = 1                   ;
 
-wire                        word_complete                               ;
-wire                        emit_word                                   ;
+wire                                        ms_mode                                        ;
+wire                                        lsb                                            ;
+wire                    [ 1:0]              spi_size                                       ;
+wire                                        serial_data                                    ;
+wire                    [31:0]              rxd_buff_nx                                    ;
 
-assign word_complete = unit_is_16bit ?
-                       (unit_index == 2'd1) :
-                       (unit_index == 2'd3);
-assign emit_word = unit_valid & (word_complete | unit_last);
+reg                     [31:0]              rxd_data                                       ;
+reg                     [31:0]              rxd_buff                                       ;
 
+//////////////////////////////////////////////////
+//1. Configuration And Serial Select
+//////////////////////////////////////////////////
+assign ms_mode     = spi_ctl[1];
+assign lsb         = spi_ctl[6];
+assign spi_size    = spi_ctl[8:7];
+assign serial_data = ms_mode ? spi_miso_in : spi_mosi_in;
+assign rxd_buff_nx = lsb ? {serial_data, rxd_buff[31:1]} :
+                           {rxd_buff[30:0], serial_data};
+
+//////////////////////////////////////////////////
+//2. RX Data Normalize And FIFO Write
+//////////////////////////////////////////////////
 always @(*) begin
-    assembled_word = pack_word;
-    if(unit_is_16bit) begin
-        if(unit_index == 2'd0)
-            assembled_word = {unit_data, 16'h0000};
-        else
-            assembled_word = {pack_word[31:16], unit_data};
-    end
-    else begin
-        if(unit_index == 2'd0)
-            assembled_word = {unit_data[7:0], 24'h00_0000};
-        else if(unit_index == 2'd1)
-            assembled_word = {pack_word[31:24],
-                              unit_data[7:0], 16'h0000};
-        else if(unit_index == 2'd2)
-            assembled_word = {pack_word[31:16],
-                              unit_data[7:0], 8'h00};
-        else
-            assembled_word = {pack_word[31:8], unit_data[7:0]};
-    end
+    rxd_data = 32'd0;
+    case(spi_size)
+        2'd0 : begin
+            if(lsb)
+                rxd_data[7:0] = rxd_buff_nx[31:24];
+            else
+                rxd_data[7:0] = rxd_buff_nx[7:0];
+        end
+        2'd1 : begin
+            if(lsb)
+                rxd_data[15:0] = rxd_buff_nx[31:16];
+            else
+                rxd_data[15:0] = rxd_buff_nx[15:0];
+        end
+        2'd2 : begin
+            rxd_data = rxd_buff_nx;
+        end
+        default : begin
+            if(lsb)
+                rxd_data[7:0] = rxd_buff_nx[31:24];
+            else
+                rxd_data[7:0] = rxd_buff_nx[7:0];
+        end
+    endcase
 end
 
-always @(posedge SPI_CLK or negedge SPI_RST_N) begin
-    if(!SPI_RST_N) begin
-        pack_word  <= #UDLY 32'h0000_0000;
-        unit_index <= #UDLY 2'd0;
-    end
-    else if(pack_reset) begin
-        pack_word  <= #UDLY 32'h0000_0000;
-        unit_index <= #UDLY 2'd0;
-    end
-    else if(unit_valid) begin
-        if(word_complete | unit_last) begin
-            pack_word  <= #UDLY 32'h0000_0000;
-            unit_index <= #UDLY 2'd0;
-        end
-        else begin
-            pack_word  <= #UDLY assembled_word;
-            unit_index <= #UDLY unit_index + 2'd1;
-        end
-    end
-end
+assign rx_fifo_wdata = rxd_data;
+assign rx_fifo_winc  = bit_end;
 
-always @(posedge SPI_CLK or negedge SPI_RST_N) begin
-    if(!SPI_RST_N) begin
-        fifo_wen        <= #UDLY 1'b0;
-        fifo_wdata      <= #UDLY 32'h0000_0000;
-        overflow_pulse  <= #UDLY 1'b0;
-    end
-    else begin
-        fifo_wen       <= #UDLY 1'b0;
-        overflow_pulse <= #UDLY 1'b0;
-        if(emit_word) begin
-            if(fifo_full)
-                overflow_pulse <= #UDLY 1'b1;
-            else begin
-                fifo_wen   <= #UDLY 1'b1;
-                fifo_wdata <= #UDLY assembled_word;
-            end
-        end
-    end
+//////////////////////////////////////////////////
+//3. Receive Buffer
+//////////////////////////////////////////////////
+always @(posedge spi_clk or negedge rst_n) begin
+    if(~rst_n)
+        rxd_buff <= #UDLY 32'd0;
+    else if(~spi_en | ~spi_busy)
+        rxd_buff <= #UDLY 32'd0;
+    else if(bit_end)
+        rxd_buff <= #UDLY 32'd0;
+    else if(sample_trig)
+        rxd_buff <= #UDLY rxd_buff_nx;
 end
 
 endmodule
-
-`default_nettype wire

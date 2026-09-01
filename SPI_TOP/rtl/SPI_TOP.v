@@ -1,246 +1,246 @@
 `timescale 1ns / 1ps
-`default_nettype none
 
-module SPI_TOP #(
-    parameter integer       AXI_ADDR_WIDTH              = 15            ,
-    parameter integer       UDLY                        = 1
-)(
-    input   wire                            SYS_CLK                     ,
-    input   wire                            SYS_RST_N                   ,
-    input   wire                            SPI_RST_EN                  ,
-    input   wire                            SPI_CLK                     ,
-    input   wire                            SPI_RST_N                   ,
-    input   wire        [AXI_ADDR_WIDTH-1:0] S_AXI_AWADDR               ,
-    input   wire        [2:0]               S_AXI_AWPROT                ,
-    input   wire                            S_AXI_AWVALID               ,
-    output  wire                            S_AXI_AWREADY               ,
-    input   wire        [31:0]              S_AXI_WDATA                ,
-    input   wire        [3:0]               S_AXI_WSTRB                ,
-    input   wire                            S_AXI_WVALID               ,
-    output  wire                            S_AXI_WREADY               ,
-    output  wire        [1:0]               S_AXI_BRESP                ,
-    output  wire                            S_AXI_BVALID               ,
-    input   wire                            S_AXI_BREADY               ,
-    input   wire        [AXI_ADDR_WIDTH-1:0] S_AXI_ARADDR               ,
-    input   wire        [2:0]               S_AXI_ARPROT                ,
-    input   wire                            S_AXI_ARVALID               ,
-    output  wire                            S_AXI_ARREADY               ,
-    output  wire        [31:0]              S_AXI_RDATA                ,
-    output  wire        [1:0]               S_AXI_RRESP                ,
-    output  wire                            S_AXI_RVALID               ,
-    input   wire                            S_AXI_RREADY               ,
-    input   wire                            spi_miso_i                  ,
-    output  wire                            spi_mosi_o                  ,
-    output  wire                            spi_sck_o                   ,
-    output  wire        [3:0]               spi_nss_code_o              ,
-    output  wire                            busy_o
+module SPI_TOP(
+    input                                   sys_clk                                        ,
+    input                                   spi_clk                                        ,
+    input                                   rst_n                                          ,
+
+    input               [31:0]              s_axi_awaddr                                   ,
+    input                                   s_axi_awvalid                                  ,
+    output    wire                          s_axi_awready                                  ,
+    input               [31:0]              s_axi_wdata                                    ,
+    input               [ 3:0]              s_axi_wstrb                                    ,
+    input                                   s_axi_wvalid                                   ,
+    output    wire                          s_axi_wready                                   ,
+    output    wire      [ 1:0]              s_axi_bresp                                    ,
+    output    wire                          s_axi_bvalid                                   ,
+    input                                   s_axi_bready                                   ,
+    input               [31:0]              s_axi_araddr                                   ,
+    input                                   s_axi_arvalid                                  ,
+    output    wire                          s_axi_arready                                  ,
+    output    wire      [31:0]              s_axi_rdata                                    ,
+    output    wire      [ 1:0]              s_axi_rresp                                    ,
+    output    wire                          s_axi_rvalid                                   ,
+    input                                   s_axi_rready                                   ,
+
+    input                                   spi_sck_in                                     ,
+    output    wire                          spi_sck_out                                    ,
+    output    wire                          spi_sck_oe                                     ,
+    input                                   spi_mosi_in                                    ,
+    output    wire                          spi_mosi_out                                   ,
+    output    wire                          spi_mosi_oe                                    ,
+    input                                   spi_miso_in                                    ,
+    output    wire                          spi_miso_out                                   ,
+    output    wire                          spi_miso_oe                                    ,
+    input               [ 3:0]              spi_cs_in                                      ,
+    output    wire      [ 3:0]              spi_cs_out                                     ,
+    output    wire      [ 3:0]              spi_cs_oe
 );
 
-wire                                spi_enable_sys                      ;
-wire                                run_request_sys                     ;
-wire                                tx_fifo_clear                       ;
-wire                                rx_fifo_clear                       ;
-wire        [7:0]                   command_sys                         ;
-wire        [11:0]                  address_sys                         ;
-wire        [15:0]                  length_sys                          ;
-wire        [7:0]                   command_spi                         ;
-wire        [11:0]                  address_spi                         ;
-wire        [15:0]                  length_spi                          ;
-wire                                enable_spi                          ;
-wire                                run_pulse_spi                       ;
-wire                                busy_spi                            ;
-wire                                done_spi                            ;
-wire                                error_spi                           ;
-wire                                done_sys                            ;
-wire                                error_sys                           ;
-wire                                tx_underflow_spi                    ;
-wire                                tx_underflow_sys                    ;
-wire                                rx_overflow_spi                     ;
-wire                                rx_overflow_sys                     ;
-wire                                tx_fifo_wen                         ;
-wire        [31:0]                  tx_fifo_wdata                       ;
-wire                                tx_fifo_ren                         ;
-wire        [31:0]                  tx_fifo_rdata                       ;
-wire                                tx_fifo_full                        ;
-wire                                tx_fifo_empty                       ;
-wire        [8:0]                   tx_fifo_level                       ;
-wire                                rx_fifo_wen                         ;
-wire        [31:0]                  rx_fifo_wdata                       ;
-wire                                rx_fifo_ren                         ;
-wire        [31:0]                  rx_fifo_rdata                       ;
-wire                                rx_fifo_full                        ;
-wire                                rx_fifo_empty                       ;
-wire        [8:0]                   rx_fifo_level                       ;
-wire                                tx_unit_take                        ;
-wire                                unit_is_16bit                       ;
-wire        [15:0]                  tx_unit_data                        ;
-wire                                rx_unit_valid                       ;
-wire                                rx_unit_last                        ;
-wire        [15:0]                  rx_unit_data                        ;
+parameter                                   UDLY                     = 1                   ;
 
-SPI_REG #(
-    .AXI_ADDR_WIDTH         (AXI_ADDR_WIDTH                    ),
-    .UDLY                   (UDLY                              )
-) spi_registers (
-    .SYS_CLK                (SYS_CLK                           ),
-    .SYS_RST_N              (SYS_RST_N                         ),
-    .SPI_RST_EN             (SPI_RST_EN                        ),
-    .S_AXI_AWADDR           (S_AXI_AWADDR                      ),
-    .S_AXI_AWPROT           (S_AXI_AWPROT                      ),
-    .S_AXI_AWVALID          (S_AXI_AWVALID                     ),
-    .S_AXI_AWREADY          (S_AXI_AWREADY                     ),
-    .S_AXI_WDATA            (S_AXI_WDATA                       ),
-    .S_AXI_WSTRB            (S_AXI_WSTRB                       ),
-    .S_AXI_WVALID           (S_AXI_WVALID                      ),
-    .S_AXI_WREADY           (S_AXI_WREADY                      ),
-    .S_AXI_BRESP            (S_AXI_BRESP                       ),
-    .S_AXI_BVALID           (S_AXI_BVALID                      ),
-    .S_AXI_BREADY           (S_AXI_BREADY                      ),
-    .S_AXI_ARADDR           (S_AXI_ARADDR                      ),
-    .S_AXI_ARPROT           (S_AXI_ARPROT                      ),
-    .S_AXI_ARVALID          (S_AXI_ARVALID                     ),
-    .S_AXI_ARREADY          (S_AXI_ARREADY                     ),
-    .S_AXI_RDATA            (S_AXI_RDATA                       ),
-    .S_AXI_RRESP            (S_AXI_RRESP                       ),
-    .S_AXI_RVALID           (S_AXI_RVALID                      ),
-    .S_AXI_RREADY           (S_AXI_RREADY                      ),
-    .busy_sys               (busy_o                            ),
-    .done_pulse_sys         (done_sys                          ),
-    .error_pulse_sys        (error_sys                         ),
-    .tx_underflow_sys       (tx_underflow_sys                  ),
-    .rx_overflow_sys        (rx_overflow_sys                   ),
-    .tx_fifo_full           (tx_fifo_full                      ),
-    .tx_fifo_level          (tx_fifo_level                     ),
-    .rx_fifo_empty          (rx_fifo_empty                     ),
-    .rx_fifo_level          (rx_fifo_level                     ),
-    .rx_fifo_rdata          (rx_fifo_rdata                     ),
-    .tx_fifo_wen            (tx_fifo_wen                       ),
-    .tx_fifo_wdata          (tx_fifo_wdata                     ),
-    .rx_fifo_ren            (rx_fifo_ren                       ),
-    .spi_enable             (spi_enable_sys                    ),
-    .run_request            (run_request_sys                   ),
-    .tx_fifo_clear          (tx_fifo_clear                     ),
-    .rx_fifo_clear          (rx_fifo_clear                     ),
-    .spi_command            (command_sys                       ),
-    .spi_address            (address_sys                       ),
-    .spi_length             (length_sys                        )
+wire                    [31:0]              spi_ctl                                        ;
+wire                    [31:0]              sck_div                                        ;
+wire                    [31:0]              cs_cfg                                         ;
+wire                                        spi_en                                         ;
+wire                    [ 5:0]              spi_io                                         ;
+wire                                        cs_sel                                         ;
+wire                                        spi_cs_n                                       ;
+wire                                        spi_busy                                       ;
+wire                                        spi_busy_sync                                  ;
+wire                                        sample_trig                                    ;
+wire                                        bit_end                                        ;
+
+wire                    [31:0]              tx_fifo_wdata                                  ;
+wire                                        tx_fifo_winc                                   ;
+wire                    [31:0]              tx_fifo_rdata                                  ;
+wire                                        tx_fifo_rinc                                   ;
+wire                    [ 5:0]              tx_fifo_level                                  ;
+wire                                        tx_fifo_full                                   ;
+wire                                        tx_fifo_empty                                  ;
+wire                                        tx_fifo_of                                     ;
+wire                                        tx_fifo_uf                                     ;
+wire                                        tx_fifo_empty_sync                             ;
+wire                                        tx_fifo_uf_sync                                ;
+wire                                        tx_fifo_clr_sync                               ;
+
+wire                    [31:0]              rx_fifo_wdata                                  ;
+wire                                        rx_fifo_winc                                   ;
+wire                    [31:0]              rx_fifo_rdata                                  ;
+wire                                        rx_fifo_rinc                                   ;
+wire                                        rx_fifo_full                                   ;
+wire                                        rx_fifo_empty                                  ;
+wire                                        rx_fifo_of                                     ;
+wire                                        rx_fifo_uf                                     ;
+wire                                        rx_fifo_full_sync                              ;
+wire                                        rx_fifo_of_sync                                ;
+wire                                        rx_fifo_clr_sync                               ;
+
+//////////////////////////////////////////////////
+//1. Configuration And Physical Input CDC
+//////////////////////////////////////////////////
+level_sync #(.RV(1'd0)) spi_enable_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(spi_ctl[0]), .out(spi_en));
+level_sync #(.RV(1'd0)) tx_fifo_clr_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(spi_ctl[9]), .out(tx_fifo_clr_sync));
+level_sync #(.RV(1'd0)) rx_fifo_clr_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(spi_ctl[10]), .out(rx_fifo_clr_sync));
+levels_sync #(.DS(6), .RV(1'd0)) spi_io_levels_sync(.clk(spi_clk), .rst_n(rst_n), .in({spi_sck_in, spi_cs_in, spi_mosi_in}), .out(spi_io));
+
+//////////////////////////////////////////////////
+//2. Register And Status CDC
+//////////////////////////////////////////////////
+SPI_REG spi_reg(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (rst_n                                        ),
+    .s_axi_awaddr                        (s_axi_awaddr                                 ),
+    .s_axi_awvalid                       (s_axi_awvalid                                ),
+    .s_axi_awready                       (s_axi_awready                                ),
+    .s_axi_wdata                         (s_axi_wdata                                  ),
+    .s_axi_wstrb                         (s_axi_wstrb                                  ),
+    .s_axi_wvalid                        (s_axi_wvalid                                 ),
+    .s_axi_wready                        (s_axi_wready                                 ),
+    .s_axi_bresp                         (s_axi_bresp                                  ),
+    .s_axi_bvalid                        (s_axi_bvalid                                 ),
+    .s_axi_bready                        (s_axi_bready                                 ),
+    .s_axi_araddr                        (s_axi_araddr                                 ),
+    .s_axi_arvalid                       (s_axi_arvalid                                ),
+    .s_axi_arready                       (s_axi_arready                                ),
+    .s_axi_rdata                         (s_axi_rdata                                  ),
+    .s_axi_rresp                         (s_axi_rresp                                  ),
+    .s_axi_rvalid                        (s_axi_rvalid                                 ),
+    .s_axi_rready                        (s_axi_rready                                 ),
+    .spi_ctl                             (spi_ctl                                      ),
+    .sck_div                             (sck_div                                      ),
+    .cs_cfg                              (cs_cfg                                       ),
+    .spi_busy                            (spi_busy_sync                                ),
+    .tx_fifo_empty                       (tx_fifo_empty_sync                           ),
+    .tx_fifo_full                        (tx_fifo_full                                 ),
+    .tx_fifo_of                          (tx_fifo_of                                   ),
+    .tx_fifo_uf                          (tx_fifo_uf_sync                              ),
+    .rx_fifo_empty                       (rx_fifo_empty                                ),
+    .rx_fifo_full                        (rx_fifo_full_sync                            ),
+    .rx_fifo_of                          (rx_fifo_of_sync                              ),
+    .rx_fifo_uf                          (rx_fifo_uf                                   ),
+    .tx_fifo_wdata                       (tx_fifo_wdata                                ),
+    .tx_fifo_winc                        (tx_fifo_winc                                 ),
+    .rx_fifo_rdata                       (rx_fifo_rdata                                ),
+    .rx_fifo_rinc                        (rx_fifo_rinc                                 )
 );
 
-SPI_SYNC #(
-    .UDLY                   (UDLY                              )
-) spi_synchronizers (
-    .SYS_CLK                (SYS_CLK                           ),
-    .SYS_RST_N              (SYS_RST_N                         ),
-    .SPI_CLK                (SPI_CLK                           ),
-    .SPI_RST_N              (SPI_RST_N                         ),
-    .run_request_sys        (run_request_sys                   ),
-    .command_sys            (command_sys                       ),
-    .address_sys            (address_sys                       ),
-    .length_sys             (length_sys                        ),
-    .enable_sys             (spi_enable_sys                    ),
-    .busy_spi               (busy_spi                          ),
-    .done_spi               (done_spi                          ),
-    .error_spi              (error_spi                         ),
-    .tx_underflow_spi       (tx_underflow_spi                  ),
-    .rx_overflow_spi        (rx_overflow_spi                   ),
-    .run_pulse_spi          (run_pulse_spi                     ),
-    .command_spi            (command_spi                       ),
-    .address_spi            (address_spi                       ),
-    .length_spi             (length_spi                        ),
-    .enable_spi             (enable_spi                        ),
-    .busy_sys               (busy_o                            ),
-    .done_sys               (done_sys                          ),
-    .error_sys              (error_sys                         ),
-    .tx_underflow_sys       (tx_underflow_sys                  ),
-    .rx_overflow_sys        (rx_overflow_sys                   )
+SPI_SYNC spi_sync(
+    .sys_clk                             (sys_clk                                      ),
+    .spi_clk                             (spi_clk                                      ),
+    .rst_n                               (rst_n                                        ),
+    .spi_busy                            (spi_busy                                     ),
+    .spi_busy_sync                       (spi_busy_sync                                ),
+    .tx_fifo_empty                       (tx_fifo_empty                                ),
+    .tx_fifo_empty_sync                  (tx_fifo_empty_sync                           ),
+    .rx_fifo_full                        (rx_fifo_full                                 ),
+    .rx_fifo_full_sync                   (rx_fifo_full_sync                            ),
+    .tx_fifo_uf                          (tx_fifo_uf                                   ),
+    .tx_fifo_uf_sync                     (tx_fifo_uf_sync                              ),
+    .rx_fifo_of                          (rx_fifo_of                                   ),
+    .rx_fifo_of_sync                     (rx_fifo_of_sync                              )
 );
 
-SPI_TXD #(
-    .UDLY                   (UDLY                              )
-) spi_transmit_data (
-    .SPI_CLK                (SPI_CLK                           ),
-    .SPI_RST_N              (SPI_RST_N                         ),
-    .pack_reset             (run_pulse_spi                     ),
-    .unit_is_16bit          (unit_is_16bit                     ),
-    .unit_take              (tx_unit_take                      ),
-    .fifo_empty             (tx_fifo_empty                     ),
-    .fifo_rdata             (tx_fifo_rdata                     ),
-    .fifo_ren               (tx_fifo_ren                       ),
-    .unit_data              (tx_unit_data                      ),
-    .underflow_pulse        (tx_underflow_spi                  )
+//////////////////////////////////////////////////
+//3. SPI Data Path And Pin Coding
+//////////////////////////////////////////////////
+SPI_TXD spi_txd(
+    .spi_clk                             (spi_clk                                      ),
+    .rst_n                               (rst_n                                        ),
+    .spi_en                              (spi_en                                       ),
+    .spi_ctl                             (spi_ctl                                      ),
+    .sck_div                             (sck_div                                      ),
+    .spi_sck_in                          (spi_io[5]                                    ),
+    .cs_sel                              (cs_sel                                       ),
+    .tx_fifo_rdata                       (tx_fifo_rdata                                ),
+    .tx_fifo_empty                       (tx_fifo_empty                                ),
+    .tx_fifo_level                       (tx_fifo_level                                ),
+    .tx_fifo_rinc                        (tx_fifo_rinc                                 ),
+    .spi_busy                            (spi_busy                                     ),
+    .spi_cs_n                            (spi_cs_n                                     ),
+    .spi_sck_out                         (spi_sck_out                                  ),
+    .spi_sck_oe                          (spi_sck_oe                                   ),
+    .spi_mosi_out                        (spi_mosi_out                                 ),
+    .spi_mosi_oe                         (spi_mosi_oe                                  ),
+    .spi_miso_out                        (spi_miso_out                                 ),
+    .spi_miso_oe                         (spi_miso_oe                                  ),
+    .spi_cs_oe                           (spi_cs_oe                                    ),
+    .sample_trig                         (sample_trig                                  ),
+    .bit_end                             (bit_end                                      )
 );
 
-SPI_RXD #(
-    .UDLY                   (UDLY                              )
-) spi_receive_data (
-    .SPI_CLK                (SPI_CLK                           ),
-    .SPI_RST_N              (SPI_RST_N                         ),
-    .pack_reset             (run_pulse_spi                     ),
-    .unit_is_16bit          (unit_is_16bit                     ),
-    .unit_valid             (rx_unit_valid                     ),
-    .unit_last              (rx_unit_last                      ),
-    .unit_data              (rx_unit_data                      ),
-    .fifo_full              (rx_fifo_full                      ),
-    .fifo_wen               (rx_fifo_wen                       ),
-    .fifo_wdata             (rx_fifo_wdata                     ),
-    .overflow_pulse         (rx_overflow_spi                   )
+SPI_RXD spi_rxd(
+    .spi_clk                             (spi_clk                                      ),
+    .rst_n                               (rst_n                                        ),
+    .spi_en                              (spi_en                                       ),
+    .spi_ctl                             (spi_ctl                                      ),
+    .sample_trig                         (sample_trig                                  ),
+    .bit_end                             (bit_end                                      ),
+    .spi_busy                            (spi_busy                                     ),
+    .spi_miso_in                         (spi_miso_in                                  ),
+    .spi_mosi_in                         (spi_io[0]                                    ),
+    .rx_fifo_wdata                       (rx_fifo_wdata                                ),
+    .rx_fifo_winc                        (rx_fifo_winc                                 )
 );
 
-SPI_CTL #(
-    .UDLY                   (UDLY                              )
-) spi_controller (
-    .SPI_CLK                (SPI_CLK                           ),
-    .SPI_RST_N              (SPI_RST_N                         ),
-    .enable_spi             (enable_spi                        ),
-    .run_pulse              (run_pulse_spi                     ),
-    .command                (command_spi                       ),
-    .address                (address_spi                       ),
-    .length                 (length_spi                        ),
-    .spi_miso_i             (spi_miso_i                        ),
-    .tx_unit_data           (tx_unit_data                      ),
-    .tx_unit_take           (tx_unit_take                      ),
-    .unit_is_16bit          (unit_is_16bit                     ),
-    .rx_unit_valid          (rx_unit_valid                     ),
-    .rx_unit_last           (rx_unit_last                      ),
-    .rx_unit_data           (rx_unit_data                      ),
-    .spi_mosi_o             (spi_mosi_o                        ),
-    .spi_sck_o              (spi_sck_o                         ),
-    .spi_nss_code_o         (spi_nss_code_o                    ),
-    .busy_spi               (busy_spi                          ),
-    .done_pulse             (done_spi                          ),
-    .error_pulse            (error_spi                         )
+SPI_CODE spi_code(
+    .spi_ctl                             (spi_ctl                                      ),
+    .cs_cfg                              (cs_cfg                                       ),
+    .spi_cs_n                            (spi_cs_n                                     ),
+    .spi_cs_in                           (spi_io[4:1]                                  ),
+    .spi_cs_out                          (spi_cs_out                                   ),
+    .cs_sel                              (cs_sel                                       )
 );
 
-SPI_TX_FIFO_256X32 spi_transmit_fifo (
-    .rst                    (~SYS_RST_N |
-                             ~SPI_RST_N |
-                             tx_fifo_clear                    ),
-    .wr_clk                 (SYS_CLK                           ),
-    .rd_clk                 (SPI_CLK                           ),
-    .din                    (tx_fifo_wdata                     ),
-    .wr_en                  (tx_fifo_wen                       ),
-    .rd_en                  (tx_fifo_ren                       ),
-    .dout                   (tx_fifo_rdata                     ),
-    .full                   (tx_fifo_full                      ),
-    .empty                  (tx_fifo_empty                     ),
-    .wr_data_count          (tx_fifo_level                     )
+//////////////////////////////////////////////////
+//4. Asynchronous FIFOs
+//////////////////////////////////////////////////
+async_fifo #(
+    .AS                                  (5                                            ),
+    .DS                                  (32                                           ),
+    .RSTEN                               (0                                            ),
+    .WC                                  (0                                            ),
+    .RC                                  (0                                            )
+) tx_async_fifo(
+    .wclk                                (sys_clk                                      ),
+    .rclk                                (spi_clk                                      ),
+    .wclr                                (spi_ctl[9]                                   ),
+    .rclr                                (tx_fifo_clr_sync                             ),
+    .rst_n                               (rst_n                                        ),
+    .winc                                (tx_fifo_winc                                 ),
+    .rinc                                (tx_fifo_rinc                                 ),
+    .wdata                               (tx_fifo_wdata                                ),
+    .rdata                               (tx_fifo_rdata                                ),
+    .full                                (tx_fifo_full                                 ),
+    .empty                               (tx_fifo_empty                                ),
+    .overflow                            (tx_fifo_of                                   ),
+    .underflow                           (tx_fifo_uf                                   ),
+    .wlevel                              (                                             ),
+    .rlevel                              (tx_fifo_level                                )
 );
 
-SPI_RX_FIFO_256X32 spi_receive_fifo (
-    .rst                    (~SYS_RST_N |
-                             ~SPI_RST_N |
-                             rx_fifo_clear                    ),
-    .wr_clk                 (SPI_CLK                           ),
-    .rd_clk                 (SYS_CLK                           ),
-    .din                    (rx_fifo_wdata                     ),
-    .wr_en                  (rx_fifo_wen                       ),
-    .rd_en                  (rx_fifo_ren                       ),
-    .dout                   (rx_fifo_rdata                     ),
-    .full                   (rx_fifo_full                      ),
-    .empty                  (rx_fifo_empty                     ),
-    .rd_data_count          (rx_fifo_level                     )
+async_fifo #(
+    .AS                                  (5                                            ),
+    .DS                                  (32                                           ),
+    .RSTEN                               (0                                            ),
+    .WC                                  (0                                            ),
+    .RC                                  (0                                            )
+) rx_async_fifo(
+    .wclk                                (spi_clk                                      ),
+    .rclk                                (sys_clk                                      ),
+    .wclr                                (rx_fifo_clr_sync                             ),
+    .rclr                                (spi_ctl[10]                                  ),
+    .rst_n                               (rst_n                                        ),
+    .winc                                (rx_fifo_winc                                 ),
+    .rinc                                (rx_fifo_rinc                                 ),
+    .wdata                               (rx_fifo_wdata                                ),
+    .rdata                               (rx_fifo_rdata                                ),
+    .full                                (rx_fifo_full                                 ),
+    .empty                               (rx_fifo_empty                                ),
+    .overflow                            (rx_fifo_of                                   ),
+    .underflow                           (rx_fifo_uf                                   ),
+    .wlevel                              (                                             ),
+    .rlevel                              (                                             )
 );
 
 endmodule
-
-`default_nettype wire

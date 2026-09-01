@@ -1,125 +1,111 @@
 `timescale 1ns / 1ps
-`default_nettype none
 
-module SPI_SYNC #(
-    parameter integer       UDLY                        = 1
-)(
-    input   wire            SYS_CLK                                     ,
-    input   wire            SYS_RST_N                                   ,
-    input   wire            SPI_CLK                                     ,
-    input   wire            SPI_RST_N                                   ,
-    input   wire            run_request_sys                             ,
-    input   wire    [7:0]   command_sys                                 ,
-    input   wire    [11:0]  address_sys                                 ,
-    input   wire    [15:0]  length_sys                                  ,
-    input   wire            enable_sys                                  ,
-    input   wire            busy_spi                                    ,
-    input   wire            done_spi                                    ,
-    input   wire            error_spi                                   ,
-    input   wire            tx_underflow_spi                            ,
-    input   wire            rx_overflow_spi                             ,
-    output  wire            run_pulse_spi                               ,
-    output  reg     [7:0]   command_spi                                 ,
-    output  reg     [11:0]  address_spi                                 ,
-    output  reg     [15:0]  length_spi                                  ,
-    output  wire            enable_spi                                  ,
-    output  wire            busy_sys                                    ,
-    output  wire            done_sys                                    ,
-    output  wire            error_sys                                   ,
-    output  wire            tx_underflow_sys                            ,
-    output  wire            rx_overflow_sys
+module SPI_SYNC(
+    input                                   sys_clk                                        ,
+    input                                   spi_clk                                        ,
+    input                                   rst_n                                          ,
+
+    input                                   spi_busy                                       ,
+    output    wire                          spi_busy_sync                                  ,
+    input                                   tx_fifo_empty                                  ,
+    output    wire                          tx_fifo_empty_sync                             ,
+    input                                   rx_fifo_full                                   ,
+    output    wire                          rx_fifo_full_sync                              ,
+    input                                   tx_fifo_uf                                     ,
+    output    reg                           tx_fifo_uf_sync                                ,
+    input                                   rx_fifo_of                                     ,
+    output    reg                           rx_fifo_of_sync
 );
 
-SPI_PULSE_HANDSHAKE #(
-    .UDLY               (UDLY                              )
-) run_request_cdc (
-    .source_clk         (SYS_CLK                           ),
-    .source_rst_n       (SYS_RST_N                         ),
-    .destination_clk    (SPI_CLK                           ),
-    .destination_rst_n  (SPI_RST_N                         ),
-    .pulse_in           (run_request_sys                    ),
-    .pulse_out          (run_pulse_spi                      )
-);
+parameter                                   UDLY                     = 1                   ;
 
-SPI_LEVEL_SYNC #(
-    .UDLY               (UDLY                              ),
-    .DS                 (2                                 ),
-    .RV                 (1'b0                              )
-) enable_cdc (
-    .clk                (SPI_CLK                           ),
-    .rst_n              (SPI_RST_N                         ),
-    .in                 (enable_sys                        ),
-    .out                (enable_spi                        )
-);
+wire                                        tx_fifo_uf_req_sync                            ;
+wire                                        tx_fifo_uf_ack_sync                            ;
+wire                                        rx_fifo_of_req_sync                            ;
+wire                                        rx_fifo_of_ack_sync                            ;
 
-SPI_LEVEL_SYNC #(
-    .UDLY               (UDLY                              ),
-    .DS                 (2                                 ),
-    .RV                 (1'b0                              )
-) busy_cdc (
-    .clk                (SYS_CLK                           ),
-    .rst_n              (SYS_RST_N                         ),
-    .in                 (busy_spi                          ),
-    .out                (busy_sys                          )
-);
+reg                                         tx_fifo_uf_req                                 ;
+reg                                         tx_fifo_uf_queued                              ;
+reg                                         tx_fifo_uf_req_r                               ;
+reg                                         rx_fifo_of_req                                 ;
+reg                                         rx_fifo_of_queued                              ;
+reg                                         rx_fifo_of_req_r                               ;
 
-SPI_PULSE_HANDSHAKE #(
-    .UDLY               (UDLY                              )
-) done_cdc (
-    .source_clk         (SPI_CLK                           ),
-    .source_rst_n       (SPI_RST_N                         ),
-    .destination_clk    (SYS_CLK                           ),
-    .destination_rst_n  (SYS_RST_N                         ),
-    .pulse_in           (done_spi                          ),
-    .pulse_out          (done_sys                          )
-);
+//////////////////////////////////////////////////
+//1. Status Level CDC
+//////////////////////////////////////////////////
+level_sync #(.RV(1'd0)) spi_busy_level_sync(.clk(sys_clk), .rst_n(rst_n), .in(spi_busy), .out(spi_busy_sync));
+level_sync #(.RV(1'd1)) tx_fifo_empty_level_sync(.clk(sys_clk), .rst_n(rst_n), .in(tx_fifo_empty), .out(tx_fifo_empty_sync));
+level_sync #(.RV(1'd0)) rx_fifo_full_level_sync(.clk(sys_clk), .rst_n(rst_n), .in(rx_fifo_full), .out(rx_fifo_full_sync));
 
-SPI_PULSE_HANDSHAKE #(
-    .UDLY               (UDLY                              )
-) error_cdc (
-    .source_clk         (SPI_CLK                           ),
-    .source_rst_n       (SPI_RST_N                         ),
-    .destination_clk    (SYS_CLK                           ),
-    .destination_rst_n  (SYS_RST_N                         ),
-    .pulse_in           (error_spi                         ),
-    .pulse_out          (error_sys                         )
-);
+//////////////////////////////////////////////////
+//2. TX Underflow Event CDC
+//////////////////////////////////////////////////
+level_sync #(.RV(1'd0)) tx_fifo_uf_req_level_sync(.clk(sys_clk), .rst_n(rst_n), .in(tx_fifo_uf_req), .out(tx_fifo_uf_req_sync));
+level_sync #(.RV(1'd0)) tx_fifo_uf_ack_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(tx_fifo_uf_req_sync), .out(tx_fifo_uf_ack_sync));
 
-SPI_PULSE_HANDSHAKE #(
-    .UDLY               (UDLY                              )
-) tx_underflow_cdc (
-    .source_clk         (SPI_CLK                           ),
-    .source_rst_n       (SPI_RST_N                         ),
-    .destination_clk    (SYS_CLK                           ),
-    .destination_rst_n  (SYS_RST_N                         ),
-    .pulse_in           (tx_underflow_spi                  ),
-    .pulse_out          (tx_underflow_sys                  )
-);
-
-SPI_PULSE_HANDSHAKE #(
-    .UDLY               (UDLY                              )
-) rx_overflow_cdc (
-    .source_clk         (SPI_CLK                           ),
-    .source_rst_n       (SPI_RST_N                         ),
-    .destination_clk    (SYS_CLK                           ),
-    .destination_rst_n  (SYS_RST_N                         ),
-    .pulse_in           (rx_overflow_spi                   ),
-    .pulse_out          (rx_overflow_sys                   )
-);
-
-always @(posedge SPI_CLK or negedge SPI_RST_N) begin
-    if(!SPI_RST_N) begin
-        command_spi <= #UDLY 8'h00;
-        address_spi <= #UDLY 12'h000;
-        length_spi  <= #UDLY 16'h0000;
+always @(posedge spi_clk or negedge rst_n) begin
+    if(~rst_n) begin
+        tx_fifo_uf_req    <= #UDLY 1'd0;
+        tx_fifo_uf_queued <= #UDLY 1'd0;
     end
-    else if(run_pulse_spi) begin
-        command_spi <= #UDLY command_sys;
-        address_spi <= #UDLY address_sys;
-        length_spi  <= #UDLY length_sys;
+    else begin
+        if(tx_fifo_uf_req & tx_fifo_uf_ack_sync)
+            tx_fifo_uf_req <= #UDLY 1'd0;
+        else if(~tx_fifo_uf_req & ~tx_fifo_uf_ack_sync & (tx_fifo_uf_queued | tx_fifo_uf))
+            tx_fifo_uf_req <= #UDLY 1'd1;
+
+        if(tx_fifo_uf & (tx_fifo_uf_req | tx_fifo_uf_ack_sync))
+            tx_fifo_uf_queued <= #UDLY 1'd1;
+        else if(~tx_fifo_uf_req & ~tx_fifo_uf_ack_sync & tx_fifo_uf_queued)
+            tx_fifo_uf_queued <= #UDLY 1'd0;
+    end
+end
+
+always @(posedge sys_clk or negedge rst_n) begin
+    if(~rst_n) begin
+        tx_fifo_uf_req_r <= #UDLY 1'd0;
+        tx_fifo_uf_sync  <= #UDLY 1'd0;
+    end
+    else begin
+        tx_fifo_uf_req_r <= #UDLY tx_fifo_uf_req_sync;
+        tx_fifo_uf_sync  <= #UDLY tx_fifo_uf_req_sync & ~tx_fifo_uf_req_r;
+    end
+end
+
+//////////////////////////////////////////////////
+//3. RX Overflow Event CDC
+//////////////////////////////////////////////////
+level_sync #(.RV(1'd0)) rx_fifo_of_req_level_sync(.clk(sys_clk), .rst_n(rst_n), .in(rx_fifo_of_req), .out(rx_fifo_of_req_sync));
+level_sync #(.RV(1'd0)) rx_fifo_of_ack_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(rx_fifo_of_req_sync), .out(rx_fifo_of_ack_sync));
+
+always @(posedge spi_clk or negedge rst_n) begin
+    if(~rst_n) begin
+        rx_fifo_of_req    <= #UDLY 1'd0;
+        rx_fifo_of_queued <= #UDLY 1'd0;
+    end
+    else begin
+        if(rx_fifo_of_req & rx_fifo_of_ack_sync)
+            rx_fifo_of_req <= #UDLY 1'd0;
+        else if(~rx_fifo_of_req & ~rx_fifo_of_ack_sync & (rx_fifo_of_queued | rx_fifo_of))
+            rx_fifo_of_req <= #UDLY 1'd1;
+
+        if(rx_fifo_of & (rx_fifo_of_req | rx_fifo_of_ack_sync))
+            rx_fifo_of_queued <= #UDLY 1'd1;
+        else if(~rx_fifo_of_req & ~rx_fifo_of_ack_sync & rx_fifo_of_queued)
+            rx_fifo_of_queued <= #UDLY 1'd0;
+    end
+end
+
+always @(posedge sys_clk or negedge rst_n) begin
+    if(~rst_n) begin
+        rx_fifo_of_req_r <= #UDLY 1'd0;
+        rx_fifo_of_sync  <= #UDLY 1'd0;
+    end
+    else begin
+        rx_fifo_of_req_r <= #UDLY rx_fifo_of_req_sync;
+        rx_fifo_of_sync  <= #UDLY rx_fifo_of_req_sync & ~rx_fifo_of_req_r;
     end
 end
 
 endmodule
-
-`default_nettype wire

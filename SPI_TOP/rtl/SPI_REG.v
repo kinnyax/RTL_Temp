@@ -1,429 +1,267 @@
 `timescale 1ns / 1ps
-`default_nettype none
 
-module SPI_REG #(
-    parameter integer       AXI_ADDR_WIDTH              = 15            ,
-    parameter integer       UDLY                        = 1
-)(
-    input   wire                            SYS_CLK                     ,
-    input   wire                            SYS_RST_N                   ,
-    input   wire                            SPI_RST_EN                  ,
-    input   wire        [AXI_ADDR_WIDTH-1:0] S_AXI_AWADDR               ,
-    input   wire        [2:0]               S_AXI_AWPROT                ,
-    input   wire                            S_AXI_AWVALID               ,
-    output  wire                            S_AXI_AWREADY               ,
-    input   wire        [31:0]              S_AXI_WDATA                ,
-    input   wire        [3:0]               S_AXI_WSTRB                ,
-    input   wire                            S_AXI_WVALID               ,
-    output  wire                            S_AXI_WREADY               ,
-    output  reg         [1:0]               S_AXI_BRESP                ,
-    output  reg                             S_AXI_BVALID               ,
-    input   wire                            S_AXI_BREADY               ,
-    input   wire        [AXI_ADDR_WIDTH-1:0] S_AXI_ARADDR               ,
-    input   wire        [2:0]               S_AXI_ARPROT                ,
-    input   wire                            S_AXI_ARVALID               ,
-    output  wire                            S_AXI_ARREADY               ,
-    output  reg         [31:0]              S_AXI_RDATA                ,
-    output  reg         [1:0]               S_AXI_RRESP                ,
-    output  reg                             S_AXI_RVALID               ,
-    input   wire                            S_AXI_RREADY               ,
-    input   wire                            busy_sys                    ,
-    input   wire                            done_pulse_sys              ,
-    input   wire                            error_pulse_sys             ,
-    input   wire                            tx_underflow_sys            ,
-    input   wire                            rx_overflow_sys             ,
-    input   wire                            tx_fifo_full                ,
-    input   wire        [8:0]               tx_fifo_level               ,
-    input   wire                            rx_fifo_empty               ,
-    input   wire        [8:0]               rx_fifo_level               ,
-    input   wire        [31:0]              rx_fifo_rdata               ,
-    output  wire                            tx_fifo_wen                 ,
-    output  wire        [31:0]              tx_fifo_wdata               ,
-    output  wire                            rx_fifo_ren                 ,
-    output  wire                            spi_enable                  ,
-    output  wire                            run_request                 ,
-    output  wire                            tx_fifo_clear               ,
-    output  wire                            rx_fifo_clear               ,
-    output  wire        [7:0]               spi_command                ,
-    output  wire        [11:0]              spi_address                ,
-    output  wire        [15:0]              spi_length
+module SPI_REG(
+    input                                   sys_clk                                        ,
+    input                                   sys_rst_n                                      ,
+
+    input               [31:0]              s_axi_awaddr                                   ,
+    input                                   s_axi_awvalid                                  ,
+    output    reg                           s_axi_awready                                  ,
+
+    input               [31:0]              s_axi_wdata                                    ,
+    input               [ 3:0]              s_axi_wstrb                                    ,
+    input                                   s_axi_wvalid                                   ,
+    output    reg                           s_axi_wready                                   ,
+
+    output    reg       [ 1:0]              s_axi_bresp                                    ,
+    output    reg                           s_axi_bvalid                                   ,
+    input                                   s_axi_bready                                   ,
+
+    input               [31:0]              s_axi_araddr                                   ,
+    input                                   s_axi_arvalid                                  ,
+    output    reg                           s_axi_arready                                  ,
+
+    output    reg       [31:0]              s_axi_rdata                                    ,
+    output    reg       [ 1:0]              s_axi_rresp                                    ,
+    output    reg                           s_axi_rvalid                                   ,
+    input                                   s_axi_rready                                   ,
+
+    output    reg       [31:0]              spi_ctl                                        ,
+    output    reg       [31:0]              sck_div                                        ,
+    output    reg       [31:0]              cs_cfg                                         ,
+
+    input                                   spi_busy                                       ,
+    input                                   tx_fifo_empty                                  ,
+    input                                   tx_fifo_full                                   ,
+    input                                   tx_fifo_of                                     ,
+    input                                   tx_fifo_uf                                     ,
+    input                                   rx_fifo_empty                                  ,
+    input                                   rx_fifo_full                                   ,
+    input                                   rx_fifo_of                                     ,
+    input                                   rx_fifo_uf                                     ,
+
+    output    reg       [31:0]              tx_fifo_wdata                                  ,
+    output    reg                           tx_fifo_winc                                   ,
+    input               [31:0]              rx_fifo_rdata                                  ,
+    output    wire                          rx_fifo_rinc
 );
 
-localparam  [1:0]                   AXI_OKAY                = 2'b00      ;
-localparam  [AXI_ADDR_WIDTH-1:0]    ADDR_SPI_CTL            = 15'h0000  ;
-localparam  [AXI_ADDR_WIDTH-1:0]    ADDR_SPI_CMD            = 15'h0004  ;
-localparam  [AXI_ADDR_WIDTH-1:0]    ADDR_SPI_ADDR           = 15'h0008  ;
-localparam  [AXI_ADDR_WIDTH-1:0]    ADDR_SPI_LEN            = 15'h000C  ;
-localparam  [AXI_ADDR_WIDTH-1:0]    ADDR_SPI_TXDATA         = 15'h0010  ;
-localparam  [AXI_ADDR_WIDTH-1:0]    ADDR_SPI_RXDATA         = 15'h0014  ;
-localparam  [AXI_ADDR_WIDTH-1:0]    ADDR_SPI_STA            = 15'h0018  ;
+parameter                                   UDLY                     = 1                   ;
 
-reg         [AXI_ADDR_WIDTH-1:0]    write_address                         ;
-reg         [31:0]                  write_data                            ;
-reg         [3:0]                   write_strobe                          ;
-reg         [AXI_ADDR_WIDTH-1:0]    read_address                          ;
-reg                                 write_address_pending                 ;
-reg                                 write_data_pending                    ;
-reg                                 read_address_pending                  ;
-reg         [3:0]                   control_register                      ;
-reg         [7:0]                   command_register                      ;
-reg         [11:0]                  address_register                      ;
-reg         [15:0]                  length_register                       ;
-reg                                 done_status                           ;
-reg                                 error_status                          ;
-reg         [3:0]                   exception_status                      ;
-reg         [3:0]                   exception_status_next                 ;
-reg                                 rx_pop_pending                        ;
+wire                    [31:0]              io_rdata                                       ;
+wire                                        wr_access                                      ;
+wire                                        wr_addr                                        ;
+wire                                        wr_data                                        ;
+wire                                        wr_done                                        ;
+wire                                        w_ready                                        ;
+wire                                        rd_access                                      ;
+wire                                        ar_idle                                        ;
+wire                                        reg_0000h_wr                                   ;
+wire                                        reg_0004h_wr                                   ;
+wire                                        reg_0008h_wr                                   ;
+wire                                        reg_0010h_wr                                   ;
+wire                                        reg_001ch_wr                                   ;
+wire                                        reg_0000h_rd                                   ;
+wire                                        reg_0004h_rd                                   ;
+wire                                        reg_0008h_rd                                   ;
+wire                                        reg_0014h_rd                                   ;
+wire                                        reg_0018h_rd                                   ;
+wire                                        reg_001ch_rd                                   ;
+wire                    [31:0]              reg_0000h                                      ;
+wire                    [31:0]              reg_0004h                                      ;
+wire                    [31:0]              reg_0008h                                      ;
+wire                    [31:0]              reg_0014h                                      ;
+wire                    [31:0]              reg_0018h                                      ;
+wire                    [31:0]              reg_001ch                                      ;
 
-wire                                write_address_accept                  ;
-wire                                write_data_accept                     ;
-wire                                read_address_accept                   ;
-wire                                write_access                          ;
-wire                                read_access                           ;
-wire                                full_word_write                       ;
-wire                                aligned_write                         ;
-wire                                aligned_read                          ;
-wire                                business_write                        ;
-wire                                reg_0000h_write                       ;
-wire                                reg_0000h_read                        ;
-wire                                reg_0004h_write                       ;
-wire                                reg_0004h_read                        ;
-wire                                reg_0008h_write                       ;
-wire                                reg_0008h_read                        ;
-wire                                reg_000ch_write                       ;
-wire                                reg_000ch_read                        ;
-wire                                reg_0010h_write                       ;
-wire                                reg_0010h_read                        ;
-wire                                reg_0014h_read                        ;
-wire                                reg_0018h_write                       ;
-wire                                reg_0018h_read                        ;
-wire                                run_accept                            ;
-wire                                tx_overflow_event                     ;
-wire                                rx_underflow_event                    ;
-wire                                tx_fifo_empty_status                  ;
-wire                                rx_fifo_full_status                   ;
-wire        [31:0]                  reg_0000h                             ;
-wire        [31:0]                  reg_0004h                             ;
-wire        [31:0]                  reg_0008h                             ;
-wire        [31:0]                  reg_000ch                             ;
-wire        [31:0]                  reg_0010h                             ;
-wire        [31:0]                  reg_0014h                             ;
-wire        [31:0]                  reg_0018h                             ;
-wire        [31:0]                  read_data                             ;
+reg                     [31:0]              axi_awaddr_r                                   ;
+reg                     [31:0]              axi_araddr_r                                   ;
+reg                                         aw_busy                                        ;
+reg                                         wait_data                                      ;
+reg                                         rdata_pop_pending                              ;
+reg                     [ 3:0]              spi_pd                                         ;
+
+integer i;
 
 //////////////////////////////////////////////////
-//1. AXI4-Lite Protocol
+//1. AXI Protocol
 //////////////////////////////////////////////////
-assign S_AXI_AWREADY = SYS_RST_N &
-                       ~write_address_pending &
-                       ~S_AXI_BVALID;
-assign S_AXI_WREADY  = SYS_RST_N &
-                       ~write_data_pending &
-                       ~S_AXI_BVALID;
-assign S_AXI_ARREADY = SYS_RST_N &
-                       ~read_address_pending &
-                       ~S_AXI_RVALID;
+assign wr_access = s_axi_wready & s_axi_wvalid;
+assign wr_addr   = ~s_axi_awready & s_axi_awvalid & ~aw_busy;
+assign wr_data   = wr_access & ~s_axi_bvalid;
+assign wr_done   = s_axi_bready & s_axi_bvalid;
 
-assign write_address_accept = S_AXI_AWREADY & S_AXI_AWVALID;
-assign write_data_accept    = S_AXI_WREADY  & S_AXI_WVALID;
-assign read_address_accept  = S_AXI_ARREADY & S_AXI_ARVALID;
-assign write_access         = write_address_pending &
-                              write_data_pending &
-                              ~S_AXI_BVALID;
-assign read_access          = read_address_pending & ~S_AXI_RVALID;
-
-// AWPROT and ARPROT are standard interface attributes. Access control is
-// owned by the system interconnect, so the register bank intentionally does
-// not consume them.
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        write_address <= #UDLY {AXI_ADDR_WIDTH{1'b0}};
-    else if(write_address_accept)
-        write_address <= #UDLY S_AXI_AWADDR;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        write_address_pending <= #UDLY 1'b0;
-    else if(write_access)
-        write_address_pending <= #UDLY 1'b0;
-    else if(write_address_accept)
-        write_address_pending <= #UDLY 1'b1;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N) begin
-        write_data   <= #UDLY 32'h0000_0000;
-        write_strobe <= #UDLY 4'h0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_awready <= #UDLY 1'd0;
+        aw_busy       <= #UDLY 1'd0;
     end
-    else if(write_data_accept) begin
-        write_data   <= #UDLY S_AXI_WDATA;
-        write_strobe <= #UDLY S_AXI_WSTRB;
+    else if(wr_addr) begin
+        s_axi_awready <= #UDLY 1'd1;
+        aw_busy       <= #UDLY 1'd1;
+    end
+    else if(wr_done) begin
+        s_axi_awready <= #UDLY 1'd0;
+        aw_busy       <= #UDLY 1'd0;
+    end
+    else
+        s_axi_awready <= #UDLY 1'd0;
+end
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        axi_awaddr_r <= #UDLY 32'd0;
+    else if(wr_addr)
+        axi_awaddr_r <= #UDLY s_axi_awaddr;
+end
+
+assign w_ready = ~s_axi_wready & s_axi_wvalid & (wait_data | wr_addr);
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_wready <= #UDLY 1'd0;
+        wait_data    <= #UDLY 1'd0;
+    end
+    else if(w_ready) begin
+        s_axi_wready <= #UDLY 1'd1;
+        wait_data    <= #UDLY 1'd0;
+    end
+    else if(wr_addr) begin
+        wait_data <= #UDLY 1'd1;
+    end
+    else begin
+        s_axi_wready <= #UDLY 1'd0;
     end
 end
 
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        write_data_pending <= #UDLY 1'b0;
-    else if(write_access)
-        write_data_pending <= #UDLY 1'b0;
-    else if(write_data_accept)
-        write_data_pending <= #UDLY 1'b1;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        S_AXI_BVALID <= #UDLY 1'b0;
-    else if(S_AXI_BVALID & S_AXI_BREADY)
-        S_AXI_BVALID <= #UDLY 1'b0;
-    else if(write_access)
-        S_AXI_BVALID <= #UDLY 1'b1;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        S_AXI_BRESP <= #UDLY AXI_OKAY;
-    else if(write_access)
-        S_AXI_BRESP <= #UDLY AXI_OKAY;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        read_address <= #UDLY {AXI_ADDR_WIDTH{1'b0}};
-    else if(read_address_accept)
-        read_address <= #UDLY S_AXI_ARADDR;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        read_address_pending <= #UDLY 1'b0;
-    else if(read_access)
-        read_address_pending <= #UDLY 1'b0;
-    else if(read_address_accept)
-        read_address_pending <= #UDLY 1'b1;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        S_AXI_RVALID <= #UDLY 1'b0;
-    else if(S_AXI_RVALID & S_AXI_RREADY)
-        S_AXI_RVALID <= #UDLY 1'b0;
-    else if(read_access)
-        S_AXI_RVALID <= #UDLY 1'b1;
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N) begin
-        S_AXI_RDATA <= #UDLY 32'h0000_0000;
-        S_AXI_RRESP <= #UDLY AXI_OKAY;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_bvalid <= #UDLY 1'd0;
+        s_axi_bresp  <= #UDLY 2'd0;
     end
-    else if(read_access) begin
-        S_AXI_RDATA <= #UDLY read_data;
-        S_AXI_RRESP <= #UDLY AXI_OKAY;
+    else if(wr_data) begin
+        s_axi_bvalid <= #UDLY 1'd1;
+        s_axi_bresp  <= #UDLY 2'd0;
     end
+    else if(wr_done)
+        s_axi_bvalid <= #UDLY 1'd0;
+end
+
+assign ar_idle   = ~s_axi_rvalid | (s_axi_rvalid & s_axi_rready);
+assign rd_access = s_axi_arready & s_axi_arvalid;
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_arready <= #UDLY 1'd0;
+        axi_araddr_r  <= #UDLY 32'd0;
+    end
+    else if(~s_axi_arready & s_axi_arvalid & ar_idle) begin
+        s_axi_arready <= #UDLY 1'd1;
+        axi_araddr_r  <= #UDLY s_axi_araddr;
+    end
+    else
+        s_axi_arready <= #UDLY 1'd0;
+end
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_rvalid <= #UDLY 1'd0;
+        s_axi_rdata  <= #UDLY 32'd0;
+        s_axi_rresp  <= #UDLY 2'd0;
+    end
+    else if(rd_access) begin
+        s_axi_rvalid <= #UDLY 1'd1;
+        s_axi_rdata  <= #UDLY io_rdata;
+        s_axi_rresp  <= #UDLY 2'd0;
+    end
+    else if(s_axi_rready & s_axi_rvalid)
+        s_axi_rvalid <= #UDLY 1'd0;
 end
 
 //////////////////////////////////////////////////
 //2. Address Decode
 //////////////////////////////////////////////////
-assign full_word_write = (write_strobe == 4'hF);
-assign aligned_write   = (write_address[1:0] == 2'b00);
-assign aligned_read    = (read_address[1:0] == 2'b00);
-assign business_write  = write_access & SPI_RST_EN &
-                         full_word_write & aligned_write;
+assign reg_0000h_wr = (axi_awaddr_r == 32'h0000) & wr_access;
+assign reg_0004h_wr = (axi_awaddr_r == 32'h0004) & wr_access;
+assign reg_0008h_wr = (axi_awaddr_r == 32'h0008) & wr_access;
+assign reg_0010h_wr = (axi_awaddr_r == 32'h0010) & wr_access;
+assign reg_001ch_wr = (axi_awaddr_r == 32'h001c) & wr_access;
 
-assign reg_0000h_write = business_write &
-                         (write_address == ADDR_SPI_CTL);
-assign reg_0000h_read  = read_access & aligned_read &
-                         (read_address == ADDR_SPI_CTL);
-assign reg_0004h_write = business_write &
-                         (write_address == ADDR_SPI_CMD);
-assign reg_0004h_read  = read_access & aligned_read &
-                         (read_address == ADDR_SPI_CMD);
-assign reg_0008h_write = business_write &
-                         (write_address == ADDR_SPI_ADDR);
-assign reg_0008h_read  = read_access & aligned_read &
-                         (read_address == ADDR_SPI_ADDR);
-assign reg_000ch_write = business_write &
-                         (write_address == ADDR_SPI_LEN);
-assign reg_000ch_read  = read_access & aligned_read &
-                         (read_address == ADDR_SPI_LEN);
-assign reg_0010h_write = business_write &
-                         (write_address == ADDR_SPI_TXDATA);
-assign reg_0010h_read  = read_access & aligned_read &
-                         (read_address == ADDR_SPI_TXDATA);
-assign reg_0014h_read  = read_access & aligned_read &
-                         (read_address == ADDR_SPI_RXDATA);
-assign reg_0018h_write = business_write &
-                         (write_address == ADDR_SPI_STA);
-assign reg_0018h_read  = read_access & aligned_read &
-                         (read_address == ADDR_SPI_STA);
+assign reg_0000h_rd = (axi_araddr_r == 32'h0000) & rd_access;
+assign reg_0004h_rd = (axi_araddr_r == 32'h0004) & rd_access;
+assign reg_0008h_rd = (axi_araddr_r == 32'h0008) & rd_access;
+assign reg_0014h_rd = (axi_araddr_r == 32'h0014) & rd_access;
+assign reg_0018h_rd = (axi_araddr_r == 32'h0018) & rd_access;
+assign reg_001ch_rd = (axi_araddr_r == 32'h001c) & rd_access;
 
 //////////////////////////////////////////////////
-//3. Register Encode
+//3. Write & Read REG
 //////////////////////////////////////////////////
-assign run_accept = reg_0000h_write &
-                    write_data[1] &
-                    write_data[0] &
-                    control_register[0] &
-                    ~control_register[1] &
-                    ~busy_sys;
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        control_register <= #UDLY 4'h0;
-    else if(!SPI_RST_EN)
-        control_register <= #UDLY 4'h0;
-    else begin
-        if(reg_0000h_write) begin
-            control_register[3:2] <= #UDLY write_data[3:2];
-            control_register[0]   <= #UDLY write_data[0];
-        end
-        if(done_pulse_sys | error_pulse_sys)
-            control_register[1] <= #UDLY 1'b0;
-        else if(reg_0000h_write & ~write_data[0])
-            control_register[1] <= #UDLY 1'b0;
-        else if(run_accept)
-            control_register[1] <= #UDLY 1'b1;
-        else if(~control_register[0])
-            control_register[1] <= #UDLY 1'b0;
-    end
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        command_register <= #UDLY 8'h00;
-    else if(!SPI_RST_EN)
-        command_register <= #UDLY 8'h00;
-    else if(reg_0004h_write)
-        command_register <= #UDLY write_data[7:0];
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        address_register <= #UDLY 12'h000;
-    else if(!SPI_RST_EN)
-        address_register <= #UDLY 12'h000;
-    else if(reg_0008h_write)
-        address_register <= #UDLY write_data[11:0];
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        length_register <= #UDLY 16'h0000;
-    else if(!SPI_RST_EN)
-        length_register <= #UDLY 16'h0000;
-    else if(reg_000ch_write)
-        length_register <= #UDLY write_data[15:0];
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N) begin
-        done_status  <= #UDLY 1'b0;
-        error_status <= #UDLY 1'b0;
-    end
-    else if(!SPI_RST_EN) begin
-        done_status  <= #UDLY 1'b0;
-        error_status <= #UDLY 1'b0;
-    end
-    else if(!control_register[0] |
-            (reg_0000h_write & ~write_data[0]) |
-            run_accept) begin
-        done_status  <= #UDLY 1'b0;
-        error_status <= #UDLY 1'b0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        spi_ctl <= #UDLY 32'h0000_0180;
+        sck_div <= #UDLY 32'd0;
+        cs_cfg  <= #UDLY 32'd0;
     end
     else begin
-        if(done_pulse_sys)
-            done_status <= #UDLY 1'b1;
-        if(error_pulse_sys | tx_underflow_sys | rx_overflow_sys)
-            error_status <= #UDLY 1'b1;
+        if(reg_0000h_wr) spi_ctl <= #UDLY s_axi_wdata;
+        if(reg_0004h_wr) sck_div <= #UDLY s_axi_wdata;
+        if(reg_0008h_wr) cs_cfg  <= #UDLY s_axi_wdata;
     end
 end
 
-assign tx_overflow_event  = reg_0010h_write & tx_fifo_full;
-assign rx_underflow_event = reg_0014h_read & rx_fifo_empty;
-assign tx_fifo_empty_status = (tx_fifo_level == 9'd0);
-assign rx_fifo_full_status  = (rx_fifo_level == 9'd256);
-
-always @(*) begin
-    exception_status_next = exception_status;
-    if(reg_0018h_write)
-        exception_status_next = exception_status &
-                                ~write_data[10:7];
-    exception_status_next = exception_status_next |
-                            {rx_underflow_event,
-                             rx_overflow_sys,
-                             tx_underflow_sys,
-                             tx_overflow_event};
-end
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        exception_status <= #UDLY 4'h0;
-    else if(!SPI_RST_EN)
-        exception_status <= #UDLY 4'h0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        tx_fifo_wdata <= #UDLY 32'd0;
+        tx_fifo_winc  <= #UDLY 1'd0;
+    end
+    else if(reg_0010h_wr) begin
+        tx_fifo_wdata <= #UDLY s_axi_wdata;
+        tx_fifo_winc  <= #UDLY 1'd1;
+    end
     else
-        exception_status <= #UDLY exception_status_next;
+        tx_fifo_winc <= #UDLY 1'd0;
 end
 
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        rx_pop_pending <= #UDLY 1'b0;
-    else if(!SPI_RST_EN)
-        rx_pop_pending <= #UDLY 1'b0;
-    else if(S_AXI_RVALID & S_AXI_RREADY)
-        rx_pop_pending <= #UDLY 1'b0;
-    else if(read_access)
-        rx_pop_pending <= #UDLY reg_0014h_read & ~rx_fifo_empty;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        spi_pd <= #UDLY 4'd0;
+    else begin
+        for(i=0;i<4;i=i+1) begin
+            if(reg_001ch_wr & s_axi_wdata[i]) spi_pd[i] <= #UDLY 1'd0;
+        end
+        if(tx_fifo_of) spi_pd[0] <= #UDLY 1'd1;
+        if(tx_fifo_uf) spi_pd[1] <= #UDLY 1'd1;
+        if(rx_fifo_of) spi_pd[2] <= #UDLY 1'd1;
+        if(rx_fifo_uf) spi_pd[3] <= #UDLY 1'd1;
+    end
 end
 
-assign tx_fifo_wen   = reg_0010h_write &
-                       ~tx_fifo_full &
-                       ~control_register[2];
-assign tx_fifo_wdata = write_data;
-assign rx_fifo_ren   = S_AXI_RVALID &
-                       S_AXI_RREADY &
-                       rx_pop_pending &
-                       ~rx_fifo_empty &
-                       ~control_register[3] &
-                       SPI_RST_EN;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        rdata_pop_pending <= #UDLY 1'd0;
+    else begin
+        if(s_axi_rvalid & s_axi_rready)
+            rdata_pop_pending <= #UDLY 1'd0;
+        if(reg_0014h_rd)
+            rdata_pop_pending <= #UDLY 1'd1;
+    end
+end
 
-assign spi_enable    = control_register[0];
-assign run_request   = run_accept;
-assign tx_fifo_clear = control_register[2];
-assign rx_fifo_clear = control_register[3];
-assign spi_command   = command_register;
-assign spi_address   = address_register;
-assign spi_length    = length_register;
+assign rx_fifo_rinc = s_axi_rvalid & s_axi_rready & rdata_pop_pending;
 
-assign reg_0000h = {28'h000_0000, control_register};
-assign reg_0004h = {24'h00_0000, command_register};
-assign reg_0008h = {20'h0_0000, address_register};
-assign reg_000ch = {16'h0000, length_register};
-assign reg_0010h = 32'h0000_0000;
-assign reg_0014h = rx_fifo_empty ?
-                   32'h0000_0000 : rx_fifo_rdata;
-assign reg_0018h = {3'b000,
-                    rx_fifo_level,
-                    tx_fifo_level,
-                    exception_status,
-                    rx_fifo_full_status,
-                    rx_fifo_empty,
-                    tx_fifo_full,
-                    tx_fifo_empty_status,
-                    error_status,
-                    done_status,
-                    busy_sys};
+assign reg_0000h = spi_ctl & 32'h0000_07ff;
+assign reg_0004h = sck_div & 32'h0000_ffff;
+assign reg_0008h = cs_cfg  & 32'h0000_0007;
+assign reg_0014h = rx_fifo_rdata;
+assign reg_0018h = {27'd0, rx_fifo_full, rx_fifo_empty, tx_fifo_full, tx_fifo_empty, spi_busy};
+assign reg_001ch = {28'd0, spi_pd};
 
-assign read_data = ({32{reg_0000h_read}} & reg_0000h) |
-                   ({32{reg_0004h_read}} & reg_0004h) |
-                   ({32{reg_0008h_read}} & reg_0008h) |
-                   ({32{reg_000ch_read}} & reg_000ch) |
-                   ({32{reg_0010h_read}} & reg_0010h) |
-                   ({32{reg_0014h_read}} & reg_0014h) |
-                   ({32{reg_0018h_read}} & reg_0018h);
+assign io_rdata = ({32{reg_0000h_rd}} & reg_0000h) |
+                  ({32{reg_0004h_rd}} & reg_0004h) |
+                  ({32{reg_0008h_rd}} & reg_0008h) |
+                  ({32{reg_0014h_rd}} & reg_0014h) |
+                  ({32{reg_0018h_rd}} & reg_0018h) |
+                  ({32{reg_001ch_rd}} & reg_001ch);
 
 endmodule
-
-`default_nettype wire
