@@ -23,24 +23,62 @@ localparam                                  TGC_APPLY                = 2'd1     
 localparam                                  TGC_SLOPE                = 2'd2                ;
 
 wire                                        tgc_run_sync                                   ;
+wire                                        tgc_ack                                        ;
+wire                                        tgc_req_pending                                ;
+wire                                        tgc_src_pending_sync                           ;
 wire                                        tgc_start                                      ;
+wire                                        tgc_fsm_idle                                   ;
 wire                                        tgc_apply                                      ;
 wire                                        tgc_slope_phase                                ;
 
+reg                                         tgc_req                                        ;
+reg                                         tgc_src_pending                                ;
+reg                     [ 1:0]              tgc_ack_sync                                   ;
+reg                     [ 2:0]              tgc_req_sync                                   ;
 reg                     [ 1:0]              tgc_fsm                                        ;
 reg                     [ 1:0]              tgc_fsm_nx                                     ;
 
 //////////////////////////////////////////////////
 //1. Run Event CDC
 //////////////////////////////////////////////////
-pulse_sync tgc_run_pulse_sync(
-    .clka                                (sys_clk                                      ),
-    .clkb                                (afe_clk                                      ),
-    .rst_n_a                             (sys_rst_n                                    ),
-    .rst_n_b                             (afe_rst_n                                    ),
-    .in                                  (tgc_chn[0]                                   ),
-    .out                                 (tgc_run_sync                                 )
-);
+assign tgc_ack = tgc_ack_sync[1];
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        tgc_req <= #UDLY 1'd0;
+    else if(tgc_ack)
+        tgc_req <= #UDLY 1'd0;
+    else if(tgc_chn[0])
+        tgc_req <= #UDLY 1'd1;
+end
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        tgc_src_pending <= #UDLY 1'd0;
+    else if(tgc_chn[0])
+        tgc_src_pending <= #UDLY 1'd1;
+    else if(~tgc_req & ~tgc_ack)
+        tgc_src_pending <= #UDLY 1'd0;
+end
+
+always @(posedge afe_clk or negedge afe_rst_n) begin
+    if(~afe_rst_n)
+        tgc_req_sync <= #UDLY 3'd0;
+    else
+        tgc_req_sync <= #UDLY {tgc_req_sync[1:0],tgc_req};
+end
+
+assign tgc_run_sync    = tgc_req_sync[1] & ~tgc_req_sync[2];
+assign tgc_req_pending = |tgc_req_sync[2:1];
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        tgc_ack_sync <= #UDLY 2'd0;
+    else
+        tgc_ack_sync <= #UDLY {tgc_ack_sync[0],tgc_req_sync[2]};
+end
+
+level_sync tgc_src_pending_level_sync(.clk(afe_clk),.rst_n(afe_rst_n),.in(tgc_src_pending),.out(tgc_src_pending_sync));
 
 //////////////////////////////////////////////////
 //2. State Machine
@@ -77,8 +115,9 @@ end
 //////////////////////////////////////////////////
 //3. State Decode And Pin Action
 //////////////////////////////////////////////////
-assign tgc_idle        = (tgc_fsm == TGC_IDLE);
-assign tgc_start       = tgc_idle & chn_en & tgc_run_sync;
+assign tgc_fsm_idle    = (tgc_fsm == TGC_IDLE);
+assign tgc_idle        = tgc_fsm_idle & ~tgc_req_pending & ~tgc_src_pending_sync;
+assign tgc_start       = tgc_fsm_idle & chn_en & tgc_run_sync;
 assign tgc_apply       = (tgc_fsm == TGC_APPLY);
 assign tgc_slope_phase = (tgc_fsm == TGC_SLOPE);
 
