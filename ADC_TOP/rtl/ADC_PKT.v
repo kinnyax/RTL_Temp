@@ -16,7 +16,7 @@ module ADC_PKT(
     output    reg                           m_axis_tlast                                   ,
     input                                   m_axis_tready                                  ,
 
-    output    wire                          chn_idle
+    output    wire                          pkt_idle
 );
 
 parameter                                   UDLY                     = 1                   ;
@@ -66,17 +66,17 @@ always @(*) begin
 end
 
 //////////////////////////////////////////////////
-//2. State Decode And Admission
+//2. State Decode
 //////////////////////////////////////////////////
-assign chn_idle       = (pkt_fsm == PKT_IDLE);
+assign pkt_idle       = (pkt_fsm == PKT_IDLE);
 assign pkt_busy       = (pkt_fsm == PKT_BUSY);
-assign pkt_update     = chn_idle | pkt_done;
-assign pkt_run        = chn_idle & pkt_start & chn_en & ~rx_fifo_empty &
-                        (rx_fifo_rlevel >= 10'd256);
-assign axis_handshake = m_axis_tvalid & m_axis_tready;
-assign pkt_done       = axis_handshake & m_axis_tlast;
-assign rx_fifo_rinc   = axis_handshake;
-assign m_axis_tdata   = m_axis_tvalid ? rx_fifo_rdat : 512'd0;
+
+//////////////////////////////////////////////////
+//3. Admission Control
+//////////////////////////////////////////////////
+assign pkt_update     = pkt_idle | pkt_done;
+assign pkt_run        = pkt_idle & pkt_start & chn_en & ~rx_fifo_empty &
+                         (rx_fifo_rlevel >= 10'd256);
 
 always @(posedge adc_clk or negedge adc_rst_n) begin
     if(~adc_rst_n)
@@ -86,8 +86,13 @@ always @(posedge adc_clk or negedge adc_rst_n) begin
 end
 
 //////////////////////////////////////////////////
-//3. AXIS Transfer
+//4. AXIS Transfer
 //////////////////////////////////////////////////
+assign axis_handshake = m_axis_tvalid & m_axis_tready;
+assign pkt_done       = axis_handshake & m_axis_tlast;
+assign rx_fifo_rinc   = axis_handshake;
+assign m_axis_tdata   = m_axis_tvalid ? rx_fifo_rdat : 512'd0;
+
 always @(posedge adc_clk or negedge adc_rst_n) begin
     if(~adc_rst_n)
         payload_cnt <= #UDLY 8'd0;

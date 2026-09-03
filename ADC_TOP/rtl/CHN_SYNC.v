@@ -31,10 +31,8 @@ module CHN_SYNC(
     input                                   link_error                                     ,
     output    wire                          link_error_sync                                ,
 
-    input                                   upk_idle                                       ,
-    output    wire                          upk_idle_sync                                  ,
-    input                                   tgc_idle                                       ,
-    output    wire                          tgc_idle_sync
+    input                                   afe_idle                                       ,
+    output    wire                          afe_idle_sync
 );
 
 parameter                                   UDLY                     = 1                   ;
@@ -58,8 +56,7 @@ pulse_sync disparity0_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rs
 pulse_sync disparity1_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(phy_disparity[1]),.out(phy_disparity_sync[1]));
 pulse_sync notintable0_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(phy_notintable[0]),.out(phy_notintable_sync[0]));
 pulse_sync notintable1_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(phy_notintable[1]),.out(phy_notintable_sync[1]));
-level_sync #(.RV(1'd1)) upk_idle_level_sync(.clk(adc_clk),.rst_n(adc_rst_n),.in(upk_idle),.out(upk_idle_sync));
-level_sync #(.RV(1'd1)) tgc_idle_level_sync(.clk(adc_clk),.rst_n(adc_rst_n),.in(tgc_idle),.out(tgc_idle_sync));
+level_sync #(.RV(1'd1)) afe_idle_level_sync(.clk(adc_clk),.rst_n(adc_rst_n),.in(afe_idle),.out(afe_idle_sync));
 
 assign link_error_sync = sysref_error_sync | link_error_core_sync;
 

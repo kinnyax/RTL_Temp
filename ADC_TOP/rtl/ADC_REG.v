@@ -38,10 +38,18 @@ module ADC_REG(
     input               [ 7:0]              sysref_seen_sync                               ,
     input               [15:0]              disparity_sync                                 ,
     input               [15:0]              notintable_sync                                ,
+    input               [ 7:0]              tgc_done                                       ,
 
     output    reg       [31:0]              adc_ctl                                        ,
     output    reg       [31:0]              frm_cfg                                        ,
-    output    reg       [31:0]              tgc_chn
+    output    reg       [ 3:0]              chn0_tgc                                       ,
+    output    reg       [ 3:0]              chn1_tgc                                       ,
+    output    reg       [ 3:0]              chn2_tgc                                       ,
+    output    reg       [ 3:0]              chn3_tgc                                       ,
+    output    reg       [ 3:0]              chn4_tgc                                       ,
+    output    reg       [ 3:0]              chn5_tgc                                       ,
+    output    reg       [ 3:0]              chn6_tgc                                       ,
+    output    reg       [ 3:0]              chn7_tgc
 );
 
 parameter                                   UDLY                     = 1                   ;
@@ -262,33 +270,32 @@ end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        tgc_chn <= #UDLY 32'd0;
+        chn0_tgc <= #UDLY 4'd0;
+        chn1_tgc <= #UDLY 4'd0;
+        chn2_tgc <= #UDLY 4'd0;
+        chn3_tgc <= #UDLY 4'd0;
+        chn4_tgc <= #UDLY 4'd0;
+        chn5_tgc <= #UDLY 4'd0;
+        chn6_tgc <= #UDLY 4'd0;
+        chn7_tgc <= #UDLY 4'd0;
     end
     else begin
-        tgc_chn[0]  <= #UDLY 1'd0;
-        tgc_chn[4]  <= #UDLY 1'd0;
-        tgc_chn[8]  <= #UDLY 1'd0;
-        tgc_chn[12] <= #UDLY 1'd0;
-        tgc_chn[16] <= #UDLY 1'd0;
-        tgc_chn[20] <= #UDLY 1'd0;
-        tgc_chn[24] <= #UDLY 1'd0;
-        tgc_chn[28] <= #UDLY 1'd0;
-        if(reg_0008h_wr)
-            tgc_chn[3:0]   <= #UDLY s_axi_wdata[3:0];
-        if(reg_000ch_wr)
-            tgc_chn[7:4]   <= #UDLY s_axi_wdata[3:0];
-        if(reg_0010h_wr)
-            tgc_chn[11:8]  <= #UDLY s_axi_wdata[3:0];
-        if(reg_0014h_wr)
-            tgc_chn[15:12] <= #UDLY s_axi_wdata[3:0];
-        if(reg_0018h_wr)
-            tgc_chn[19:16] <= #UDLY s_axi_wdata[3:0];
-        if(reg_001ch_wr)
-            tgc_chn[23:20] <= #UDLY s_axi_wdata[3:0];
-        if(reg_0020h_wr)
-            tgc_chn[27:24] <= #UDLY s_axi_wdata[3:0];
-        if(reg_0024h_wr)
-            tgc_chn[31:28] <= #UDLY s_axi_wdata[3:0];
+        if(reg_0008h_wr) chn0_tgc <= #UDLY s_axi_wdata[3:0];
+        if(reg_000ch_wr) chn1_tgc <= #UDLY s_axi_wdata[3:0];
+        if(reg_0010h_wr) chn2_tgc <= #UDLY s_axi_wdata[3:0];
+        if(reg_0014h_wr) chn3_tgc <= #UDLY s_axi_wdata[3:0];
+        if(reg_0018h_wr) chn4_tgc <= #UDLY s_axi_wdata[3:0];
+        if(reg_001ch_wr) chn5_tgc <= #UDLY s_axi_wdata[3:0];
+        if(reg_0020h_wr) chn6_tgc <= #UDLY s_axi_wdata[3:0];
+        if(reg_0024h_wr) chn7_tgc <= #UDLY s_axi_wdata[3:0];
+        if(tgc_done[0]) chn0_tgc[0] <= #UDLY 1'd0;
+        if(tgc_done[1]) chn1_tgc[0] <= #UDLY 1'd0;
+        if(tgc_done[2]) chn2_tgc[0] <= #UDLY 1'd0;
+        if(tgc_done[3]) chn3_tgc[0] <= #UDLY 1'd0;
+        if(tgc_done[4]) chn4_tgc[0] <= #UDLY 1'd0;
+        if(tgc_done[5]) chn5_tgc[0] <= #UDLY 1'd0;
+        if(tgc_done[6]) chn6_tgc[0] <= #UDLY 1'd0;
+        if(tgc_done[7]) chn7_tgc[0] <= #UDLY 1'd0;
     end
 end
 
@@ -391,14 +398,14 @@ end
 
 assign reg_0000h = adc_ctl;
 assign reg_0004h = frm_cfg;
-assign reg_0008h = {28'd0,tgc_chn[3:1],1'd0};
-assign reg_000ch = {28'd0,tgc_chn[7:5],1'd0};
-assign reg_0010h = {28'd0,tgc_chn[11:9],1'd0};
-assign reg_0014h = {28'd0,tgc_chn[15:13],1'd0};
-assign reg_0018h = {28'd0,tgc_chn[19:17],1'd0};
-assign reg_001ch = {28'd0,tgc_chn[23:21],1'd0};
-assign reg_0020h = {28'd0,tgc_chn[27:25],1'd0};
-assign reg_0024h = {28'd0,tgc_chn[31:29],1'd0};
+assign reg_0008h = {28'd0,chn0_tgc};
+assign reg_000ch = {28'd0,chn1_tgc};
+assign reg_0010h = {28'd0,chn2_tgc};
+assign reg_0014h = {28'd0,chn3_tgc};
+assign reg_0018h = {28'd0,chn4_tgc};
+assign reg_001ch = {28'd0,chn5_tgc};
+assign reg_0020h = {28'd0,chn6_tgc};
+assign reg_0024h = {28'd0,chn7_tgc};
 assign reg_0028h = {chn_idle,fifo_full,fifo_empty,link_ready};
 assign reg_002ch = {8'd0,adc_pd};
 assign reg_0030h = {rx_reset_done,pll_lock,8'd0,link_ready};
@@ -426,4 +433,3 @@ assign io_rdata = ({32{reg_0000h_rd}} & reg_0000h) |
                   ({32{reg_0040h_rd}} & reg_0040h);
 
 endmodule
-

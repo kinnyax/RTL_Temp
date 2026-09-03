@@ -177,26 +177,34 @@ parameter                                   UDLY                     = 1        
 
 wire                    [31:0]              adc_ctl                                        ;
 wire                    [31:0]              frm_cfg                                        ;
-wire                    [31:0]              tgc_chn                                        ;
-wire                    [ 7:0]              link_ready_adc                                 ;
-wire                    [ 7:0]              fifo_empty_adc                                 ;
-wire                    [ 7:0]              afe_idle_adc                                   ;
-wire                    [ 7:0]              pll_lock_adc                                   ;
-wire                    [ 7:0]              rx_reset_done_adc                              ;
-wire                    [15:0]              lane_ready_adc                                 ;
-wire                    [15:0]              byte_aligned_adc                               ;
-wire                    [15:0]              comma_detected_adc                             ;
-wire                    [ 7:0]              link_error_adc                                 ;
-wire                    [ 7:0]              sysref_seen_adc                                ;
-wire                    [15:0]              disparity_adc                                  ;
-wire                    [15:0]              notintable_adc                                 ;
-wire                    [ 7:0]              fifo_overflow_afe                              ;
-wire                    [ 7:0]              fifo_full_afe                                  ;
-wire                    [ 7:0]              data_error_afe                                 ;
+wire                    [ 3:0]              chn0_tgc                                       ;
+wire                    [ 3:0]              chn1_tgc                                       ;
+wire                    [ 3:0]              chn2_tgc                                       ;
+wire                    [ 3:0]              chn3_tgc                                       ;
+wire                    [ 3:0]              chn4_tgc                                       ;
+wire                    [ 3:0]              chn5_tgc                                       ;
+wire                    [ 3:0]              chn6_tgc                                       ;
+wire                    [ 3:0]              chn7_tgc                                       ;
+wire                    [ 7:0]              tgc_done                                       ;
+wire                    [ 7:0]              link_ready                                     ;
+wire                    [ 7:0]              fifo_empty                                     ;
+wire                    [ 7:0]              chn_idle                                       ;
+wire                    [ 7:0]              pll_lock                                       ;
+wire                    [ 7:0]              rx_reset_done                                  ;
+wire                    [15:0]              lane_ready                                     ;
+wire                    [15:0]              byte_aligned                                   ;
+wire                    [15:0]              comma_detected                                 ;
+wire                    [ 7:0]              link_error                                     ;
+wire                    [ 7:0]              sysref_seen                                    ;
+wire                    [15:0]              disparity                                      ;
+wire                    [15:0]              notintable                                     ;
+wire                    [ 7:0]              fifo_overflow                                  ;
+wire                    [ 7:0]              fifo_full                                      ;
+wire                    [ 7:0]              data_error                                     ;
 wire                    [ 7:0]              link_ready_sync                                ;
 wire                    [ 7:0]              fifo_empty_sync                                ;
 wire                    [ 7:0]              fifo_full_sync                                 ;
-wire                    [ 7:0]              afe_idle_sync                                  ;
+wire                    [ 7:0]              chn_idle_sync                                  ;
 wire                    [ 7:0]              pll_lock_sync                                  ;
 wire                    [ 7:0]              rx_reset_done_sync                             ;
 wire                    [15:0]              lane_ready_sync                                ;
@@ -236,7 +244,7 @@ ADC_REG adc_reg(
     .link_ready                          (link_ready_sync                              ),
     .fifo_empty                          (fifo_empty_sync                              ),
     .fifo_full                           (fifo_full_sync                               ),
-    .chn_idle                            (afe_idle_sync                                ),
+    .chn_idle                            (chn_idle_sync                                ),
     .pll_lock                            (pll_lock_sync                                ),
     .rx_reset_done                       (rx_reset_done_sync                           ),
     .lane_ready                          (lane_ready_sync                              ),
@@ -249,9 +257,17 @@ ADC_REG adc_reg(
     .sysref_seen_sync                    (sysref_seen_sync                             ),
     .disparity_sync                      (disparity_sync                               ),
     .notintable_sync                     (notintable_sync                              ),
+    .tgc_done                            (tgc_done                                     ),
     .adc_ctl                             (adc_ctl                                      ),
     .frm_cfg                             (frm_cfg                                      ),
-    .tgc_chn                             (tgc_chn                                      )
+    .chn0_tgc                            (chn0_tgc                                     ),
+    .chn1_tgc                            (chn1_tgc                                     ),
+    .chn2_tgc                            (chn2_tgc                                     ),
+    .chn3_tgc                            (chn3_tgc                                     ),
+    .chn4_tgc                            (chn4_tgc                                     ),
+    .chn5_tgc                            (chn5_tgc                                     ),
+    .chn6_tgc                            (chn6_tgc                                     ),
+    .chn7_tgc                            (chn7_tgc                                     )
 );
 
 ADC_SYNC adc_sync(
@@ -263,35 +279,35 @@ ADC_SYNC adc_sync(
     .afe_rst_n                           (afe_rst_n                                    ),
     .sysref                              (sysref_in                                    ),
     .sysref_sync                         (sysref_sync                                  ),
-    .link_ready                          (link_ready_adc                               ),
+    .link_ready                          (link_ready                                   ),
     .link_ready_sync                     (link_ready_sync                              ),
-    .fifo_empty                          (fifo_empty_adc                               ),
+    .fifo_empty                          (fifo_empty                                   ),
     .fifo_empty_sync                     (fifo_empty_sync                              ),
-    .fifo_full                           (fifo_full_afe                                ),
+    .fifo_full                           (fifo_full                                    ),
     .fifo_full_sync                      (fifo_full_sync                               ),
-    .afe_idle                            (afe_idle_adc                                 ),
-    .afe_idle_sync                       (afe_idle_sync                                ),
-    .pll_lock                            (pll_lock_adc                                 ),
+    .chn_idle                            (chn_idle                                     ),
+    .chn_idle_sync                       (chn_idle_sync                                ),
+    .pll_lock                            (pll_lock                                     ),
     .pll_lock_sync                       (pll_lock_sync                                ),
-    .rx_reset_done                       (rx_reset_done_adc                            ),
+    .rx_reset_done                       (rx_reset_done                                ),
     .rx_reset_done_sync                  (rx_reset_done_sync                           ),
-    .lane_ready                          (lane_ready_adc                               ),
+    .lane_ready                          (lane_ready                                   ),
     .lane_ready_sync                     (lane_ready_sync                              ),
-    .byte_aligned                        (byte_aligned_adc                             ),
+    .byte_aligned                        (byte_aligned                                 ),
     .byte_aligned_sync                   (byte_aligned_sync                            ),
-    .comma_detected                      (comma_detected_adc                           ),
+    .comma_detected                      (comma_detected                               ),
     .comma_detected_sync                 (comma_detected_sync                          ),
-    .fifo_overflow                       (fifo_overflow_afe                            ),
+    .fifo_overflow                       (fifo_overflow                                ),
     .fifo_overflow_sync                  (fifo_overflow_sync                           ),
-    .data_error                          (data_error_afe                               ),
+    .data_error                          (data_error                                   ),
     .data_error_sync                     (data_error_sync                              ),
-    .link_error                          (link_error_adc                               ),
+    .link_error                          (link_error                                   ),
     .link_error_sync                     (link_error_sync                              ),
-    .sysref_seen                         (sysref_seen_adc                              ),
+    .sysref_seen                         (sysref_seen                                  ),
     .sysref_seen_sync                    (sysref_seen_sync                             ),
-    .disparity                           (disparity_adc                                ),
+    .disparity                           (disparity                                    ),
     .disparity_sync                      (disparity_sync                               ),
-    .notintable                          (notintable_adc                               ),
+    .notintable                          (notintable                                   ),
     .notintable_sync                     (notintable_sync                              )
 );
 
@@ -326,26 +342,27 @@ ADC_CHN adc_chn0(
     .m_axis_tvalid                       (m_axis_afe0_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe0_tlast                            ),
     .m_axis_tready                       (m_axis_afe0_tready                           ),
-    .link_ready_sync                     (link_ready_adc[0]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[0]                            ),
-    .chn_idle_adc                        (afe_idle_adc[0]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[0]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[0]                         ),
-    .lane_ready_sync                     (lane_ready_adc[0 +: 2]                       ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[0 +: 2]                     ),
-    .cgs_ready_sync                      (comma_detected_adc[0 +: 2]                   ),
-    .fifo_overflow                       (fifo_overflow_afe[0]                         ),
-    .link_error_sync                     (link_error_adc[0]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[0]                           ),
-    .phy_disparity_sync                  (disparity_adc[0 +: 2]                        ),
-    .phy_notintable_sync                 (notintable_adc[0 +: 2]                       ),
-    .tgc_chn                             (tgc_chn[0 +: 4]                              ),
+    .link_ready_sync                     (link_ready[0]                                ),
+    .rx_fifo_empt                        (fifo_empty[0]                                ),
+    .chn_idle                            (chn_idle[0]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[0]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[0]                             ),
+    .lane_ready_sync                     (lane_ready[0 +: 2]                           ),
+    .phy_byte_aligned_sync               (byte_aligned[0 +: 2]                         ),
+    .cgs_ready_sync                      (comma_detected[0 +: 2]                       ),
+    .fifo_overflow                       (fifo_overflow[0]                             ),
+    .link_error_sync                     (link_error[0]                                ),
+    .sysref_seen_sync                    (sysref_seen[0]                               ),
+    .phy_disparity_sync                  (disparity[0 +: 2]                            ),
+    .phy_notintable_sync                 (notintable[0 +: 2]                           ),
+    .chn_tgc                             (chn0_tgc                                     ),
+    .tgc_done                            (tgc_done[0]                                  ),
     .tgc_slope                           (tgc0_slope                                   ),
     .tgc_up_dn                           (tgc0_up_dn                                   ),
     .tgc_prof1                           (tgc0_prof1                                   ),
     .tgc_prof2                           (tgc0_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[0]                             ),
-    .data_error                          (data_error_afe[0]                            )
+    .fifo_full                           (fifo_full[0]                                 ),
+    .data_error                          (data_error[0]                                )
 );
 
 ADC_CHN adc_chn1(
@@ -376,26 +393,27 @@ ADC_CHN adc_chn1(
     .m_axis_tvalid                       (m_axis_afe1_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe1_tlast                            ),
     .m_axis_tready                       (m_axis_afe1_tready                           ),
-    .link_ready_sync                     (link_ready_adc[1]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[1]                            ),
-    .chn_idle_adc                        (afe_idle_adc[1]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[1]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[1]                         ),
-    .lane_ready_sync                     (lane_ready_adc[2 +: 2]                       ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[2 +: 2]                     ),
-    .cgs_ready_sync                      (comma_detected_adc[2 +: 2]                   ),
-    .fifo_overflow                       (fifo_overflow_afe[1]                         ),
-    .link_error_sync                     (link_error_adc[1]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[1]                           ),
-    .phy_disparity_sync                  (disparity_adc[2 +: 2]                        ),
-    .phy_notintable_sync                 (notintable_adc[2 +: 2]                       ),
-    .tgc_chn                             (tgc_chn[4 +: 4]                              ),
+    .link_ready_sync                     (link_ready[1]                                ),
+    .rx_fifo_empt                        (fifo_empty[1]                                ),
+    .chn_idle                            (chn_idle[1]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[1]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[1]                             ),
+    .lane_ready_sync                     (lane_ready[2 +: 2]                           ),
+    .phy_byte_aligned_sync               (byte_aligned[2 +: 2]                         ),
+    .cgs_ready_sync                      (comma_detected[2 +: 2]                       ),
+    .fifo_overflow                       (fifo_overflow[1]                             ),
+    .link_error_sync                     (link_error[1]                                ),
+    .sysref_seen_sync                    (sysref_seen[1]                               ),
+    .phy_disparity_sync                  (disparity[2 +: 2]                            ),
+    .phy_notintable_sync                 (notintable[2 +: 2]                           ),
+    .chn_tgc                             (chn1_tgc                                     ),
+    .tgc_done                            (tgc_done[1]                                  ),
     .tgc_slope                           (tgc1_slope                                   ),
     .tgc_up_dn                           (tgc1_up_dn                                   ),
     .tgc_prof1                           (tgc1_prof1                                   ),
     .tgc_prof2                           (tgc1_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[1]                             ),
-    .data_error                          (data_error_afe[1]                            )
+    .fifo_full                           (fifo_full[1]                                 ),
+    .data_error                          (data_error[1]                                )
 );
 
 ADC_CHN adc_chn2(
@@ -426,26 +444,27 @@ ADC_CHN adc_chn2(
     .m_axis_tvalid                       (m_axis_afe2_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe2_tlast                            ),
     .m_axis_tready                       (m_axis_afe2_tready                           ),
-    .link_ready_sync                     (link_ready_adc[2]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[2]                            ),
-    .chn_idle_adc                        (afe_idle_adc[2]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[2]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[2]                         ),
-    .lane_ready_sync                     (lane_ready_adc[4 +: 2]                       ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[4 +: 2]                     ),
-    .cgs_ready_sync                      (comma_detected_adc[4 +: 2]                   ),
-    .fifo_overflow                       (fifo_overflow_afe[2]                         ),
-    .link_error_sync                     (link_error_adc[2]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[2]                           ),
-    .phy_disparity_sync                  (disparity_adc[4 +: 2]                        ),
-    .phy_notintable_sync                 (notintable_adc[4 +: 2]                       ),
-    .tgc_chn                             (tgc_chn[8 +: 4]                              ),
+    .link_ready_sync                     (link_ready[2]                                ),
+    .rx_fifo_empt                        (fifo_empty[2]                                ),
+    .chn_idle                            (chn_idle[2]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[2]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[2]                             ),
+    .lane_ready_sync                     (lane_ready[4 +: 2]                           ),
+    .phy_byte_aligned_sync               (byte_aligned[4 +: 2]                         ),
+    .cgs_ready_sync                      (comma_detected[4 +: 2]                       ),
+    .fifo_overflow                       (fifo_overflow[2]                             ),
+    .link_error_sync                     (link_error[2]                                ),
+    .sysref_seen_sync                    (sysref_seen[2]                               ),
+    .phy_disparity_sync                  (disparity[4 +: 2]                            ),
+    .phy_notintable_sync                 (notintable[4 +: 2]                           ),
+    .chn_tgc                             (chn2_tgc                                     ),
+    .tgc_done                            (tgc_done[2]                                  ),
     .tgc_slope                           (tgc2_slope                                   ),
     .tgc_up_dn                           (tgc2_up_dn                                   ),
     .tgc_prof1                           (tgc2_prof1                                   ),
     .tgc_prof2                           (tgc2_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[2]                             ),
-    .data_error                          (data_error_afe[2]                            )
+    .fifo_full                           (fifo_full[2]                                 ),
+    .data_error                          (data_error[2]                                )
 );
 
 ADC_CHN adc_chn3(
@@ -476,26 +495,27 @@ ADC_CHN adc_chn3(
     .m_axis_tvalid                       (m_axis_afe3_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe3_tlast                            ),
     .m_axis_tready                       (m_axis_afe3_tready                           ),
-    .link_ready_sync                     (link_ready_adc[3]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[3]                            ),
-    .chn_idle_adc                        (afe_idle_adc[3]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[3]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[3]                         ),
-    .lane_ready_sync                     (lane_ready_adc[6 +: 2]                       ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[6 +: 2]                     ),
-    .cgs_ready_sync                      (comma_detected_adc[6 +: 2]                   ),
-    .fifo_overflow                       (fifo_overflow_afe[3]                         ),
-    .link_error_sync                     (link_error_adc[3]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[3]                           ),
-    .phy_disparity_sync                  (disparity_adc[6 +: 2]                        ),
-    .phy_notintable_sync                 (notintable_adc[6 +: 2]                       ),
-    .tgc_chn                             (tgc_chn[12 +: 4]                             ),
+    .link_ready_sync                     (link_ready[3]                                ),
+    .rx_fifo_empt                        (fifo_empty[3]                                ),
+    .chn_idle                            (chn_idle[3]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[3]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[3]                             ),
+    .lane_ready_sync                     (lane_ready[6 +: 2]                           ),
+    .phy_byte_aligned_sync               (byte_aligned[6 +: 2]                         ),
+    .cgs_ready_sync                      (comma_detected[6 +: 2]                       ),
+    .fifo_overflow                       (fifo_overflow[3]                             ),
+    .link_error_sync                     (link_error[3]                                ),
+    .sysref_seen_sync                    (sysref_seen[3]                               ),
+    .phy_disparity_sync                  (disparity[6 +: 2]                            ),
+    .phy_notintable_sync                 (notintable[6 +: 2]                           ),
+    .chn_tgc                             (chn3_tgc                                     ),
+    .tgc_done                            (tgc_done[3]                                  ),
     .tgc_slope                           (tgc3_slope                                   ),
     .tgc_up_dn                           (tgc3_up_dn                                   ),
     .tgc_prof1                           (tgc3_prof1                                   ),
     .tgc_prof2                           (tgc3_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[3]                             ),
-    .data_error                          (data_error_afe[3]                            )
+    .fifo_full                           (fifo_full[3]                                 ),
+    .data_error                          (data_error[3]                                )
 );
 
 ADC_CHN adc_chn4(
@@ -526,26 +546,27 @@ ADC_CHN adc_chn4(
     .m_axis_tvalid                       (m_axis_afe4_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe4_tlast                            ),
     .m_axis_tready                       (m_axis_afe4_tready                           ),
-    .link_ready_sync                     (link_ready_adc[4]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[4]                            ),
-    .chn_idle_adc                        (afe_idle_adc[4]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[4]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[4]                         ),
-    .lane_ready_sync                     (lane_ready_adc[8 +: 2]                       ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[8 +: 2]                     ),
-    .cgs_ready_sync                      (comma_detected_adc[8 +: 2]                   ),
-    .fifo_overflow                       (fifo_overflow_afe[4]                         ),
-    .link_error_sync                     (link_error_adc[4]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[4]                           ),
-    .phy_disparity_sync                  (disparity_adc[8 +: 2]                        ),
-    .phy_notintable_sync                 (notintable_adc[8 +: 2]                       ),
-    .tgc_chn                             (tgc_chn[16 +: 4]                             ),
+    .link_ready_sync                     (link_ready[4]                                ),
+    .rx_fifo_empt                        (fifo_empty[4]                                ),
+    .chn_idle                            (chn_idle[4]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[4]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[4]                             ),
+    .lane_ready_sync                     (lane_ready[8 +: 2]                           ),
+    .phy_byte_aligned_sync               (byte_aligned[8 +: 2]                         ),
+    .cgs_ready_sync                      (comma_detected[8 +: 2]                       ),
+    .fifo_overflow                       (fifo_overflow[4]                             ),
+    .link_error_sync                     (link_error[4]                                ),
+    .sysref_seen_sync                    (sysref_seen[4]                               ),
+    .phy_disparity_sync                  (disparity[8 +: 2]                            ),
+    .phy_notintable_sync                 (notintable[8 +: 2]                           ),
+    .chn_tgc                             (chn4_tgc                                     ),
+    .tgc_done                            (tgc_done[4]                                  ),
     .tgc_slope                           (tgc4_slope                                   ),
     .tgc_up_dn                           (tgc4_up_dn                                   ),
     .tgc_prof1                           (tgc4_prof1                                   ),
     .tgc_prof2                           (tgc4_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[4]                             ),
-    .data_error                          (data_error_afe[4]                            )
+    .fifo_full                           (fifo_full[4]                                 ),
+    .data_error                          (data_error[4]                                )
 );
 
 ADC_CHN adc_chn5(
@@ -576,26 +597,27 @@ ADC_CHN adc_chn5(
     .m_axis_tvalid                       (m_axis_afe5_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe5_tlast                            ),
     .m_axis_tready                       (m_axis_afe5_tready                           ),
-    .link_ready_sync                     (link_ready_adc[5]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[5]                            ),
-    .chn_idle_adc                        (afe_idle_adc[5]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[5]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[5]                         ),
-    .lane_ready_sync                     (lane_ready_adc[10 +: 2]                      ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[10 +: 2]                    ),
-    .cgs_ready_sync                      (comma_detected_adc[10 +: 2]                  ),
-    .fifo_overflow                       (fifo_overflow_afe[5]                         ),
-    .link_error_sync                     (link_error_adc[5]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[5]                           ),
-    .phy_disparity_sync                  (disparity_adc[10 +: 2]                       ),
-    .phy_notintable_sync                 (notintable_adc[10 +: 2]                      ),
-    .tgc_chn                             (tgc_chn[20 +: 4]                             ),
+    .link_ready_sync                     (link_ready[5]                                ),
+    .rx_fifo_empt                        (fifo_empty[5]                                ),
+    .chn_idle                            (chn_idle[5]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[5]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[5]                             ),
+    .lane_ready_sync                     (lane_ready[10 +: 2]                          ),
+    .phy_byte_aligned_sync               (byte_aligned[10 +: 2]                        ),
+    .cgs_ready_sync                      (comma_detected[10 +: 2]                      ),
+    .fifo_overflow                       (fifo_overflow[5]                             ),
+    .link_error_sync                     (link_error[5]                                ),
+    .sysref_seen_sync                    (sysref_seen[5]                               ),
+    .phy_disparity_sync                  (disparity[10 +: 2]                           ),
+    .phy_notintable_sync                 (notintable[10 +: 2]                          ),
+    .chn_tgc                             (chn5_tgc                                     ),
+    .tgc_done                            (tgc_done[5]                                  ),
     .tgc_slope                           (tgc5_slope                                   ),
     .tgc_up_dn                           (tgc5_up_dn                                   ),
     .tgc_prof1                           (tgc5_prof1                                   ),
     .tgc_prof2                           (tgc5_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[5]                             ),
-    .data_error                          (data_error_afe[5]                            )
+    .fifo_full                           (fifo_full[5]                                 ),
+    .data_error                          (data_error[5]                                )
 );
 
 ADC_CHN adc_chn6(
@@ -626,26 +648,27 @@ ADC_CHN adc_chn6(
     .m_axis_tvalid                       (m_axis_afe6_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe6_tlast                            ),
     .m_axis_tready                       (m_axis_afe6_tready                           ),
-    .link_ready_sync                     (link_ready_adc[6]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[6]                            ),
-    .chn_idle_adc                        (afe_idle_adc[6]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[6]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[6]                         ),
-    .lane_ready_sync                     (lane_ready_adc[12 +: 2]                      ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[12 +: 2]                    ),
-    .cgs_ready_sync                      (comma_detected_adc[12 +: 2]                  ),
-    .fifo_overflow                       (fifo_overflow_afe[6]                         ),
-    .link_error_sync                     (link_error_adc[6]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[6]                           ),
-    .phy_disparity_sync                  (disparity_adc[12 +: 2]                       ),
-    .phy_notintable_sync                 (notintable_adc[12 +: 2]                      ),
-    .tgc_chn                             (tgc_chn[24 +: 4]                             ),
+    .link_ready_sync                     (link_ready[6]                                ),
+    .rx_fifo_empt                        (fifo_empty[6]                                ),
+    .chn_idle                            (chn_idle[6]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[6]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[6]                             ),
+    .lane_ready_sync                     (lane_ready[12 +: 2]                          ),
+    .phy_byte_aligned_sync               (byte_aligned[12 +: 2]                        ),
+    .cgs_ready_sync                      (comma_detected[12 +: 2]                      ),
+    .fifo_overflow                       (fifo_overflow[6]                             ),
+    .link_error_sync                     (link_error[6]                                ),
+    .sysref_seen_sync                    (sysref_seen[6]                               ),
+    .phy_disparity_sync                  (disparity[12 +: 2]                           ),
+    .phy_notintable_sync                 (notintable[12 +: 2]                          ),
+    .chn_tgc                             (chn6_tgc                                     ),
+    .tgc_done                            (tgc_done[6]                                  ),
     .tgc_slope                           (tgc6_slope                                   ),
     .tgc_up_dn                           (tgc6_up_dn                                   ),
     .tgc_prof1                           (tgc6_prof1                                   ),
     .tgc_prof2                           (tgc6_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[6]                             ),
-    .data_error                          (data_error_afe[6]                            )
+    .fifo_full                           (fifo_full[6]                                 ),
+    .data_error                          (data_error[6]                                )
 );
 
 ADC_CHN adc_chn7(
@@ -676,26 +699,27 @@ ADC_CHN adc_chn7(
     .m_axis_tvalid                       (m_axis_afe7_tvalid                           ),
     .m_axis_tlast                        (m_axis_afe7_tlast                            ),
     .m_axis_tready                       (m_axis_afe7_tready                           ),
-    .link_ready_sync                     (link_ready_adc[7]                            ),
-    .rx_fifo_empt                        (fifo_empty_adc[7]                            ),
-    .chn_idle_adc                        (afe_idle_adc[7]                              ),
-    .phy_pll_lock_sync                   (pll_lock_adc[7]                              ),
-    .phy_rx_reset_done_sync              (rx_reset_done_adc[7]                         ),
-    .lane_ready_sync                     (lane_ready_adc[14 +: 2]                      ),
-    .phy_byte_aligned_sync               (byte_aligned_adc[14 +: 2]                    ),
-    .cgs_ready_sync                      (comma_detected_adc[14 +: 2]                  ),
-    .fifo_overflow                       (fifo_overflow_afe[7]                         ),
-    .link_error_sync                     (link_error_adc[7]                            ),
-    .sysref_seen_sync                    (sysref_seen_adc[7]                           ),
-    .phy_disparity_sync                  (disparity_adc[14 +: 2]                       ),
-    .phy_notintable_sync                 (notintable_adc[14 +: 2]                      ),
-    .tgc_chn                             (tgc_chn[28 +: 4]                             ),
+    .link_ready_sync                     (link_ready[7]                                ),
+    .rx_fifo_empt                        (fifo_empty[7]                                ),
+    .chn_idle                            (chn_idle[7]                                  ),
+    .phy_pll_lock_sync                   (pll_lock[7]                                  ),
+    .phy_rx_reset_done_sync              (rx_reset_done[7]                             ),
+    .lane_ready_sync                     (lane_ready[14 +: 2]                          ),
+    .phy_byte_aligned_sync               (byte_aligned[14 +: 2]                        ),
+    .cgs_ready_sync                      (comma_detected[14 +: 2]                      ),
+    .fifo_overflow                       (fifo_overflow[7]                             ),
+    .link_error_sync                     (link_error[7]                                ),
+    .sysref_seen_sync                    (sysref_seen[7]                               ),
+    .phy_disparity_sync                  (disparity[14 +: 2]                           ),
+    .phy_notintable_sync                 (notintable[14 +: 2]                          ),
+    .chn_tgc                             (chn7_tgc                                     ),
+    .tgc_done                            (tgc_done[7]                                  ),
     .tgc_slope                           (tgc7_slope                                   ),
     .tgc_up_dn                           (tgc7_up_dn                                   ),
     .tgc_prof1                           (tgc7_prof1                                   ),
     .tgc_prof2                           (tgc7_prof2                                   ),
-    .fifo_full_afe                       (fifo_full_afe[7]                             ),
-    .data_error                          (data_error_afe[7]                            )
+    .fifo_full                           (fifo_full[7]                                 ),
+    .data_error                          (data_error[7]                                )
 );
 
 endmodule

@@ -100,6 +100,13 @@ assign period_beats = {4'd0,valid_beats} + zero_beats;
 //////////////////////////////////////////////////
 //2. State Machine
 //////////////////////////////////////////////////
+assign upk_start = upk_fsm_idle & chn_en & data_vld & sync_match;
+assign upk_end = ~chn_en | rx_discontinuity | sync_error;
+assign sync_check = (sync_cnt < 12'd4) | (sync_cnt >= (prefix_beats - 12'd4));
+assign sync_last  = (sync_cnt == (prefix_beats - 12'd1));
+assign rx_discontinuity = ~upk_fsm_idle & ~data_vld;
+assign sync_error = upk_fsm_sync & data_vld & sync_check & ~sync_match;
+
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
         upk_fsm <= #UDLY UPK_IDLE;
@@ -148,20 +155,10 @@ assign sync_match = (rxd_data[15:0]    == 16'h2772) &
                     (rxd_data[47:32]   == 16'h2772) &
                     (rxd_data[63:48]   == 16'h2772) &
                     (rxd_data[79:64]   == 16'h2772) &
-                    (rxd_data[95:80]   == 16'h2772) &
-                    (rxd_data[111:96]  == 16'h2772) &
-                    (rxd_data[127:112] == 16'h2772);
-assign sync_check = (sync_cnt < 12'd4) | (sync_cnt >= (prefix_beats - 12'd4));
-assign sync_last  = (sync_cnt == (prefix_beats - 12'd1));
-assign data_region = (smp_mode == 2'd0) | (region_cnt < {4'd0,valid_beats});
+                     (rxd_data[95:80]   == 16'h2772) &
+                     (rxd_data[111:96]  == 16'h2772) &
+                     (rxd_data[127:112] == 16'h2772);
 assign data_vld    = rxd_ready & rxd_data_vld;
-assign data_accept = upk_fsm_data & data_vld & data_region;
-assign rx_discontinuity = ~upk_fsm_idle & ~data_vld;
-assign upk_start = upk_fsm_idle & chn_en & data_vld & sync_match;
-assign sync_mismatch = upk_fsm_idle & data_vld & ~sync_match;
-assign sync_error = upk_fsm_sync & data_vld & sync_check & ~sync_match;
-assign data_error_set = chn_en & (rx_discontinuity | sync_error | sync_mismatch);
-assign upk_end = ~chn_en | rx_discontinuity | sync_error;
 
 //////////////////////////////////////////////////
 //5. Synchronization And Region Counters
@@ -179,6 +176,8 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
         sync_cnt <= #UDLY 12'd0;
 end
 
+assign data_region = (smp_mode == 2'd0) | (region_cnt < {4'd0,valid_beats});
+
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
         region_cnt <= #UDLY 10'd0;
@@ -187,8 +186,7 @@ always @(posedge afe_clk or negedge afe_rst_n) begin
     else if(upk_fsm_sync & sync_last)
         region_cnt <= #UDLY 10'd0;
     else if(upk_fsm_data & data_vld & (smp_mode != 2'd0))
-        region_cnt <= #UDLY (region_cnt == (period_beats - 10'd1)) ?
-                      10'd0 : region_cnt + 10'd1;
+        region_cnt <= #UDLY (region_cnt == (period_beats - 10'd1)) ? 10'd0 : region_cnt + 10'd1;
 end
 
 //////////////////////////////////////////////////
@@ -215,6 +213,7 @@ end
 //////////////////////////////////////////////////
 //7. Candidate Packing
 //////////////////////////////////////////////////
+assign data_accept = upk_fsm_data & data_vld & data_region;
 assign pack_last = (pack_cnt == 2'd3);
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
@@ -263,6 +262,9 @@ end
 //////////////////////////////////////////////////
 //9. Error Event
 //////////////////////////////////////////////////
+assign sync_mismatch  = upk_fsm_idle & data_vld & ~sync_match;
+assign data_error_set = chn_en & (rx_discontinuity | sync_error | sync_mismatch);
+
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
         data_error <= #UDLY 1'd0;

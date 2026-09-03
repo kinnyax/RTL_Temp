@@ -16,8 +16,8 @@ module ADC_SYNC(
     output    wire      [ 7:0]              fifo_empty_sync                                ,
     input               [ 7:0]              fifo_full                                      ,
     output    wire      [ 7:0]              fifo_full_sync                                 ,
-    input               [ 7:0]              afe_idle                                       ,
-    output    wire      [ 7:0]              afe_idle_sync                                  ,
+    input               [ 7:0]              chn_idle                                       ,
+    output    wire      [ 7:0]              chn_idle_sync                                  ,
     input               [ 7:0]              pll_lock                                       ,
     output    wire      [ 7:0]              pll_lock_sync                                  ,
     input               [ 7:0]              rx_reset_done                                  ,
@@ -51,7 +51,7 @@ level_sync sysref_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(sysref),.out(sy
 levels_sync #(.DS(8),.RV(1'd0)) link_ready_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(link_ready),.out(link_ready_sync));
 levels_sync #(.DS(8),.RV(1'd1)) fifo_empty_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(fifo_empty),.out(fifo_empty_sync));
 levels_sync #(.DS(8),.RV(1'd0)) fifo_full_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(fifo_full),.out(fifo_full_sync));
-levels_sync #(.DS(8),.RV(1'd1)) afe_idle_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(afe_idle),.out(afe_idle_sync));
+levels_sync #(.DS(8),.RV(1'd1)) chn_idle_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(chn_idle),.out(chn_idle_sync));
 levels_sync #(.DS(8),.RV(1'd0)) pll_lock_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(pll_lock),.out(pll_lock_sync));
 levels_sync #(.DS(8),.RV(1'd0)) rx_reset_done_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(rx_reset_done),.out(rx_reset_done_sync));
 levels_sync #(.DS(16),.RV(1'd0)) lane_ready_level_sync(.clk(sys_clk),.rst_n(sys_rst_n),.in(lane_ready),.out(lane_ready_sync));
