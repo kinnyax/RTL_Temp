@@ -62,7 +62,7 @@ wire                                        tx_fifo_of                          
 wire                                        tx_fifo_uf                                     ;
 wire                                        tx_fifo_empty_sync                             ;
 wire                                        tx_fifo_uf_sync                                ;
-wire                                        tx_fifo_clr_sync                               ;
+wire                                        txf_rst_n                                      ;
 
 wire                    [31:0]              rx_fifo_wdata                                  ;
 wire                                        rx_fifo_winc                                   ;
@@ -74,14 +74,12 @@ wire                                        rx_fifo_of                          
 wire                                        rx_fifo_uf                                     ;
 wire                                        rx_fifo_full_sync                              ;
 wire                                        rx_fifo_of_sync                                ;
-wire                                        rx_fifo_clr_sync                               ;
+wire                                        rxf_rst_n                                      ;
 
 //////////////////////////////////////////////////
 //1. Configuration And Physical Input CDC
 //////////////////////////////////////////////////
 level_sync #(.RV(1'd0)) spi_enable_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(spi_ctl[0]), .out(spi_en));
-level_sync #(.RV(1'd0)) tx_fifo_clr_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(spi_ctl[9]), .out(tx_fifo_clr_sync));
-level_sync #(.RV(1'd0)) rx_fifo_clr_level_sync(.clk(spi_clk), .rst_n(rst_n), .in(spi_ctl[10]), .out(rx_fifo_clr_sync));
 levels_sync #(.DS(6), .RV(1'd0)) spi_io_levels_sync(.clk(spi_clk), .rst_n(rst_n), .in({spi_sck_in, spi_cs_in, spi_mosi_in}), .out(spi_io));
 
 //////////////////////////////////////////////////
@@ -195,6 +193,8 @@ SPI_CODE spi_code(
 //////////////////////////////////////////////////
 //4. Asynchronous FIFOs
 //////////////////////////////////////////////////
+assign txf_rst_n = rst_n & ~spi_ctl[9];
+
 async_fifo #(
     .AS                                  (5                                            ),
     .DS                                  (32                                           ),
@@ -204,9 +204,9 @@ async_fifo #(
 ) tx_async_fifo(
     .wclk                                (sys_clk                                      ),
     .rclk                                (spi_clk                                      ),
-    .wclr                                (spi_ctl[9]                                   ),
-    .rclr                                (tx_fifo_clr_sync                             ),
-    .rst_n                               (rst_n                                        ),
+    .wclr                                (1'd0                                         ),
+    .rclr                                (1'd0                                         ),
+    .rst_n                               (txf_rst_n                                    ),
     .winc                                (tx_fifo_winc                                 ),
     .rinc                                (tx_fifo_rinc                                 ),
     .wdata                               (tx_fifo_wdata                                ),
@@ -219,6 +219,8 @@ async_fifo #(
     .rlevel                              (tx_fifo_level                                )
 );
 
+assign rxf_rst_n = rst_n & ~spi_ctl[10];
+
 async_fifo #(
     .AS                                  (5                                            ),
     .DS                                  (32                                           ),
@@ -228,9 +230,9 @@ async_fifo #(
 ) rx_async_fifo(
     .wclk                                (spi_clk                                      ),
     .rclk                                (sys_clk                                      ),
-    .wclr                                (rx_fifo_clr_sync                             ),
-    .rclr                                (spi_ctl[10]                                  ),
-    .rst_n                               (rst_n                                        ),
+    .wclr                                (1'd0                                         ),
+    .rclr                                (1'd0                                         ),
+    .rst_n                               (rxf_rst_n                                    ),
     .winc                                (rx_fifo_winc                                 ),
     .rinc                                (rx_fifo_rinc                                 ),
     .wdata                               (rx_fifo_wdata                                ),
