@@ -1,122 +1,94 @@
 `timescale 1ns / 1ps
-`default_nettype none
 
-// Wiring-only top for the ASU SPI-to-AXI4-Lite bridge.
-module ASU_TOP
-(
-    input  wire                             SYS_CLK                                     ,
-    input  wire                             SYS_RST_N                                   ,
-    input  wire                             ASU_SPI_CS_N                                ,
-    input  wire                             ASU_SPI_SCK                                 ,
-    input  wire                             ASU_SPI_MOSI                                ,
-    output wire                             ASU_SPI_MISO                                ,
-    output wire [31:0]                      M_AXI_AWADDR                                ,
-    output wire [2:0]                       M_AXI_AWPROT                                ,
-    output wire                             M_AXI_AWVALID                               ,
-    input  wire                             M_AXI_AWREADY                               ,
-    output wire [31:0]                      M_AXI_WDATA                                 ,
-    output wire [3:0]                       M_AXI_WSTRB                                 ,
-    output wire                             M_AXI_WVALID                                ,
-    input  wire                             M_AXI_WREADY                                ,
-    input  wire [1:0]                       M_AXI_BRESP                                 ,
-    input  wire                             M_AXI_BVALID                                ,
-    output wire                             M_AXI_BREADY                                ,
-    output wire [31:0]                      M_AXI_ARADDR                                ,
-    output wire [2:0]                       M_AXI_ARPROT                                ,
-    output wire                             M_AXI_ARVALID                               ,
-    input  wire                             M_AXI_ARREADY                               ,
-    input  wire [31:0]                      M_AXI_RDATA                                 ,
-    input  wire [1:0]                       M_AXI_RRESP                                 ,
-    input  wire                             M_AXI_RVALID                                ,
-    output wire                             M_AXI_RREADY
+module ASU_TOP(
+    input                                   sys_clk                                        ,
+    input                                   sys_rst_n                                      ,
+
+    input                                   SPI_SCK                                        ,
+    input                                   SPI_CS                                         ,
+    input                                   SPI_MOSI                                       ,
+    output    wire                          SPI_MISO                                       ,
+
+    output    wire      [31:0]              m_axi_awaddr                                   ,
+    output    wire      [ 2:0]              m_axi_awprot                                   ,
+    output    wire                          m_axi_awvalid                                  ,
+    input                                   m_axi_awready                                  ,
+    output    wire      [31:0]              m_axi_wdata                                    ,
+    output    wire      [ 3:0]              m_axi_wstrb                                    ,
+    output    wire                          m_axi_wvalid                                   ,
+    input                                   m_axi_wready                                   ,
+    input               [ 1:0]              m_axi_bresp                                    ,
+    input                                   m_axi_bvalid                                   ,
+    output    wire                          m_axi_bready                                   ,
+
+    output    wire      [31:0]              m_axi_araddr                                   ,
+    output    wire      [ 2:0]              m_axi_arprot                                   ,
+    output    wire                          m_axi_arvalid                                  ,
+    input                                   m_axi_arready                                  ,
+    input               [31:0]              m_axi_rdata                                    ,
+    input               [ 1:0]              m_axi_rresp                                    ,
+    input                                   m_axi_rvalid                                   ,
+    output    wire                          m_axi_rready
 );
 
-parameter integer                           UDLY                        = 1              ;
+parameter                                   UDLY                     = 1                   ;
 
-wire                                        frt_req_vld                                  ;
-wire [127:0]                                frt_req_frame                                ;
-wire                                        ctl_req_rdy                                  ;
-wire                                        ctl_rsp_vld                                  ;
-wire                                        ctl_req_err                                  ;
-wire [1:0]                                  ctl_axi_resp                                 ;
-wire [31:0]                                 ctl_rdata                                    ;
-wire                                        frt_rsp_rdy                                  ;
-wire                                        frt_rsp_consumed                             ;
-wire                                        crc_start                                    ;
-wire [111:0]                                crc_data                                     ;
-wire                                        crc_busy                                     ;
-wire                                        crc_done                                     ;
-wire [15:0]                                 crc_value                                    ;
+wire                                        rxd_req                                        ;
+wire                                        rxd_write                                      ;
+wire                    [31:0]              rxd_addr                                       ;
+wire                    [31:0]              rxd_wdata                                      ;
+wire                                        txd_rdy                                        ;
+wire                                        txd_timeout                                    ;
+wire                    [31:0]              txd_rdata                                      ;
 
-ASU_FRT asu_frt
-(
-    .SYS_CLK                              (SYS_CLK                                      ),
-    .SYS_RST_N                            (SYS_RST_N                                    ),
-    .ASU_SPI_CS_N                         (ASU_SPI_CS_N                                 ),
-    .ASU_SPI_SCK                          (ASU_SPI_SCK                                  ),
-    .ASU_SPI_MOSI                         (ASU_SPI_MOSI                                 ),
-    .ASU_SPI_MISO                         (ASU_SPI_MISO                                 ),
-    .FRT_REQ_VLD                          (frt_req_vld                                  ),
-    .FRT_REQ_FRAME                        (frt_req_frame                                ),
-    .CTL_REQ_RDY                          (ctl_req_rdy                                  ),
-    .CTL_RSP_VLD                          (ctl_rsp_vld                                  ),
-    .CTL_REQ_ERR                          (ctl_req_err                                  ),
-    .CTL_AXI_RESP                         (ctl_axi_resp                                 ),
-    .CTL_RDATA                            (ctl_rdata                                    ),
-    .FRT_RSP_RDY                          (frt_rsp_rdy                                  ),
-    .FRT_RSP_CONSUMED                     (frt_rsp_consumed                             ),
-    .CRC_START                            (crc_start                                    ),
-    .CRC_DATA                             (crc_data                                     ),
-    .CRC_BUSY                             (crc_busy                                     ),
-    .CRC_DONE                             (crc_done                                     ),
-    .CRC_VALUE                            (crc_value                                    )
+//////////////////////////////////////////////////
+//1. Module Connections
+//////////////////////////////////////////////////
+ASU_RXD asu_rxd(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
+    .SPI_SCK                             (SPI_SCK                                      ),
+    .SPI_CS                              (SPI_CS                                       ),
+    .SPI_MOSI                            (SPI_MOSI                                     ),
+    .SPI_MISO                            (SPI_MISO                                     ),
+    .rxd_req                             (rxd_req                                      ),
+    .rxd_write                           (rxd_write                                    ),
+    .rxd_addr                            (rxd_addr                                     ),
+    .rxd_wdata                           (rxd_wdata                                    ),
+    .txd_rdy                             (txd_rdy                                      ),
+    .txd_timeout                         (txd_timeout                                  ),
+    .txd_rdata                           (txd_rdata                                    )
 );
 
-ASU_CRC asu_crc
-(
-    .SYS_CLK                              (SYS_CLK                                      ),
-    .SYS_RST_N                            (SYS_RST_N                                    ),
-    .CRC_START                            (crc_start                                    ),
-    .CRC_DATA                             (crc_data                                     ),
-    .CRC_BUSY                             (crc_busy                                     ),
-    .CRC_DONE                             (crc_done                                     ),
-    .CRC_VALUE                            (crc_value                                    )
-);
-
-ASU_CTL asu_ctl
-(
-    .SYS_CLK                              (SYS_CLK                                      ),
-    .SYS_RST_N                            (SYS_RST_N                                    ),
-    .FRT_REQ_VLD                          (frt_req_vld                                  ),
-    .FRT_REQ_FRAME                        (frt_req_frame                                ),
-    .CTL_REQ_RDY                          (ctl_req_rdy                                  ),
-    .CTL_RSP_VLD                          (ctl_rsp_vld                                  ),
-    .CTL_REQ_ERR                          (ctl_req_err                                  ),
-    .CTL_AXI_RESP                         (ctl_axi_resp                                 ),
-    .CTL_RDATA                            (ctl_rdata                                    ),
-    .FRT_RSP_RDY                          (frt_rsp_rdy                                  ),
-    .FRT_RSP_CONSUMED                     (frt_rsp_consumed                             ),
-    .M_AXI_AWADDR                         (M_AXI_AWADDR                                 ),
-    .M_AXI_AWPROT                         (M_AXI_AWPROT                                 ),
-    .M_AXI_AWVALID                        (M_AXI_AWVALID                                ),
-    .M_AXI_AWREADY                        (M_AXI_AWREADY                                ),
-    .M_AXI_WDATA                          (M_AXI_WDATA                                  ),
-    .M_AXI_WSTRB                          (M_AXI_WSTRB                                  ),
-    .M_AXI_WVALID                         (M_AXI_WVALID                                 ),
-    .M_AXI_WREADY                         (M_AXI_WREADY                                 ),
-    .M_AXI_BRESP                          (M_AXI_BRESP                                  ),
-    .M_AXI_BVALID                         (M_AXI_BVALID                                 ),
-    .M_AXI_BREADY                         (M_AXI_BREADY                                 ),
-    .M_AXI_ARADDR                         (M_AXI_ARADDR                                 ),
-    .M_AXI_ARPROT                         (M_AXI_ARPROT                                 ),
-    .M_AXI_ARVALID                        (M_AXI_ARVALID                                ),
-    .M_AXI_ARREADY                        (M_AXI_ARREADY                                ),
-    .M_AXI_RDATA                          (M_AXI_RDATA                                  ),
-    .M_AXI_RRESP                          (M_AXI_RRESP                                  ),
-    .M_AXI_RVALID                         (M_AXI_RVALID                                 ),
-    .M_AXI_RREADY                         (M_AXI_RREADY                                 )
+ASU_TXD asu_txd(
+    .sys_clk                             (sys_clk                                      ),
+    .sys_rst_n                           (sys_rst_n                                    ),
+    .rxd_req                             (rxd_req                                      ),
+    .rxd_write                           (rxd_write                                    ),
+    .rxd_addr                            (rxd_addr                                     ),
+    .rxd_wdata                           (rxd_wdata                                    ),
+    .txd_rdy                             (txd_rdy                                      ),
+    .txd_timeout                         (txd_timeout                                  ),
+    .txd_rdata                           (txd_rdata                                    ),
+    .m_axi_awaddr                        (m_axi_awaddr                                 ),
+    .m_axi_awprot                        (m_axi_awprot                                 ),
+    .m_axi_awvalid                       (m_axi_awvalid                                ),
+    .m_axi_awready                       (m_axi_awready                                ),
+    .m_axi_wdata                         (m_axi_wdata                                  ),
+    .m_axi_wstrb                         (m_axi_wstrb                                  ),
+    .m_axi_wvalid                        (m_axi_wvalid                                 ),
+    .m_axi_wready                        (m_axi_wready                                 ),
+    .m_axi_bresp                         (m_axi_bresp                                  ),
+    .m_axi_bvalid                        (m_axi_bvalid                                 ),
+    .m_axi_bready                        (m_axi_bready                                 ),
+    .m_axi_araddr                        (m_axi_araddr                                 ),
+    .m_axi_arprot                        (m_axi_arprot                                 ),
+    .m_axi_arvalid                       (m_axi_arvalid                                ),
+    .m_axi_arready                       (m_axi_arready                                ),
+    .m_axi_rdata                         (m_axi_rdata                                  ),
+    .m_axi_rresp                         (m_axi_rresp                                  ),
+    .m_axi_rvalid                        (m_axi_rvalid                                 ),
+    .m_axi_rready                        (m_axi_rready                                 )
 );
 
 endmodule
-
-`default_nettype wire
