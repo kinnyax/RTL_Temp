@@ -55,90 +55,91 @@ module ADC_CHN(
     output    wire                          data_error
 );
 
-parameter                                   UDLY                     = 1                   ;
+parameter               [ 7:0]              AFE_ID                   = 8'd0                ;
 
-wire                                        pkt_en                                         ;
-wire                                        upk_en                                         ;
-wire                    [127:0]             rxd_data                                       ;
-wire                                        rxd_data_vld                                   ;
-wire                                        rxd_ready                                      ;
+wire                                        adc_en                                         ;
+wire                                        afe_en                                         ;
+wire                    [127:0]             adi_data                                       ;
+wire                                        adi_data_vld                                   ;
+wire                                        adi_link_qual                                  ;
 wire                                        adi_sysref_error                               ;
 wire                                        adi_sysref_seen                                ;
 wire                                        adi_link_ready                                 ;
 wire                    [ 1:0]              adi_lane_ready                                 ;
 wire                    [ 1:0]              adi_cgs_ready                                  ;
+wire                                        adi_phy_rx_reset_done                          ;
+wire                                        adi_phy_pll_lock                               ;
+wire                    [ 1:0]              adi_phy_byte_aligned                           ;
 wire                    [ 1:0]              phy_disparity                                  ;
 wire                    [ 1:0]              phy_notintable                                 ;
-wire                                        link_error                                     ;
+wire                                        jesd_link_error                                ;
 wire                    [511:0]             rx_fifo_wdat                                   ;
 wire                                        rx_fifo_winc                                   ;
 wire                    [511:0]             rx_fifo_rdat                                   ;
 wire                                        rx_fifo_rinc                                   ;
 wire                    [ 9:0]              rx_fifo_rlevel                                 ;
-wire                                        upk_idle                                       ;
-wire                                        pkt_idle                                       ;
+wire                                        rxd_idle                                       ;
+wire                                        txd_idle                                       ;
 wire                                        tgc_sta_idle                                   ;
-wire                                        afe_idle                                       ;
-wire                                        afe_idle_sync                                  ;
 wire                                        fifo_rst_n                                     ;
 
 //////////////////////////////////////////////////
 //1. Local Control And CDC
 //////////////////////////////////////////////////
-assign afe_idle = upk_idle & tgc_sta_idle;
-assign chn_idle = pkt_idle & afe_idle_sync;
-
-level_sync packet_enable_level_sync(.clk(adc_clk),.rst_n(adc_rst_n),.in(chn_en),.out(pkt_en));
-level_sync unpack_enable_level_sync(.clk(afe_clk),.rst_n(afe_rst_n),.in(chn_en),.out(upk_en));
+level_sync adc_enable_level_sync(.clk(adc_clk),.rst_n(adc_rst_n),.in(chn_en),.out(adc_en));
+level_sync afe_enable_level_sync(.clk(afe_clk),.rst_n(afe_rst_n),.in(chn_en),.out(afe_en));
 
 //////////////////////////////////////////////////
-//2. Receive And Unpack
+//2. Receive And Decode
 //////////////////////////////////////////////////
-ADC_RXD adc_rxd(
+ADC_ADI adc_adi(
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk                                     ),
     .jesd_rst_n                          (jesd_rst_n                                   ),
-    .chn_en                              (upk_en                                       ),
     .sysref                              (sysref                                       ),
     .phy_rx_data                         (phy_rx_data                                  ),
     .phy_rx_charisk                      (phy_rx_charisk                               ),
     .phy_rx_disperr                      (phy_rx_disperr                               ),
     .phy_rx_notintable                   (phy_rx_notintable                            ),
-    .phy_rx_reset_done                   (phy_rx_reset_done                            ),
-    .phy_pll_lock                        (phy_pll_lock                                 ),
+    .rx_reset_done                       (phy_rx_reset_done                            ),
+    .pll_lock                            (phy_pll_lock                                 ),
+    .byte_aligned                        (phy_byte_aligned                             ),
     .phy_rx_encommalign                  (phy_rx_encommalign                           ),
     .phy_sync_n                          (phy_sync_n                                   ),
-    .rxd_data                            (rxd_data                                     ),
-    .rxd_data_vld                        (rxd_data_vld                                 ),
-    .rxd_ready                           (rxd_ready                                    ),
+    .adi_data                            (adi_data                                     ),
+    .adi_data_vld                        (adi_data_vld                                 ),
+    .adi_link_qual                       (adi_link_qual                                ),
     .adi_sysref_error                    (adi_sysref_error                             ),
     .adi_sysref_seen                     (adi_sysref_seen                              ),
     .adi_link_ready                      (adi_link_ready                               ),
     .adi_lane_ready                      (adi_lane_ready                               ),
     .adi_cgs_ready                       (adi_cgs_ready                                ),
+    .phy_rx_reset_done                   (adi_phy_rx_reset_done                        ),
+    .phy_pll_lock                        (adi_phy_pll_lock                             ),
+    .phy_byte_aligned                    (adi_phy_byte_aligned                         ),
     .phy_disparity                       (phy_disparity                                ),
     .phy_notintable                      (phy_notintable                               ),
-    .link_error                          (link_error                                   )
+    .jesd_link_error                     (jesd_link_error                              )
 );
 
-ADC_UPK adc_upk(
+ADC_RXD adc_rxd(
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
-    .chn_en                              (upk_en                                       ),
-    .rxd_data                            (rxd_data                                     ),
-    .rxd_data_vld                        (rxd_data_vld                                 ),
-    .rxd_ready                           (rxd_ready                                    ),
+    .chn_en                              (afe_en                                       ),
+    .adi_data                            (adi_data                                     ),
+    .adi_data_vld                        (adi_data_vld                                 ),
+    .adi_link_qual                       (adi_link_qual                                ),
     .adc_ctl                             (adc_ctl                                      ),
     .frm_cfg                             (frm_cfg                                      ),
     .rx_fifo_wdat                        (rx_fifo_wdat                                 ),
     .rx_fifo_winc                        (rx_fifo_winc                                 ),
     .data_error                          (data_error                                   ),
-    .upk_idle                            (upk_idle                                     )
+    .rxd_idle                            (rxd_idle                                     )
 );
 
 //////////////////////////////////////////////////
-//3. FIFO And Packet
+//3. FIFO And Transmit
 //////////////////////////////////////////////////
 assign fifo_rst_n = ~fifo_clr & afe_rst_n & adc_rst_n;
 
@@ -166,12 +167,14 @@ async_fifo #(
     .rlevel                              (rx_fifo_rlevel                               )
 );
 
-ADC_PKT adc_pkt(
+ADC_TXD #(
+    .AFE_ID                              (AFE_ID                                       )
+) adc_txd(
     .adc_clk                             (adc_clk                                      ),
     .adc_rst_n                           (adc_rst_n                                    ),
-    .chn_en                              (pkt_en                                       ),
+    .chn_en                              (adc_en                                       ),
+    .link_ready_sync                     (link_ready_sync                              ),
     .rx_fifo_rdat                        (rx_fifo_rdat                                 ),
-    .rx_fifo_empty                       (rx_fifo_empt                                 ),
     .rx_fifo_rlevel                      (rx_fifo_rlevel                               ),
     .rx_fifo_rinc                        (rx_fifo_rinc                                 ),
     .m_axis_tdata                        (m_axis_tdata                                 ),
@@ -179,7 +182,7 @@ ADC_PKT adc_pkt(
     .m_axis_tvalid                       (m_axis_tvalid                                ),
     .m_axis_tlast                        (m_axis_tlast                                 ),
     .m_axis_tready                       (m_axis_tready                                ),
-    .pkt_idle                            (pkt_idle                                     )
+    .txd_idle                            (txd_idle                                     )
 );
 
 //////////////////////////////////////////////////
@@ -192,11 +195,11 @@ CHN_SYNC chn_sync(
     .afe_rst_n                           (afe_rst_n                                    ),
     .jesd_clk                            (jesd_clk                                     ),
     .jesd_rst_n                          (jesd_rst_n                                   ),
-    .phy_rx_reset_done                   (phy_rx_reset_done                            ),
+    .phy_rx_reset_done                   (adi_phy_rx_reset_done                        ),
     .phy_rx_reset_done_sync              (phy_rx_reset_done_sync                       ),
-    .phy_pll_lock                        (phy_pll_lock                                 ),
+    .phy_pll_lock                        (adi_phy_pll_lock                             ),
     .phy_pll_lock_sync                   (phy_pll_lock_sync                            ),
-    .phy_byte_aligned                    (phy_byte_aligned                             ),
+    .phy_byte_aligned                    (adi_phy_byte_aligned                         ),
     .phy_byte_align_sync                 (phy_byte_aligned_sync                        ),
     .sysref_error                        (adi_sysref_error                             ),
     .sysref_seen                         (adi_sysref_seen                              ),
@@ -211,10 +214,12 @@ CHN_SYNC chn_sync(
     .phy_disparity_sync                  (phy_disparity_sync                           ),
     .phy_notintable                      (phy_notintable                               ),
     .phy_notintable_sync                 (phy_notintable_sync                          ),
-    .link_error                          (link_error                                   ),
+    .jesd_link_error                     (jesd_link_error                              ),
     .link_error_sync                     (link_error_sync                              ),
-    .afe_idle                            (afe_idle                                     ),
-    .afe_idle_sync                       (afe_idle_sync                                )
+    .rxd_idle                            (rxd_idle                                     ),
+    .tgc_sta_idle                        (tgc_sta_idle                                 ),
+    .txd_idle                            (txd_idle                                     ),
+    .chn_idle                            (chn_idle                                     )
 );
 
 //////////////////////////////////////////////////
@@ -225,7 +230,7 @@ ADC_TGC adc_tgc(
     .sys_rst_n                           (sys_rst_n                                    ),
     .afe_clk                             (afe_clk                                      ),
     .afe_rst_n                           (afe_rst_n                                    ),
-    .chn_en                              (upk_en                                       ),
+    .chn_en                              (afe_en                                       ),
     .chn_tgc                             (chn_tgc                                      ),
     .tgc_done                            (tgc_done                                     ),
     .tgc_sta_idle                        (tgc_sta_idle                                 ),

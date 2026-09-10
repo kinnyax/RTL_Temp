@@ -52,8 +52,6 @@ module ADC_REG(
     output    reg       [ 3:0]              chn7_tgc
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 wire                    [31:0]              io_rdata                                       ;
 wire                                        wr_access                                      ;
 wire                                        wr_addr                                        ;
@@ -132,58 +130,58 @@ assign wr_done   = s_axi_bready & s_axi_bvalid;
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_awready <= #UDLY 1'd0;
-        aw_busy       <= #UDLY 1'd0;
+        s_axi_awready <= 1'd0;
+        aw_busy       <= 1'd0;
     end
     else if(wr_addr) begin
-        s_axi_awready <= #UDLY 1'd1;
-        aw_busy       <= #UDLY 1'd1;
+        s_axi_awready <= 1'd1;
+        aw_busy       <= 1'd1;
     end
     else if(wr_done) begin
-        s_axi_awready <= #UDLY 1'd0;
-        aw_busy       <= #UDLY 1'd0;
+        s_axi_awready <= 1'd0;
+        aw_busy       <= 1'd0;
     end
     else
-        s_axi_awready <= #UDLY 1'd0;
+        s_axi_awready <= 1'd0;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        axi_awaddr_r <= #UDLY 16'd0;
+        axi_awaddr_r <= 16'd0;
     else if(wr_addr)
-        axi_awaddr_r <= #UDLY s_axi_awaddr;
+        axi_awaddr_r <= s_axi_awaddr;
 end
 
 assign w_ready = ~s_axi_wready & s_axi_wvalid & (wait_data | wr_addr);
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_wready <= #UDLY 1'd0;
-        wait_data    <= #UDLY 1'd0;
+        s_axi_wready <= 1'd0;
+        wait_data    <= 1'd0;
     end
     else if(w_ready) begin
-        s_axi_wready <= #UDLY 1'd1;
-        wait_data    <= #UDLY 1'd0;
+        s_axi_wready <= 1'd1;
+        wait_data    <= 1'd0;
     end
     else if(wr_addr) begin
-        wait_data <= #UDLY 1'd1;
+        wait_data <= 1'd1;
     end
     else begin
-        s_axi_wready <= #UDLY 1'd0;
+        s_axi_wready <= 1'd0;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_bvalid <= #UDLY 1'd0;
-        s_axi_bresp  <= #UDLY 2'd0;
+        s_axi_bvalid <= 1'd0;
+        s_axi_bresp  <= 2'd0;
     end
     else if(wr_data) begin
-        s_axi_bvalid <= #UDLY 1'd1;
-        s_axi_bresp  <= #UDLY 2'd0;
+        s_axi_bvalid <= 1'd1;
+        s_axi_bresp  <= 2'd0;
     end
     else if(wr_done)
-        s_axi_bvalid <= #UDLY 1'd0;
+        s_axi_bvalid <= 1'd0;
 end
 
 assign ar_idle   = ~s_axi_rvalid | (s_axi_rvalid & s_axi_rready);
@@ -191,30 +189,30 @@ assign rd_access = s_axi_arready & s_axi_arvalid;
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_arready <= #UDLY 1'd0;
-        axi_araddr_r  <= #UDLY 16'd0;
+        s_axi_arready <= 1'd0;
+        axi_araddr_r  <= 16'd0;
     end
     else if(~s_axi_arready & s_axi_arvalid & ar_idle) begin
-        s_axi_arready <= #UDLY 1'd1;
-        axi_araddr_r  <= #UDLY s_axi_araddr;
+        s_axi_arready <= 1'd1;
+        axi_araddr_r  <= s_axi_araddr;
     end
     else
-        s_axi_arready <= #UDLY 1'd0;
+        s_axi_arready <= 1'd0;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_rvalid <= #UDLY 1'd0;
-        s_axi_rdata  <= #UDLY 32'd0;
-        s_axi_rresp  <= #UDLY 2'd0;
+        s_axi_rvalid <= 1'd0;
+        s_axi_rdata  <= 32'd0;
+        s_axi_rresp  <= 2'd0;
     end
     else if(rd_access) begin
-        s_axi_rvalid <= #UDLY 1'd1;
-        s_axi_rdata  <= #UDLY io_rdata;
-        s_axi_rresp  <= #UDLY 2'd0;
+        s_axi_rvalid <= 1'd1;
+        s_axi_rdata  <= io_rdata;
+        s_axi_rresp  <= 2'd0;
     end
     else if(s_axi_rready & s_axi_rvalid)
-        s_axi_rvalid <= #UDLY 1'd0;
+        s_axi_rvalid <= 1'd0;
 end
 
 //////////////////////////////////////////////////
@@ -257,141 +255,141 @@ assign reg_0040h_rd = (axi_araddr_r == 16'h0040) & rd_access;
 //////////////////////////////////////////////////
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        adc_ctl <= #UDLY 32'd0;
-        frm_cfg <= #UDLY 32'd0;
+        adc_ctl <= 32'd0;
+        frm_cfg <= 32'd0;
     end
     else begin
         if(reg_0000h_wr)
-            adc_ctl <= #UDLY s_axi_wdata & 32'hce00ffff;
+            adc_ctl <= s_axi_wdata & 32'hce00ffff;
         if(reg_0004h_wr)
-            frm_cfg <= #UDLY s_axi_wdata & 32'h000003ff;
+            frm_cfg <= s_axi_wdata & 32'h000003ff;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        chn0_tgc <= #UDLY 4'd0;
-        chn1_tgc <= #UDLY 4'd0;
-        chn2_tgc <= #UDLY 4'd0;
-        chn3_tgc <= #UDLY 4'd0;
-        chn4_tgc <= #UDLY 4'd0;
-        chn5_tgc <= #UDLY 4'd0;
-        chn6_tgc <= #UDLY 4'd0;
-        chn7_tgc <= #UDLY 4'd0;
+        chn0_tgc <= 4'd0;
+        chn1_tgc <= 4'd0;
+        chn2_tgc <= 4'd0;
+        chn3_tgc <= 4'd0;
+        chn4_tgc <= 4'd0;
+        chn5_tgc <= 4'd0;
+        chn6_tgc <= 4'd0;
+        chn7_tgc <= 4'd0;
     end
     else begin
-        if(reg_0008h_wr) chn0_tgc <= #UDLY s_axi_wdata[3:0];
-        if(reg_000ch_wr) chn1_tgc <= #UDLY s_axi_wdata[3:0];
-        if(reg_0010h_wr) chn2_tgc <= #UDLY s_axi_wdata[3:0];
-        if(reg_0014h_wr) chn3_tgc <= #UDLY s_axi_wdata[3:0];
-        if(reg_0018h_wr) chn4_tgc <= #UDLY s_axi_wdata[3:0];
-        if(reg_001ch_wr) chn5_tgc <= #UDLY s_axi_wdata[3:0];
-        if(reg_0020h_wr) chn6_tgc <= #UDLY s_axi_wdata[3:0];
-        if(reg_0024h_wr) chn7_tgc <= #UDLY s_axi_wdata[3:0];
-        if(tgc_done[0]) chn0_tgc[0] <= #UDLY 1'd0;
-        if(tgc_done[1]) chn1_tgc[0] <= #UDLY 1'd0;
-        if(tgc_done[2]) chn2_tgc[0] <= #UDLY 1'd0;
-        if(tgc_done[3]) chn3_tgc[0] <= #UDLY 1'd0;
-        if(tgc_done[4]) chn4_tgc[0] <= #UDLY 1'd0;
-        if(tgc_done[5]) chn5_tgc[0] <= #UDLY 1'd0;
-        if(tgc_done[6]) chn6_tgc[0] <= #UDLY 1'd0;
-        if(tgc_done[7]) chn7_tgc[0] <= #UDLY 1'd0;
+        if(reg_0008h_wr) chn0_tgc <= s_axi_wdata[3:0];
+        if(reg_000ch_wr) chn1_tgc <= s_axi_wdata[3:0];
+        if(reg_0010h_wr) chn2_tgc <= s_axi_wdata[3:0];
+        if(reg_0014h_wr) chn3_tgc <= s_axi_wdata[3:0];
+        if(reg_0018h_wr) chn4_tgc <= s_axi_wdata[3:0];
+        if(reg_001ch_wr) chn5_tgc <= s_axi_wdata[3:0];
+        if(reg_0020h_wr) chn6_tgc <= s_axi_wdata[3:0];
+        if(reg_0024h_wr) chn7_tgc <= s_axi_wdata[3:0];
+        if(tgc_done[0]) chn0_tgc[0] <= 1'd0;
+        if(tgc_done[1]) chn1_tgc[0] <= 1'd0;
+        if(tgc_done[2]) chn2_tgc[0] <= 1'd0;
+        if(tgc_done[3]) chn3_tgc[0] <= 1'd0;
+        if(tgc_done[4]) chn4_tgc[0] <= 1'd0;
+        if(tgc_done[5]) chn5_tgc[0] <= 1'd0;
+        if(tgc_done[6]) chn6_tgc[0] <= 1'd0;
+        if(tgc_done[7]) chn7_tgc[0] <= 1'd0;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        adc_pd <= #UDLY 24'd0;
+        adc_pd <= 24'd0;
     else begin
-        if(fifo_overflow_sync[0]) adc_pd[0]  <= #UDLY 1'd1;
-        if(fifo_overflow_sync[1]) adc_pd[1]  <= #UDLY 1'd1;
-        if(fifo_overflow_sync[2]) adc_pd[2]  <= #UDLY 1'd1;
-        if(fifo_overflow_sync[3]) adc_pd[3]  <= #UDLY 1'd1;
-        if(fifo_overflow_sync[4]) adc_pd[4]  <= #UDLY 1'd1;
-        if(fifo_overflow_sync[5]) adc_pd[5]  <= #UDLY 1'd1;
-        if(fifo_overflow_sync[6]) adc_pd[6]  <= #UDLY 1'd1;
-        if(fifo_overflow_sync[7]) adc_pd[7]  <= #UDLY 1'd1;
-        if(data_error_sync[0])    adc_pd[8]  <= #UDLY 1'd1;
-        if(data_error_sync[1])    adc_pd[9]  <= #UDLY 1'd1;
-        if(data_error_sync[2])    adc_pd[10] <= #UDLY 1'd1;
-        if(data_error_sync[3])    adc_pd[11] <= #UDLY 1'd1;
-        if(data_error_sync[4])    adc_pd[12] <= #UDLY 1'd1;
-        if(data_error_sync[5])    adc_pd[13] <= #UDLY 1'd1;
-        if(data_error_sync[6])    adc_pd[14] <= #UDLY 1'd1;
-        if(data_error_sync[7])    adc_pd[15] <= #UDLY 1'd1;
-        if(link_error_sync[0])    adc_pd[16] <= #UDLY 1'd1;
-        if(link_error_sync[1])    adc_pd[17] <= #UDLY 1'd1;
-        if(link_error_sync[2])    adc_pd[18] <= #UDLY 1'd1;
-        if(link_error_sync[3])    adc_pd[19] <= #UDLY 1'd1;
-        if(link_error_sync[4])    adc_pd[20] <= #UDLY 1'd1;
-        if(link_error_sync[5])    adc_pd[21] <= #UDLY 1'd1;
-        if(link_error_sync[6])    adc_pd[22] <= #UDLY 1'd1;
-        if(link_error_sync[7])    adc_pd[23] <= #UDLY 1'd1;
+        if(fifo_overflow_sync[0]) adc_pd[0]  <= 1'd1;
+        if(fifo_overflow_sync[1]) adc_pd[1]  <= 1'd1;
+        if(fifo_overflow_sync[2]) adc_pd[2]  <= 1'd1;
+        if(fifo_overflow_sync[3]) adc_pd[3]  <= 1'd1;
+        if(fifo_overflow_sync[4]) adc_pd[4]  <= 1'd1;
+        if(fifo_overflow_sync[5]) adc_pd[5]  <= 1'd1;
+        if(fifo_overflow_sync[6]) adc_pd[6]  <= 1'd1;
+        if(fifo_overflow_sync[7]) adc_pd[7]  <= 1'd1;
+        if(data_error_sync[0])    adc_pd[8]  <= 1'd1;
+        if(data_error_sync[1])    adc_pd[9]  <= 1'd1;
+        if(data_error_sync[2])    adc_pd[10] <= 1'd1;
+        if(data_error_sync[3])    adc_pd[11] <= 1'd1;
+        if(data_error_sync[4])    adc_pd[12] <= 1'd1;
+        if(data_error_sync[5])    adc_pd[13] <= 1'd1;
+        if(data_error_sync[6])    adc_pd[14] <= 1'd1;
+        if(data_error_sync[7])    adc_pd[15] <= 1'd1;
+        if(link_error_sync[0])    adc_pd[16] <= 1'd1;
+        if(link_error_sync[1])    adc_pd[17] <= 1'd1;
+        if(link_error_sync[2])    adc_pd[18] <= 1'd1;
+        if(link_error_sync[3])    adc_pd[19] <= 1'd1;
+        if(link_error_sync[4])    adc_pd[20] <= 1'd1;
+        if(link_error_sync[5])    adc_pd[21] <= 1'd1;
+        if(link_error_sync[6])    adc_pd[22] <= 1'd1;
+        if(link_error_sync[7])    adc_pd[23] <= 1'd1;
         for(i=0;i<24;i=i+1) begin
             if(reg_002ch_wr & s_axi_wdata[i])
-                adc_pd[i] <= #UDLY 1'd0;
+                adc_pd[i] <= 1'd0;
         end
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        sysref_seen <= #UDLY 8'd0;
+        sysref_seen <= 8'd0;
     else begin
-        if(sysref_seen_sync[0]) sysref_seen[0] <= #UDLY 1'd1;
-        if(sysref_seen_sync[1]) sysref_seen[1] <= #UDLY 1'd1;
-        if(sysref_seen_sync[2]) sysref_seen[2] <= #UDLY 1'd1;
-        if(sysref_seen_sync[3]) sysref_seen[3] <= #UDLY 1'd1;
-        if(sysref_seen_sync[4]) sysref_seen[4] <= #UDLY 1'd1;
-        if(sysref_seen_sync[5]) sysref_seen[5] <= #UDLY 1'd1;
-        if(sysref_seen_sync[6]) sysref_seen[6] <= #UDLY 1'd1;
-        if(sysref_seen_sync[7]) sysref_seen[7] <= #UDLY 1'd1;
+        if(sysref_seen_sync[0]) sysref_seen[0] <= 1'd1;
+        if(sysref_seen_sync[1]) sysref_seen[1] <= 1'd1;
+        if(sysref_seen_sync[2]) sysref_seen[2] <= 1'd1;
+        if(sysref_seen_sync[3]) sysref_seen[3] <= 1'd1;
+        if(sysref_seen_sync[4]) sysref_seen[4] <= 1'd1;
+        if(sysref_seen_sync[5]) sysref_seen[5] <= 1'd1;
+        if(sysref_seen_sync[6]) sysref_seen[6] <= 1'd1;
+        if(sysref_seen_sync[7]) sysref_seen[7] <= 1'd1;
         for(j=0;j<8;j=j+1) begin
             if(reg_0034h_wr & s_axi_wdata[j])
-                sysref_seen[j] <= #UDLY 1'd0;
+                sysref_seen[j] <= 1'd0;
         end
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        lane_pd <= #UDLY 32'd0;
+        lane_pd <= 32'd0;
     else begin
-        if(disparity_sync[0])   lane_pd[0]  <= #UDLY 1'd1;
-        if(disparity_sync[1])   lane_pd[1]  <= #UDLY 1'd1;
-        if(disparity_sync[2])   lane_pd[2]  <= #UDLY 1'd1;
-        if(disparity_sync[3])   lane_pd[3]  <= #UDLY 1'd1;
-        if(disparity_sync[4])   lane_pd[4]  <= #UDLY 1'd1;
-        if(disparity_sync[5])   lane_pd[5]  <= #UDLY 1'd1;
-        if(disparity_sync[6])   lane_pd[6]  <= #UDLY 1'd1;
-        if(disparity_sync[7])   lane_pd[7]  <= #UDLY 1'd1;
-        if(disparity_sync[8])   lane_pd[8]  <= #UDLY 1'd1;
-        if(disparity_sync[9])   lane_pd[9]  <= #UDLY 1'd1;
-        if(disparity_sync[10])  lane_pd[10] <= #UDLY 1'd1;
-        if(disparity_sync[11])  lane_pd[11] <= #UDLY 1'd1;
-        if(disparity_sync[12])  lane_pd[12] <= #UDLY 1'd1;
-        if(disparity_sync[13])  lane_pd[13] <= #UDLY 1'd1;
-        if(disparity_sync[14])  lane_pd[14] <= #UDLY 1'd1;
-        if(disparity_sync[15])  lane_pd[15] <= #UDLY 1'd1;
-        if(notintable_sync[0])  lane_pd[16] <= #UDLY 1'd1;
-        if(notintable_sync[1])  lane_pd[17] <= #UDLY 1'd1;
-        if(notintable_sync[2])  lane_pd[18] <= #UDLY 1'd1;
-        if(notintable_sync[3])  lane_pd[19] <= #UDLY 1'd1;
-        if(notintable_sync[4])  lane_pd[20] <= #UDLY 1'd1;
-        if(notintable_sync[5])  lane_pd[21] <= #UDLY 1'd1;
-        if(notintable_sync[6])  lane_pd[22] <= #UDLY 1'd1;
-        if(notintable_sync[7])  lane_pd[23] <= #UDLY 1'd1;
-        if(notintable_sync[8])  lane_pd[24] <= #UDLY 1'd1;
-        if(notintable_sync[9])  lane_pd[25] <= #UDLY 1'd1;
-        if(notintable_sync[10]) lane_pd[26] <= #UDLY 1'd1;
-        if(notintable_sync[11]) lane_pd[27] <= #UDLY 1'd1;
-        if(notintable_sync[12]) lane_pd[28] <= #UDLY 1'd1;
-        if(notintable_sync[13]) lane_pd[29] <= #UDLY 1'd1;
-        if(notintable_sync[14]) lane_pd[30] <= #UDLY 1'd1;
-        if(notintable_sync[15]) lane_pd[31] <= #UDLY 1'd1;
+        if(disparity_sync[0])   lane_pd[0]  <= 1'd1;
+        if(disparity_sync[1])   lane_pd[1]  <= 1'd1;
+        if(disparity_sync[2])   lane_pd[2]  <= 1'd1;
+        if(disparity_sync[3])   lane_pd[3]  <= 1'd1;
+        if(disparity_sync[4])   lane_pd[4]  <= 1'd1;
+        if(disparity_sync[5])   lane_pd[5]  <= 1'd1;
+        if(disparity_sync[6])   lane_pd[6]  <= 1'd1;
+        if(disparity_sync[7])   lane_pd[7]  <= 1'd1;
+        if(disparity_sync[8])   lane_pd[8]  <= 1'd1;
+        if(disparity_sync[9])   lane_pd[9]  <= 1'd1;
+        if(disparity_sync[10])  lane_pd[10] <= 1'd1;
+        if(disparity_sync[11])  lane_pd[11] <= 1'd1;
+        if(disparity_sync[12])  lane_pd[12] <= 1'd1;
+        if(disparity_sync[13])  lane_pd[13] <= 1'd1;
+        if(disparity_sync[14])  lane_pd[14] <= 1'd1;
+        if(disparity_sync[15])  lane_pd[15] <= 1'd1;
+        if(notintable_sync[0])  lane_pd[16] <= 1'd1;
+        if(notintable_sync[1])  lane_pd[17] <= 1'd1;
+        if(notintable_sync[2])  lane_pd[18] <= 1'd1;
+        if(notintable_sync[3])  lane_pd[19] <= 1'd1;
+        if(notintable_sync[4])  lane_pd[20] <= 1'd1;
+        if(notintable_sync[5])  lane_pd[21] <= 1'd1;
+        if(notintable_sync[6])  lane_pd[22] <= 1'd1;
+        if(notintable_sync[7])  lane_pd[23] <= 1'd1;
+        if(notintable_sync[8])  lane_pd[24] <= 1'd1;
+        if(notintable_sync[9])  lane_pd[25] <= 1'd1;
+        if(notintable_sync[10]) lane_pd[26] <= 1'd1;
+        if(notintable_sync[11]) lane_pd[27] <= 1'd1;
+        if(notintable_sync[12]) lane_pd[28] <= 1'd1;
+        if(notintable_sync[13]) lane_pd[29] <= 1'd1;
+        if(notintable_sync[14]) lane_pd[30] <= 1'd1;
+        if(notintable_sync[15]) lane_pd[31] <= 1'd1;
         for(k=0;k<32;k=k+1) begin
             if(reg_0040h_wr & s_axi_wdata[k])
-                lane_pd[k] <= #UDLY 1'd0;
+                lane_pd[k] <= 1'd0;
         end
     end
 end

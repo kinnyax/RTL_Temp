@@ -173,8 +173,6 @@ module ADC_TOP(
     output    wire                          tgc7_prof2
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 wire                    [31:0]              adc_ctl                                        ;
 wire                    [31:0]              frm_cfg                                        ;
 wire                    [ 3:0]              chn0_tgc                                       ;
@@ -314,7 +312,9 @@ ADC_SYNC adc_sync(
 //////////////////////////////////////////////////
 //2. Acquisition Channels
 //////////////////////////////////////////////////
-ADC_CHN adc_chn0(
+ADC_CHN #(
+    .AFE_ID                              (8'd0                                         )
+) adc_chn0(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
@@ -365,7 +365,9 @@ ADC_CHN adc_chn0(
     .data_error                          (data_error[0]                                )
 );
 
-ADC_CHN adc_chn1(
+ADC_CHN #(
+    .AFE_ID                              (8'd1                                         )
+) adc_chn1(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
@@ -416,7 +418,9 @@ ADC_CHN adc_chn1(
     .data_error                          (data_error[1]                                )
 );
 
-ADC_CHN adc_chn2(
+ADC_CHN #(
+    .AFE_ID                              (8'd2                                         )
+) adc_chn2(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
@@ -467,7 +471,9 @@ ADC_CHN adc_chn2(
     .data_error                          (data_error[2]                                )
 );
 
-ADC_CHN adc_chn3(
+ADC_CHN #(
+    .AFE_ID                              (8'd3                                         )
+) adc_chn3(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
@@ -518,7 +524,9 @@ ADC_CHN adc_chn3(
     .data_error                          (data_error[3]                                )
 );
 
-ADC_CHN adc_chn4(
+ADC_CHN #(
+    .AFE_ID                              (8'd4                                         )
+) adc_chn4(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
@@ -569,7 +577,9 @@ ADC_CHN adc_chn4(
     .data_error                          (data_error[4]                                )
 );
 
-ADC_CHN adc_chn5(
+ADC_CHN #(
+    .AFE_ID                              (8'd5                                         )
+) adc_chn5(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
@@ -620,7 +630,9 @@ ADC_CHN adc_chn5(
     .data_error                          (data_error[5]                                )
 );
 
-ADC_CHN adc_chn6(
+ADC_CHN #(
+    .AFE_ID                              (8'd6                                         )
+) adc_chn6(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),
@@ -671,7 +683,9 @@ ADC_CHN adc_chn6(
     .data_error                          (data_error[6]                                )
 );
 
-ADC_CHN adc_chn7(
+ADC_CHN #(
+    .AFE_ID                              (8'd7                                         )
+) adc_chn7(
     .sys_clk                             (sys_clk                                      ),
     .sys_rst_n                           (sys_rst_n                                    ),
     .adc_clk                             (adc_clk                                      ),

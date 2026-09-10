@@ -28,17 +28,20 @@ module CHN_SYNC(
     output    wire      [ 1:0]              phy_disparity_sync                             ,
     input               [ 1:0]              phy_notintable                                 ,
     output    wire      [ 1:0]              phy_notintable_sync                            ,
-    input                                   link_error                                     ,
+    input                                   jesd_link_error                                ,
     output    wire                          link_error_sync                                ,
 
-    input                                   afe_idle                                       ,
-    output    wire                          afe_idle_sync
+    input                                   rxd_idle                                       ,
+    input                                   tgc_sta_idle                                   ,
+    input                                   txd_idle                                       ,
+    output    reg                           chn_idle
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 wire                                        sysref_error_sync                              ;
-wire                                        link_error_core_sync                           ;
+wire                                        jesd_link_error_sync                           ;
+wire                                        afe_idle_sync                                  ;
+
+reg                                         afe_idle                                       ;
 
 //////////////////////////////////////////////////
 //1. JESD And AFE CDC
@@ -51,13 +54,31 @@ levels_sync #(.DS(2),.RV(1'd0)) lane_ready_level_sync(.clk(adc_clk),.rst_n(adc_r
 levels_sync #(.DS(2),.RV(1'd0)) cgs_ready_level_sync(.clk(adc_clk),.rst_n(adc_rst_n),.in(cgs_ready),.out(cgs_ready_sync));
 pulse_sync sysref_error_pulse_sync(.clka(afe_clk),.clkb(adc_clk),.rst_n_a(afe_rst_n),.rst_n_b(adc_rst_n),.in(sysref_error),.out(sysref_error_sync));
 pulse_sync sysref_seen_pulse_sync(.clka(afe_clk),.clkb(adc_clk),.rst_n_a(afe_rst_n),.rst_n_b(adc_rst_n),.in(sysref_seen),.out(sysref_seen_sync));
-pulse_sync link_error_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(link_error),.out(link_error_core_sync));
+pulse_sync jesd_link_error_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(jesd_link_error),.out(jesd_link_error_sync));
 pulse_sync disparity0_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(phy_disparity[0]),.out(phy_disparity_sync[0]));
 pulse_sync disparity1_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(phy_disparity[1]),.out(phy_disparity_sync[1]));
 pulse_sync notintable0_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(phy_notintable[0]),.out(phy_notintable_sync[0]));
 pulse_sync notintable1_pulse_sync(.clka(jesd_clk),.clkb(adc_clk),.rst_n_a(jesd_rst_n),.rst_n_b(adc_rst_n),.in(phy_notintable[1]),.out(phy_notintable_sync[1]));
+
+assign link_error_sync = sysref_error_sync | jesd_link_error_sync;
+
+//////////////////////////////////////////////////
+//2. Idle Aggregation
+//////////////////////////////////////////////////
+always @(posedge afe_clk or negedge afe_rst_n) begin
+    if(~afe_rst_n)
+        afe_idle <= 1'd1;
+    else
+        afe_idle <= rxd_idle & tgc_sta_idle;
+end
+
 level_sync #(.RV(1'd1)) afe_idle_level_sync(.clk(adc_clk),.rst_n(adc_rst_n),.in(afe_idle),.out(afe_idle_sync));
 
-assign link_error_sync = sysref_error_sync | link_error_core_sync;
+always @(posedge adc_clk or negedge adc_rst_n) begin
+    if(~adc_rst_n)
+        chn_idle <= 1'd1;
+    else
+        chn_idle <= afe_idle_sync & txd_idle;
+end
 
 endmodule

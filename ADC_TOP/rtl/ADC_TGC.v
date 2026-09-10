@@ -17,8 +17,6 @@ module ADC_TGC(
     output    reg                           tgc_prof2
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 localparam                                  TGC_IDLE                 = 2'd0                ;
 localparam                                  TGC_APPLY                = 2'd1                ;
 localparam                                  TGC_SLOPE                = 2'd2                ;
@@ -50,11 +48,11 @@ req_sync tgc_req_sync(
 
 always @(negedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
-        tgc_ready <= #UDLY 1'd0;
+        tgc_ready <= 1'd0;
     else if(tgc_sta_end)
-        tgc_ready <= #UDLY 1'd1;
+        tgc_ready <= 1'd1;
     else
-        tgc_ready <= #UDLY 1'd0;
+        tgc_ready <= 1'd0;
 end
 
 //////////////////////////////////////////////////
@@ -62,9 +60,9 @@ end
 //////////////////////////////////////////////////
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
-        tgc_fsm <= #UDLY TGC_IDLE;
+        tgc_fsm <= TGC_IDLE;
     else
-        tgc_fsm <= #UDLY tgc_fsm_nx;
+        tgc_fsm <= tgc_fsm_nx;
 end
 
 always @(*) begin
@@ -109,27 +107,27 @@ assign tgc_sta_end   = (tgc_fsm == TGC_END);
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n) begin
-        tgc_slope <= #UDLY 1'd0;
-        tgc_up_dn <= #UDLY 1'd0;
-        tgc_prof1 <= #UDLY 1'd0;
-        tgc_prof2 <= #UDLY 1'd0;
+        tgc_slope <= 1'd0;
+        tgc_up_dn <= 1'd0;
+        tgc_prof1 <= 1'd0;
+        tgc_prof2 <= 1'd0;
     end
     else if(~chn_en) begin
-        tgc_slope <= #UDLY 1'd0;
-        tgc_up_dn <= #UDLY 1'd0;
-        tgc_prof1 <= #UDLY 1'd0;
-        tgc_prof2 <= #UDLY 1'd0;
+        tgc_slope <= 1'd0;
+        tgc_up_dn <= 1'd0;
+        tgc_prof1 <= 1'd0;
+        tgc_prof2 <= 1'd0;
     end
     else if(tgc_start) begin
-        tgc_slope <= #UDLY 1'd0;
-        tgc_up_dn <= #UDLY chn_tgc[3];
-        tgc_prof1 <= #UDLY chn_tgc[1];
-        tgc_prof2 <= #UDLY chn_tgc[2];
+        tgc_slope <= 1'd0;
+        tgc_up_dn <= chn_tgc[3];
+        tgc_prof1 <= chn_tgc[1];
+        tgc_prof2 <= chn_tgc[2];
     end
     else if(tgc_sta_apply)
-        tgc_slope <= #UDLY 1'd1;
+        tgc_slope <= 1'd1;
     else if(tgc_sta_slope)
-        tgc_slope <= #UDLY 1'd0;
+        tgc_slope <= 1'd0;
 end
 
 endmodule

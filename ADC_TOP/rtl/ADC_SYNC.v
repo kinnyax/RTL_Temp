@@ -42,8 +42,6 @@ module ADC_SYNC(
     output    wire      [15:0]              notintable_sync
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 //////////////////////////////////////////////////
 //1. Level And Event CDC
 //////////////////////////////////////////////////
