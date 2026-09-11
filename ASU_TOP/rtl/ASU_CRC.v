@@ -10,8 +10,6 @@ module ASU_CRC(
     output    reg       [15:0]              crc_value
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 wire                    [15:0]              crc_base                                       ;
 wire                                        crc_feedback                                   ;
 wire                    [15:0]              crc_next                                       ;
@@ -26,12 +24,11 @@ assign crc_next     = {crc_base[14:0], 1'd0} ^
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        crc_value <= #UDLY 16'hFFFF;
+        crc_value <= 16'hFFFF;
     else if(crc_valid)
-        crc_value <= #UDLY crc_next;
+        crc_value <= crc_next;
     else if(crc_init)
-        crc_value <= #UDLY 16'hFFFF;
+        crc_value <= 16'hFFFF;
 end
 
 endmodule
-

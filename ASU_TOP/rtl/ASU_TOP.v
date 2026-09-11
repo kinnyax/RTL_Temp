@@ -31,13 +31,12 @@ module ASU_TOP(
     output    wire                          m_axi_rready
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 wire                                        rxd_req                                        ;
 wire                                        rxd_write                                      ;
 wire                    [31:0]              rxd_addr                                       ;
 wire                    [31:0]              rxd_wdata                                      ;
 wire                                        txd_rdy                                        ;
+wire                                        txd_busy                                       ;
 wire                                        txd_timeout                                    ;
 wire                    [31:0]              txd_rdata                                      ;
 
@@ -56,6 +55,7 @@ ASU_RXD asu_rxd(
     .rxd_addr                            (rxd_addr                                     ),
     .rxd_wdata                           (rxd_wdata                                    ),
     .txd_rdy                             (txd_rdy                                      ),
+    .txd_busy                            (txd_busy                                     ),
     .txd_timeout                         (txd_timeout                                  ),
     .txd_rdata                           (txd_rdata                                    )
 );
@@ -68,6 +68,7 @@ ASU_TXD asu_txd(
     .rxd_addr                            (rxd_addr                                     ),
     .rxd_wdata                           (rxd_wdata                                    ),
     .txd_rdy                             (txd_rdy                                      ),
+    .txd_busy                            (txd_busy                                     ),
     .txd_timeout                         (txd_timeout                                  ),
     .txd_rdata                           (txd_rdata                                    ),
     .m_axi_awaddr                        (m_axi_awaddr                                 ),

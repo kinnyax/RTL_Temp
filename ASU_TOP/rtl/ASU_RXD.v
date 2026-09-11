@@ -14,11 +14,10 @@ module ASU_RXD(
     output    reg       [31:0]              rxd_addr                                       ,
     output    reg       [31:0]              rxd_wdata                                      ,
     input                                   txd_rdy                                        ,
+    input                                   txd_busy                                       ,
     input                                   txd_timeout                                    ,
     input               [31:0]              txd_rdata
 );
-
-parameter                                   UDLY                     = 1                   ;
 
 localparam              [15:0]              CMD_WRITE                = 16'hA501            ;
 localparam              [15:0]              CMD_READ                 = 16'hA502            ;
@@ -68,6 +67,7 @@ wire                                        cmd_read_crc_err                    
 wire                                        cmd_pd_w1c                                     ;
 wire                                        read_context_set                               ;
 wire                                        result_set                                     ;
+wire                                        txd_occupied                                   ;
 
 wire                                        txd_handshake                                  ;
 wire                    [15:0]              crc_value                                      ;
@@ -115,24 +115,24 @@ reg                     [ 4:1]              asu_pd                              
 //////////////////////////////////////////////////
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        SPI_SCK_R <= #UDLY 1'd0;
-        spi_sck <= #UDLY 1'd0;
-        spi_sck_r <= #UDLY 1'd0;
-        SPI_CS_R <= #UDLY 1'd0;
-        spi_cs <= #UDLY 1'd0;
-        spi_cs_r <= #UDLY 1'd0;
-        SPI_MOSI_R <= #UDLY 1'd0;
-        spi_mosi <= #UDLY 1'd0;
+        SPI_SCK_R <= 1'd0;
+        spi_sck <= 1'd0;
+        spi_sck_r <= 1'd0;
+        SPI_CS_R <= 1'd0;
+        spi_cs <= 1'd0;
+        spi_cs_r <= 1'd0;
+        SPI_MOSI_R <= 1'd0;
+        spi_mosi <= 1'd0;
     end
     else begin
-        SPI_SCK_R <= #UDLY SPI_SCK;
-        spi_sck <= #UDLY SPI_SCK_R;
-        spi_sck_r <= #UDLY spi_sck;
-        SPI_CS_R <= #UDLY SPI_CS;
-        spi_cs <= #UDLY SPI_CS_R;
-        spi_cs_r <= #UDLY spi_cs;
-        SPI_MOSI_R <= #UDLY SPI_MOSI;
-        spi_mosi <= #UDLY SPI_MOSI_R;
+        SPI_SCK_R <= SPI_SCK;
+        spi_sck <= SPI_SCK_R;
+        spi_sck_r <= spi_sck;
+        SPI_CS_R <= SPI_CS;
+        spi_cs <= SPI_CS_R;
+        spi_cs_r <= spi_cs;
+        SPI_MOSI_R <= SPI_MOSI;
+        spi_mosi <= SPI_MOSI_R;
     end
 end
 
@@ -143,11 +143,11 @@ assign spi_cs_fall  = ~spi_cs & spi_cs_r;
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        cs_armed <= #UDLY 1'd0;
+        cs_armed <= 1'd0;
     else if(spi_cs)
-        cs_armed <= #UDLY 1'd1;
+        cs_armed <= 1'd1;
     else if(frame_start)
-        cs_armed <= #UDLY 1'd0;
+        cs_armed <= 1'd0;
 end
 
 assign frame_start = spi_cs_fall & cs_armed;
@@ -159,51 +159,51 @@ assign SPI_MISO    = sys_rst_n & ~spi_cs & miso_data;
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        frame_active <= #UDLY 1'd0;
-        query_mode <= #UDLY 1'd0;
+        frame_active <= 1'd0;
+        query_mode <= 1'd0;
     end
     else if(frame_start) begin
-        frame_active <= #UDLY 1'd1;
-        query_mode <= #UDLY read_pending;
+        frame_active <= 1'd1;
+        query_mode <= read_pending;
     end
     else if(spi_cs_rise) begin
-        frame_active <= #UDLY 1'd0;
-        query_mode <= #UDLY 1'd0;
+        frame_active <= 1'd0;
+        query_mode <= 1'd0;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        bit_cnt <= #UDLY 9'd0;
+        bit_cnt <= 9'd0;
     else if(frame_start)
-        bit_cnt <= #UDLY 9'd0;
+        bit_cnt <= 9'd0;
     else if(spi_sample & (bit_cnt < 9'd129))
-        bit_cnt <= #UDLY bit_cnt + 9'd1;
+        bit_cnt <= bit_cnt + 9'd1;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        rx_shift <= #UDLY 128'd0;
+        rx_shift <= 128'd0;
     else if(frame_start)
-        rx_shift <= #UDLY 128'd0;
+        rx_shift <= 128'd0;
     else if(spi_sample & ~query_mode)
-        rx_shift <= #UDLY {rx_shift[126:0], spi_mosi};
+        rx_shift <= {rx_shift[126:0], spi_mosi};
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        miso_data <= #UDLY 1'd0;
+        miso_data <= 1'd0;
     else if(frame_start)
-        miso_data <= #UDLY read_pending ? RSP_HEADER[15] : 1'd0;
+        miso_data <= read_pending ? RSP_HEADER[15] : 1'd0;
     else if(spi_cs_rise)
-        miso_data <= #UDLY 1'd0;
+        miso_data <= 1'd0;
     else if(spi_shift & query_mode) begin
         if(bit_cnt < 9'd112)
-            miso_data <= #UDLY query_frame[111-bit_cnt];
+            miso_data <= query_frame[111-bit_cnt];
         else if(bit_cnt < 9'd128)
-            miso_data <= #UDLY crc_value[127-bit_cnt];
+            miso_data <= crc_value[127-bit_cnt];
         else
-            miso_data <= #UDLY 1'd0;
+            miso_data <= 1'd0;
     end
 end
 
@@ -233,9 +233,10 @@ assign cmd_crc_err      = cmd_complete & ~crc_match;
 assign cmd_invalid      = cmd_complete & ~cmd_known;
 assign cmd_local_read   = cmd_crc_ok & cmd_read & addr_local;
 assign cmd_external     = cmd_crc_ok & cmd_known & ~addr_local;
-assign rxd_req_set      = cmd_external & ~rxd_req;
-assign cmd_busy_read    = cmd_external & cmd_read & rxd_req;
-assign cmd_busy_write   = cmd_external & cmd_write & rxd_req;
+assign txd_occupied     = rxd_req | txd_busy;
+assign rxd_req_set      = cmd_external & ~txd_occupied;
+assign cmd_busy_read    = cmd_external & cmd_read & txd_occupied;
+assign cmd_busy_write   = cmd_external & cmd_write & txd_occupied;
 assign cmd_read_crc_err = cmd_crc_err & cmd_read;
 assign cmd_pd_w1c       = cmd_crc_ok & cmd_write & addr_asu_pd;
 assign read_context_set = cmd_local_read | cmd_busy_read |
@@ -251,25 +252,25 @@ assign result_frame = {RSP_HEADER, read_trans_id, result_status, 8'd0,
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        query_frame <= #UDLY 112'd0;
+        query_frame <= 112'd0;
     else if(frame_start)
-        query_frame <= #UDLY read_pending ? (result_valid ? result_frame : query_wait_frame) : 112'd0;
+        query_frame <= read_pending ? (result_valid ? result_frame : query_wait_frame) : 112'd0;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        crc_init <= #UDLY 1'd0;
-        crc_valid <= #UDLY 1'd0;
-        crc_data <= #UDLY 1'd0;
+        crc_init <= 1'd0;
+        crc_valid <= 1'd0;
+        crc_data <= 1'd0;
     end
     else begin
-        crc_init <= #UDLY 1'd0;
-        crc_valid <= #UDLY 1'd0;
+        crc_init <= 1'd0;
+        crc_valid <= 1'd0;
         if(frame_start)
-            crc_init <= #UDLY 1'd1;
+            crc_init <= 1'd1;
         if(spi_sample & (bit_cnt < 9'd112)) begin
-            crc_valid <= #UDLY 1'd1;
-            crc_data <= #UDLY query_mode ? miso_data : spi_mosi;
+            crc_valid <= 1'd1;
+            crc_data <= query_mode ? miso_data : spi_mosi;
         end
     end
 end
@@ -290,89 +291,89 @@ assign txd_handshake = rxd_req & txd_rdy;
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        rxd_req <= #UDLY 1'd0;
-        rxd_write <= #UDLY 1'd0;
-        rxd_addr <= #UDLY 32'd0;
-        rxd_wdata <= #UDLY 32'd0;
+        rxd_req <= 1'd0;
+        rxd_write <= 1'd0;
+        rxd_addr <= 32'd0;
+        rxd_wdata <= 32'd0;
     end
     else if(txd_handshake)
-        rxd_req <= #UDLY 1'd0;
+        rxd_req <= 1'd0;
     else if(rxd_req_set) begin
-        rxd_req <= #UDLY 1'd1;
-        rxd_write <= #UDLY cmd_write;
-        rxd_addr <= #UDLY rx_shift[95:64];
-        rxd_wdata <= #UDLY cmd_write ? rx_shift[63:32] : 32'd0;
+        rxd_req <= 1'd1;
+        rxd_write <= cmd_write;
+        rxd_addr <= rx_shift[95:64];
+        rxd_wdata <= cmd_write ? rx_shift[63:32] : 32'd0;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        read_pending <= #UDLY 1'd0;
-        result_valid <= #UDLY 1'd0;
+        read_pending <= 1'd0;
+        result_valid <= 1'd0;
     end
     else if(result_consume) begin
-        read_pending <= #UDLY 1'd0;
-        result_valid <= #UDLY 1'd0;
+        read_pending <= 1'd0;
+        result_valid <= 1'd0;
     end
     else if(result_set) begin
-        read_pending <= #UDLY 1'd1;
-        result_valid <= #UDLY 1'd1;
+        read_pending <= 1'd1;
+        result_valid <= 1'd1;
     end
     else if(rxd_req_set & cmd_read) begin
-        read_pending <= #UDLY 1'd1;
-        result_valid <= #UDLY 1'd0;
+        read_pending <= 1'd1;
+        result_valid <= 1'd0;
     end
     else if(txd_handshake & ~rxd_write)
-        result_valid <= #UDLY 1'd1;
+        result_valid <= 1'd1;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        read_trans_id <= #UDLY 16'd0;
-        read_addr <= #UDLY 32'd0;
+        read_trans_id <= 16'd0;
+        read_addr <= 32'd0;
     end
     else if(result_consume) begin
-        read_trans_id <= #UDLY 16'd0;
-        read_addr <= #UDLY 32'd0;
+        read_trans_id <= 16'd0;
+        read_addr <= 32'd0;
     end
     else if(cmd_read_crc_err) begin
-        read_trans_id <= #UDLY 16'd0;
-        read_addr <= #UDLY 32'd0;
+        read_trans_id <= 16'd0;
+        read_addr <= 32'd0;
     end
     else if(read_context_set) begin
-        read_trans_id <= #UDLY rx_shift[111:96];
-        read_addr <= #UDLY rx_shift[95:64];
+        read_trans_id <= rx_shift[111:96];
+        read_addr <= rx_shift[95:64];
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        result_status <= #UDLY STATUS_DONE;
-        result_rdata <= #UDLY 32'd0;
+        result_status <= STATUS_DONE;
+        result_rdata <= 32'd0;
     end
     else if(result_consume) begin
-        result_status <= #UDLY STATUS_DONE;
-        result_rdata <= #UDLY 32'd0;
+        result_status <= STATUS_DONE;
+        result_rdata <= 32'd0;
     end
     else if(cmd_local_read) begin
-        result_status <= #UDLY STATUS_DONE;
-        result_rdata <= #UDLY local_rdata;
+        result_status <= STATUS_DONE;
+        result_rdata <= local_rdata;
     end
     else if(cmd_read_crc_err) begin
-        result_status <= #UDLY STATUS_CRC_ERR;
-        result_rdata <= #UDLY 32'd0;
+        result_status <= STATUS_CRC_ERR;
+        result_rdata <= 32'd0;
     end
     else if(cmd_busy_read) begin
-        result_status <= #UDLY STATUS_REQ_ERR;
-        result_rdata <= #UDLY 32'd0;
+        result_status <= STATUS_REQ_ERR;
+        result_rdata <= 32'd0;
     end
     else if(rxd_req_set & cmd_read) begin
-        result_status <= #UDLY STATUS_DONE;
-        result_rdata <= #UDLY 32'd0;
+        result_status <= STATUS_DONE;
+        result_rdata <= 32'd0;
     end
     else if(txd_handshake & ~rxd_write) begin
-        result_status <= #UDLY txd_timeout ? STATUS_TIMEOUT : STATUS_DONE;
-        result_rdata <= #UDLY txd_timeout ? 32'd0 : txd_rdata;
+        result_status <= txd_timeout ? STATUS_TIMEOUT : STATUS_DONE;
+        result_rdata <= txd_timeout ? 32'd0 : txd_rdata;
     end
 end
 
@@ -380,28 +381,28 @@ assign pd_crc_set     = cmd_crc_err;
 assign pd_req_set     = cmd_length_err | cmd_invalid;
 assign pd_timeout_set = txd_handshake & txd_timeout;
 assign pd_abort_set   = pd_crc_set | pd_req_set | pd_timeout_set | cmd_busy_write;
-assign pd_value = {27'd0, asu_pd, (rxd_req | read_pending)};
+assign pd_value = {27'd0, asu_pd, (txd_occupied | read_pending)};
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        asu_pd <= #UDLY 4'd0;
+        asu_pd <= 4'd0;
     else begin
         if(cmd_pd_w1c & rx_shift[33])
-            asu_pd[1] <= #UDLY 1'd0;
+            asu_pd[1] <= 1'd0;
         if(cmd_pd_w1c & rx_shift[34])
-            asu_pd[2] <= #UDLY 1'd0;
+            asu_pd[2] <= 1'd0;
         if(cmd_pd_w1c & rx_shift[35])
-            asu_pd[3] <= #UDLY 1'd0;
+            asu_pd[3] <= 1'd0;
         if(cmd_pd_w1c & rx_shift[36])
-            asu_pd[4] <= #UDLY 1'd0;
+            asu_pd[4] <= 1'd0;
         if(pd_crc_set)
-            asu_pd[1] <= #UDLY 1'd1;
+            asu_pd[1] <= 1'd1;
         if(pd_req_set)
-            asu_pd[2] <= #UDLY 1'd1;
+            asu_pd[2] <= 1'd1;
         if(pd_timeout_set)
-            asu_pd[3] <= #UDLY 1'd1;
+            asu_pd[3] <= 1'd1;
         if(pd_abort_set)
-            asu_pd[4] <= #UDLY 1'd1;
+            asu_pd[4] <= 1'd1;
     end
 end
 
