@@ -11,7 +11,7 @@ module ADC_RXD(
     input               [31:0]              adc_ctl                                        ,
     input               [31:0]              frm_cfg                                        ,
 
-    output    reg       [511:0]             rx_fifo_wdat                                   ,
+    output    reg       [255:0]             rx_fifo_wdat                                   ,
     output    wire                          rx_fifo_winc                                   ,
     output    reg                           data_error                                     ,
     output    wire                          rxd_idle
@@ -56,8 +56,8 @@ reg                     [ 1:0]              rxd_fsm                             
 reg                     [ 1:0]              rxd_fsm_nx                                     ;
 reg                     [11:0]              sync_cnt                                       ;
 reg                     [ 9:0]              region_cnt                                     ;
-reg                     [ 1:0]              pack_cnt                                       ;
-reg                     [383:0]             pack_data                                      ;
+reg                                         pack_cnt                                       ;
+reg                     [127:0]             pack_data                                      ;
 reg                                         fifo_write_vld                                 ;
 reg                     [127:0]             formatted_data                                 ;
 reg                     [15:0]              sample_word                                    ;
@@ -218,28 +218,24 @@ end
 //7. Candidate Packing
 //////////////////////////////////////////////////
 assign data_accept = rxd_fsm_data & beat_qual & data_region;
-assign pack_last   = (pack_cnt == 2'd3);
+assign pack_last   = pack_cnt;
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
-        pack_cnt <= 2'd0;
+        pack_cnt <= 1'd0;
     else if(rxd_abort)
-        pack_cnt <= 2'd0;
+        pack_cnt <= 1'd0;
     else if(data_accept)
-        pack_cnt <= pack_last ? 2'd0 : pack_cnt + 2'd1;
+        pack_cnt <= pack_last ? 1'd0 : 1'd1;
 end
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
-        pack_data <= 384'd0;
+        pack_data <= 128'd0;
     else if(rxd_abort)
-        pack_data <= 384'd0;
-    else if(data_accept & (pack_cnt == 2'd0))
-        pack_data[127:0] <= formatted_data;
-    else if(data_accept & (pack_cnt == 2'd1))
-        pack_data[255:128] <= formatted_data;
-    else if(data_accept & (pack_cnt == 2'd2))
-        pack_data[383:256] <= formatted_data;
+        pack_data <= 128'd0;
+    else if(data_accept & ~pack_cnt)
+        pack_data <= formatted_data;
 end
 
 //////////////////////////////////////////////////
@@ -249,9 +245,9 @@ assign rx_fifo_winc = fifo_write_vld & chn_en;
 
 always @(posedge afe_clk or negedge afe_rst_n) begin
     if(~afe_rst_n)
-        rx_fifo_wdat <= 512'd0;
+        rx_fifo_wdat <= 256'd0;
     else if(rxd_abort)
-        rx_fifo_wdat <= 512'd0;
+        rx_fifo_wdat <= 256'd0;
     else if(data_accept & pack_last)
         rx_fifo_wdat <= {formatted_data,pack_data};
 end

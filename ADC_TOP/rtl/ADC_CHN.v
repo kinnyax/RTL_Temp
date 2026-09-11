@@ -25,8 +25,8 @@ module ADC_CHN(
     output    wire                          phy_rx_encommalign                             ,
     output    wire                          phy_sync_n                                     ,
 
-    output    wire      [511:0]             m_axis_tdata                                   ,
-    output    wire      [63:0]              m_axis_tkeep                                   ,
+    output    wire      [255:0]             m_axis_tdata                                   ,
+    output    wire      [31:0]              m_axis_tkeep                                   ,
     output    wire                          m_axis_tvalid                                  ,
     output    wire                          m_axis_tlast                                   ,
     input                                   m_axis_tready                                  ,
@@ -73,11 +73,11 @@ wire                    [ 1:0]              adi_phy_byte_aligned                
 wire                    [ 1:0]              phy_disparity                                  ;
 wire                    [ 1:0]              phy_notintable                                 ;
 wire                                        jesd_link_error                                ;
-wire                    [511:0]             rx_fifo_wdat                                   ;
+wire                    [255:0]             rx_fifo_wdat                                   ;
 wire                                        rx_fifo_winc                                   ;
-wire                    [511:0]             rx_fifo_rdat                                   ;
+wire                    [255:0]             rx_fifo_rdat                                   ;
 wire                                        rx_fifo_rinc                                   ;
-wire                    [ 9:0]              rx_fifo_rlevel                                 ;
+wire                    [10:0]              rx_fifo_rlevel                                 ;
 wire                                        rxd_idle                                       ;
 wire                                        txd_idle                                       ;
 wire                                        tgc_sta_idle                                   ;
@@ -144,8 +144,8 @@ ADC_RXD adc_rxd(
 assign fifo_rst_n = ~fifo_clr & afe_rst_n & adc_rst_n;
 
 async_fifo #(
-    .AS                                  (9                                            ),
-    .DS                                  (512                                          ),
+    .AS                                  (10                                           ),
+    .DS                                  (256                                          ),
     .RSTEN                               (0                                            ),
     .WC                                  (0                                            ),
     .RC                                  (0                                            )

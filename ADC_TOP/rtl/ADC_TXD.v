@@ -6,12 +6,12 @@ module ADC_TXD(
 
     input                                   chn_en                                         ,
     input                                   link_ready_sync                                ,
-    input               [511:0]             rx_fifo_rdat                                   ,
-    input               [ 9:0]              rx_fifo_rlevel                                 ,
+    input               [255:0]             rx_fifo_rdat                                   ,
+    input               [10:0]              rx_fifo_rlevel                                 ,
     output    wire                          rx_fifo_rinc                                   ,
 
-    output    wire      [511:0]             m_axis_tdata                                   ,
-    output    wire      [63:0]              m_axis_tkeep                                   ,
+    output    wire      [255:0]             m_axis_tdata                                   ,
+    output    wire      [31:0]              m_axis_tkeep                                   ,
     output    wire                          m_axis_tvalid                                  ,
     output    wire                          m_axis_tlast                                   ,
     input                                   m_axis_tready                                  ,
@@ -33,11 +33,11 @@ wire                                        header_handshake                    
 wire                                        data_handshake                                 ;
 wire                                        data_last                                      ;
 wire                                        txd_done                                       ;
-wire                    [511:0]             header_data                                    ;
+wire                    [255:0]             header_data                                    ;
 
 reg                     [ 1:0]              txd_fsm                                        ;
 reg                     [ 1:0]              txd_fsm_nx                                     ;
-reg                     [ 7:0]              data_cnt                                       ;
+reg                     [ 8:0]              data_cnt                                       ;
 reg                     [31:0]              seq_cnt                                        ;
 reg                     [31:0]              header_seq                                     ;
 reg                     [ 7:0]              header_sta                                     ;
@@ -84,12 +84,12 @@ end
 assign txd_idle = (txd_fsm == TXD_IDLE);
 assign txd_head = (txd_fsm == TXD_HEAD);
 assign txd_data = (txd_fsm == TXD_DATA);
-assign txd_run  = txd_idle & chn_en & (rx_fifo_rlevel >= 10'd256);
+assign txd_run  = txd_idle & chn_en & (rx_fifo_rlevel >= 11'd512);
 
 //////////////////////////////////////////////////
 //3. Header Snapshot
 //////////////////////////////////////////////////
-assign header_data = {416'd0, header_seq, 8'hff, header_sta,
+assign header_data = {160'd0, header_seq, 8'hff, header_sta,
                       AFE_ID, 8'h01, 32'h48434441};
 
 always @(posedge adc_clk or negedge adc_rst_n) begin
@@ -99,7 +99,7 @@ always @(posedge adc_clk or negedge adc_rst_n) begin
     end
     else if(txd_run) begin
         header_seq <= seq_cnt;
-        header_sta <= {6'd0, (rx_fifo_rlevel >= 10'd384), link_ready_sync};
+        header_sta <= {6'd0, (rx_fifo_rlevel >= 11'd768), link_ready_sync};
     end
 end
 
@@ -109,18 +109,18 @@ end
 assign axis_handshake   = m_axis_tvalid & m_axis_tready;
 assign header_handshake = axis_handshake & txd_head;
 assign data_handshake   = axis_handshake & txd_data;
-assign data_last        = txd_data & (data_cnt == 8'd255);
+assign data_last        = txd_data & (data_cnt == 9'd511);
 assign txd_done         = data_handshake & data_last;
 
 always @(posedge adc_clk or negedge adc_rst_n) begin
     if(~adc_rst_n)
-        data_cnt <= 8'd0;
+        data_cnt <= 9'd0;
     else if(txd_run)
-        data_cnt <= 8'd0;
+        data_cnt <= 9'd0;
     else if(txd_done)
-        data_cnt <= 8'd0;
+        data_cnt <= 9'd0;
     else if(data_handshake)
-        data_cnt <= data_cnt + 8'd1;
+        data_cnt <= data_cnt + 9'd1;
 end
 
 always @(posedge adc_clk or negedge adc_rst_n) begin
@@ -135,8 +135,8 @@ end
 //////////////////////////////////////////////////
 assign rx_fifo_rinc = data_handshake;
 assign m_axis_tdata = txd_head ? header_data :
-                      txd_data ? rx_fifo_rdat : 512'd0;
-assign m_axis_tkeep = m_axis_tvalid ? 64'hffffffffffffffff : 64'd0;
+                      txd_data ? rx_fifo_rdat : 256'd0;
+assign m_axis_tkeep = m_axis_tvalid ? 32'hffffffff : 32'd0;
 assign m_axis_tvalid = txd_head | txd_data;
 assign m_axis_tlast = data_last;
 

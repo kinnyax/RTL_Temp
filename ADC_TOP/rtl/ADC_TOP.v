@@ -99,74 +99,39 @@ module ADC_TOP(
     input               [ 1:0]              afe7_byte_aligned                              ,
     output    wire                          afe7_rx_encommalign                            ,
     output    wire                          afe7_sync_n                                    ,
-    output    wire      [511:0]             m_axis_afe0_tdata                              ,
-    output    wire      [63:0]              m_axis_afe0_tkeep                              ,
-    output    wire                          m_axis_afe0_tvalid                             ,
-    output    wire                          m_axis_afe0_tlast                              ,
-    input                                   m_axis_afe0_tready                             ,
+    output    wire      [255:0]             m_axis_tdata                                   ,
+    output    wire      [31:0]              m_axis_tkeep                                   ,
+    output    wire                          m_axis_tvalid                                  ,
+    output    wire                          m_axis_tlast                                   ,
+    input                                   m_axis_tready                                  ,
     output    wire                          tgc0_slope                                     ,
     output    wire                          tgc0_up_dn                                     ,
     output    wire                          tgc0_prof1                                     ,
     output    wire                          tgc0_prof2                                     ,
-    output    wire      [511:0]             m_axis_afe1_tdata                              ,
-    output    wire      [63:0]              m_axis_afe1_tkeep                              ,
-    output    wire                          m_axis_afe1_tvalid                             ,
-    output    wire                          m_axis_afe1_tlast                              ,
-    input                                   m_axis_afe1_tready                             ,
     output    wire                          tgc1_slope                                     ,
     output    wire                          tgc1_up_dn                                     ,
     output    wire                          tgc1_prof1                                     ,
     output    wire                          tgc1_prof2                                     ,
-    output    wire      [511:0]             m_axis_afe2_tdata                              ,
-    output    wire      [63:0]              m_axis_afe2_tkeep                              ,
-    output    wire                          m_axis_afe2_tvalid                             ,
-    output    wire                          m_axis_afe2_tlast                              ,
-    input                                   m_axis_afe2_tready                             ,
     output    wire                          tgc2_slope                                     ,
     output    wire                          tgc2_up_dn                                     ,
     output    wire                          tgc2_prof1                                     ,
     output    wire                          tgc2_prof2                                     ,
-    output    wire      [511:0]             m_axis_afe3_tdata                              ,
-    output    wire      [63:0]              m_axis_afe3_tkeep                              ,
-    output    wire                          m_axis_afe3_tvalid                             ,
-    output    wire                          m_axis_afe3_tlast                              ,
-    input                                   m_axis_afe3_tready                             ,
     output    wire                          tgc3_slope                                     ,
     output    wire                          tgc3_up_dn                                     ,
     output    wire                          tgc3_prof1                                     ,
     output    wire                          tgc3_prof2                                     ,
-    output    wire      [511:0]             m_axis_afe4_tdata                              ,
-    output    wire      [63:0]              m_axis_afe4_tkeep                              ,
-    output    wire                          m_axis_afe4_tvalid                             ,
-    output    wire                          m_axis_afe4_tlast                              ,
-    input                                   m_axis_afe4_tready                             ,
     output    wire                          tgc4_slope                                     ,
     output    wire                          tgc4_up_dn                                     ,
     output    wire                          tgc4_prof1                                     ,
     output    wire                          tgc4_prof2                                     ,
-    output    wire      [511:0]             m_axis_afe5_tdata                              ,
-    output    wire      [63:0]              m_axis_afe5_tkeep                              ,
-    output    wire                          m_axis_afe5_tvalid                             ,
-    output    wire                          m_axis_afe5_tlast                              ,
-    input                                   m_axis_afe5_tready                             ,
     output    wire                          tgc5_slope                                     ,
     output    wire                          tgc5_up_dn                                     ,
     output    wire                          tgc5_prof1                                     ,
     output    wire                          tgc5_prof2                                     ,
-    output    wire      [511:0]             m_axis_afe6_tdata                              ,
-    output    wire      [63:0]              m_axis_afe6_tkeep                              ,
-    output    wire                          m_axis_afe6_tvalid                             ,
-    output    wire                          m_axis_afe6_tlast                              ,
-    input                                   m_axis_afe6_tready                             ,
     output    wire                          tgc6_slope                                     ,
     output    wire                          tgc6_up_dn                                     ,
     output    wire                          tgc6_prof1                                     ,
     output    wire                          tgc6_prof2                                     ,
-    output    wire      [511:0]             m_axis_afe7_tdata                              ,
-    output    wire      [63:0]              m_axis_afe7_tkeep                              ,
-    output    wire                          m_axis_afe7_tvalid                             ,
-    output    wire                          m_axis_afe7_tlast                              ,
-    input                                   m_axis_afe7_tready                             ,
     output    wire                          tgc7_slope                                     ,
     output    wire                          tgc7_up_dn                                     ,
     output    wire                          tgc7_prof1                                     ,
@@ -215,6 +180,46 @@ wire                    [ 7:0]              link_error_sync                     
 wire                    [ 7:0]              sysref_seen_sync                               ;
 wire                    [15:0]              disparity_sync                                 ;
 wire                    [15:0]              notintable_sync                                ;
+wire                    [255:0]             m_axis_afe0_tdata                              ;
+wire                    [31:0]              m_axis_afe0_tkeep                              ;
+wire                                        m_axis_afe0_tvalid                             ;
+wire                                        m_axis_afe0_tlast                              ;
+wire                                        m_axis_afe0_tready                             ;
+wire                    [255:0]             m_axis_afe1_tdata                              ;
+wire                    [31:0]              m_axis_afe1_tkeep                              ;
+wire                                        m_axis_afe1_tvalid                             ;
+wire                                        m_axis_afe1_tlast                              ;
+wire                                        m_axis_afe1_tready                             ;
+wire                    [255:0]             m_axis_afe2_tdata                              ;
+wire                    [31:0]              m_axis_afe2_tkeep                              ;
+wire                                        m_axis_afe2_tvalid                             ;
+wire                                        m_axis_afe2_tlast                              ;
+wire                                        m_axis_afe2_tready                             ;
+wire                    [255:0]             m_axis_afe3_tdata                              ;
+wire                    [31:0]              m_axis_afe3_tkeep                              ;
+wire                                        m_axis_afe3_tvalid                             ;
+wire                                        m_axis_afe3_tlast                              ;
+wire                                        m_axis_afe3_tready                             ;
+wire                    [255:0]             m_axis_afe4_tdata                              ;
+wire                    [31:0]              m_axis_afe4_tkeep                              ;
+wire                                        m_axis_afe4_tvalid                             ;
+wire                                        m_axis_afe4_tlast                              ;
+wire                                        m_axis_afe4_tready                             ;
+wire                    [255:0]             m_axis_afe5_tdata                              ;
+wire                    [31:0]              m_axis_afe5_tkeep                              ;
+wire                                        m_axis_afe5_tvalid                             ;
+wire                                        m_axis_afe5_tlast                              ;
+wire                                        m_axis_afe5_tready                             ;
+wire                    [255:0]             m_axis_afe6_tdata                              ;
+wire                    [31:0]              m_axis_afe6_tkeep                              ;
+wire                                        m_axis_afe6_tvalid                             ;
+wire                                        m_axis_afe6_tlast                              ;
+wire                                        m_axis_afe6_tready                             ;
+wire                    [255:0]             m_axis_afe7_tdata                              ;
+wire                    [31:0]              m_axis_afe7_tkeep                              ;
+wire                                        m_axis_afe7_tvalid                             ;
+wire                                        m_axis_afe7_tlast                              ;
+wire                                        m_axis_afe7_tready                             ;
 
 //////////////////////////////////////////////////
 //1. Register And CDC Concentration
@@ -734,6 +739,59 @@ ADC_CHN #(
     .tgc_prof2                           (tgc7_prof2                                   ),
     .fifo_full                           (fifo_full[7]                                 ),
     .data_error                          (data_error[7]                                )
+);
+
+//////////////////////////////////////////////////
+//3. Packet Arbitration
+//////////////////////////////////////////////////
+ADC_ARB adc_arb(
+    .adc_clk                             (adc_clk                                      ),
+    .adc_rst_n                           (adc_rst_n                                    ),
+    .s_axis_afe0_tdata                   (m_axis_afe0_tdata                            ),
+    .s_axis_afe0_tkeep                   (m_axis_afe0_tkeep                            ),
+    .s_axis_afe0_tvalid                  (m_axis_afe0_tvalid                           ),
+    .s_axis_afe0_tlast                   (m_axis_afe0_tlast                            ),
+    .s_axis_afe0_tready                  (m_axis_afe0_tready                           ),
+    .s_axis_afe1_tdata                   (m_axis_afe1_tdata                            ),
+    .s_axis_afe1_tkeep                   (m_axis_afe1_tkeep                            ),
+    .s_axis_afe1_tvalid                  (m_axis_afe1_tvalid                           ),
+    .s_axis_afe1_tlast                   (m_axis_afe1_tlast                            ),
+    .s_axis_afe1_tready                  (m_axis_afe1_tready                           ),
+    .s_axis_afe2_tdata                   (m_axis_afe2_tdata                            ),
+    .s_axis_afe2_tkeep                   (m_axis_afe2_tkeep                            ),
+    .s_axis_afe2_tvalid                  (m_axis_afe2_tvalid                           ),
+    .s_axis_afe2_tlast                   (m_axis_afe2_tlast                            ),
+    .s_axis_afe2_tready                  (m_axis_afe2_tready                           ),
+    .s_axis_afe3_tdata                   (m_axis_afe3_tdata                            ),
+    .s_axis_afe3_tkeep                   (m_axis_afe3_tkeep                            ),
+    .s_axis_afe3_tvalid                  (m_axis_afe3_tvalid                           ),
+    .s_axis_afe3_tlast                   (m_axis_afe3_tlast                            ),
+    .s_axis_afe3_tready                  (m_axis_afe3_tready                           ),
+    .s_axis_afe4_tdata                   (m_axis_afe4_tdata                            ),
+    .s_axis_afe4_tkeep                   (m_axis_afe4_tkeep                            ),
+    .s_axis_afe4_tvalid                  (m_axis_afe4_tvalid                           ),
+    .s_axis_afe4_tlast                   (m_axis_afe4_tlast                            ),
+    .s_axis_afe4_tready                  (m_axis_afe4_tready                           ),
+    .s_axis_afe5_tdata                   (m_axis_afe5_tdata                            ),
+    .s_axis_afe5_tkeep                   (m_axis_afe5_tkeep                            ),
+    .s_axis_afe5_tvalid                  (m_axis_afe5_tvalid                           ),
+    .s_axis_afe5_tlast                   (m_axis_afe5_tlast                            ),
+    .s_axis_afe5_tready                  (m_axis_afe5_tready                           ),
+    .s_axis_afe6_tdata                   (m_axis_afe6_tdata                            ),
+    .s_axis_afe6_tkeep                   (m_axis_afe6_tkeep                            ),
+    .s_axis_afe6_tvalid                  (m_axis_afe6_tvalid                           ),
+    .s_axis_afe6_tlast                   (m_axis_afe6_tlast                            ),
+    .s_axis_afe6_tready                  (m_axis_afe6_tready                           ),
+    .s_axis_afe7_tdata                   (m_axis_afe7_tdata                            ),
+    .s_axis_afe7_tkeep                   (m_axis_afe7_tkeep                            ),
+    .s_axis_afe7_tvalid                  (m_axis_afe7_tvalid                           ),
+    .s_axis_afe7_tlast                   (m_axis_afe7_tlast                            ),
+    .s_axis_afe7_tready                  (m_axis_afe7_tready                           ),
+    .m_axis_tdata                        (m_axis_tdata                                 ),
+    .m_axis_tkeep                        (m_axis_tkeep                                 ),
+    .m_axis_tvalid                       (m_axis_tvalid                                ),
+    .m_axis_tlast                        (m_axis_tlast                                 ),
+    .m_axis_tready                       (m_axis_tready                                )
 );
 
 endmodule
