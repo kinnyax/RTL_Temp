@@ -1,125 +1,156 @@
 `timescale 1ns / 1ps
 
-module MIG_REG #(
-    parameter integer                       AXI_ADDR_WIDTH              = 15            ,
-    parameter integer                       UDLY                        = 1
-)(
-    input  wire                             SYS_CLK                                     ,
-    input  wire                             SYS_RST_N                                   ,
-    input  wire                             INIT_CALIB_COMPLETE_SYNC                    ,
-    input  wire                             UI_RST_ACTIVE_SYNC                          ,
-    input  wire                             MIG_READY                                   ,
-    input  wire [AXI_ADDR_WIDTH-1:0]        S_AXI_CTRL_AWADDR                          ,
-    input  wire [2:0]                       S_AXI_CTRL_AWPROT                          ,
-    input  wire                             S_AXI_CTRL_AWVALID                         ,
-    output wire                             S_AXI_CTRL_AWREADY                         ,
-    input  wire [31:0]                      S_AXI_CTRL_WDATA                           ,
-    input  wire [3:0]                       S_AXI_CTRL_WSTRB                           ,
-    input  wire                             S_AXI_CTRL_WVALID                         ,
-    output wire                             S_AXI_CTRL_WREADY                         ,
-    output wire [1:0]                       S_AXI_CTRL_BRESP                          ,
-    output reg                              S_AXI_CTRL_BVALID                         ,
-    input  wire                             S_AXI_CTRL_BREADY                         ,
-    input  wire [AXI_ADDR_WIDTH-1:0]        S_AXI_CTRL_ARADDR                          ,
-    input  wire [2:0]                       S_AXI_CTRL_ARPROT                          ,
-    input  wire                             S_AXI_CTRL_ARVALID                         ,
-    output wire                             S_AXI_CTRL_ARREADY                         ,
-    output reg  [31:0]                      S_AXI_CTRL_RDATA                           ,
-    output wire [1:0]                       S_AXI_CTRL_RRESP                          ,
-    output reg                              S_AXI_CTRL_RVALID                         ,
-    input  wire                             S_AXI_CTRL_RREADY
+module MIG_REG(
+    input                                   sys_clk                                        ,
+    input                                   sys_rst_n                                      ,
+
+    input               [31:0]              s_axi_awaddr                                   ,
+    input               [ 2:0]              s_axi_awprot                                   ,
+    input                                   s_axi_awvalid                                  ,
+    output    reg                           s_axi_awready                                  ,
+
+    input               [31:0]              s_axi_wdata                                    ,
+    input               [ 3:0]              s_axi_wstrb                                    ,
+    input                                   s_axi_wvalid                                   ,
+    output    reg                           s_axi_wready                                   ,
+
+    output    reg       [ 1:0]              s_axi_bresp                                    ,
+    output    reg                           s_axi_bvalid                                   ,
+    input                                   s_axi_bready                                   ,
+
+    input               [31:0]              s_axi_araddr                                   ,
+    input               [ 2:0]              s_axi_arprot                                   ,
+    input                                   s_axi_arvalid                                  ,
+    output    reg                           s_axi_arready                                  ,
+
+    output    reg       [31:0]              s_axi_rdata                                    ,
+    output    reg       [ 1:0]              s_axi_rresp                                    ,
+    output    reg                           s_axi_rvalid                                   ,
+    input                                   s_axi_rready                                   ,
+
+    input                                   calib_complete
 );
 
-localparam [1:0]                         AXI_OKAY                    = 2'b00             ;
-localparam [AXI_ADDR_WIDTH-1:0]          MIG_STA_OFFSET             = 0                 ;
+wire                    [31:0]              io_rdata                                       ;
+wire                                        wr_access                                      ;
+wire                                        wr_addr                                        ;
+wire                                        wr_data                                        ;
+wire                                        wr_done                                        ;
+wire                                        w_ready                                        ;
+wire                                        rd_access                                      ;
+wire                                        ar_idle                                        ;
+wire                                        reg_0000h_rd                                   ;
+wire                    [31:0]              reg_0000h                                      ;
 
-reg                                      aw_pending                                     ;
-reg                                      w_pending                                      ;
-
-wire                                     aw_accept                                      ;
-wire                                     w_accept                                       ;
-wire                                     wr_access                                      ;
-wire                                     rd_access                                      ;
-wire                                     reg_0000h_rd                                   ;
-wire [31:0]                              reg_0000h                                      ;
-wire [31:0]                              io_rdata                                       ;
+reg                     [31:0]              axi_awaddr_r                                   ;
+reg                     [31:0]              axi_araddr_r                                   ;
+reg                                         aw_busy                                        ;
+reg                                         wait_data                                      ;
 
 //////////////////////////////////////////////////
-//1. AXI4-Lite Protocol
+//1. AXI Protocol
 //////////////////////////////////////////////////
+assign wr_access = s_axi_wready & s_axi_wvalid;
+assign wr_addr   = ~s_axi_awready & s_axi_awvalid & ~aw_busy;
+assign wr_data   = wr_access & ~s_axi_bvalid;
+assign wr_done   = s_axi_bready & s_axi_bvalid;
 
-assign S_AXI_CTRL_AWREADY = ~aw_pending & ~S_AXI_CTRL_BVALID;
-assign S_AXI_CTRL_WREADY  = ~w_pending  & ~S_AXI_CTRL_BVALID;
-assign S_AXI_CTRL_BRESP   = AXI_OKAY;
-assign S_AXI_CTRL_ARREADY = ~S_AXI_CTRL_RVALID;
-assign S_AXI_CTRL_RRESP   = AXI_OKAY;
-
-assign aw_accept = S_AXI_CTRL_AWVALID & S_AXI_CTRL_AWREADY;
-assign w_accept  = S_AXI_CTRL_WVALID  & S_AXI_CTRL_WREADY;
-assign wr_access = ~S_AXI_CTRL_BVALID
-                 & (aw_pending | aw_accept)
-                 & (w_pending  | w_accept);
-assign rd_access = S_AXI_CTRL_ARVALID & S_AXI_CTRL_ARREADY;
-
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        aw_pending <= #UDLY 1'b0;
-    else if(wr_access)
-        aw_pending <= #UDLY 1'b0;
-    else if(aw_accept)
-        aw_pending <= #UDLY 1'b1;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_awready <= 1'd0;
+        aw_busy       <= 1'd0;
+    end
+    else if(wr_addr) begin
+        s_axi_awready <= 1'd1;
+        aw_busy       <= 1'd1;
+    end
+    else if(wr_done) begin
+        s_axi_awready <= 1'd0;
+        aw_busy       <= 1'd0;
+    end
+    else
+        s_axi_awready <= 1'd0;
 end
 
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        w_pending <= #UDLY 1'b0;
-    else if(wr_access)
-        w_pending <= #UDLY 1'b0;
-    else if(w_accept)
-        w_pending <= #UDLY 1'b1;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n)
+        axi_awaddr_r <= 32'd0;
+    else if(wr_addr)
+        axi_awaddr_r <= s_axi_awaddr;
 end
 
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N)
-        S_AXI_CTRL_BVALID <= #UDLY 1'b0;
-    else if(wr_access)
-        S_AXI_CTRL_BVALID <= #UDLY 1'b1;
-    else if(S_AXI_CTRL_BVALID & S_AXI_CTRL_BREADY)
-        S_AXI_CTRL_BVALID <= #UDLY 1'b0;
+assign w_ready = ~s_axi_wready & s_axi_wvalid & (wait_data | wr_addr);
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_wready <= 1'd0;
+        wait_data    <= 1'd0;
+    end
+    else if(w_ready) begin
+        s_axi_wready <= 1'd1;
+        wait_data    <= 1'd0;
+    end
+    else if(wr_addr) begin
+        wait_data <= 1'd1;
+    end
+    else begin
+        s_axi_wready <= 1'd0;
+    end
 end
 
-always @(posedge SYS_CLK or negedge SYS_RST_N) begin
-    if(!SYS_RST_N) begin
-        S_AXI_CTRL_RDATA  <= #UDLY 32'd0;
-        S_AXI_CTRL_RVALID <= #UDLY 1'b0;
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_bvalid <= 1'd0;
+        s_axi_bresp  <= 2'd0;
+    end
+    else if(wr_data) begin
+        s_axi_bvalid <= 1'd1;
+        s_axi_bresp  <= 2'd0;
+    end
+    else if(wr_done)
+        s_axi_bvalid <= 1'd0;
+end
+
+assign ar_idle   = ~s_axi_rvalid | (s_axi_rvalid & s_axi_rready);
+assign rd_access = s_axi_arready & s_axi_arvalid;
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_arready <= 1'd0;
+        axi_araddr_r  <= 32'd0;
+    end
+    else if(~s_axi_arready & s_axi_arvalid & ar_idle) begin
+        s_axi_arready <= 1'd1;
+        axi_araddr_r  <= s_axi_araddr;
+    end
+    else
+        s_axi_arready <= 1'd0;
+end
+
+always @(posedge sys_clk or negedge sys_rst_n) begin
+    if(~sys_rst_n) begin
+        s_axi_rvalid <= 1'd0;
+        s_axi_rdata  <= 32'd0;
+        s_axi_rresp  <= 2'd0;
     end
     else if(rd_access) begin
-        S_AXI_CTRL_RDATA  <= #UDLY io_rdata;
-        S_AXI_CTRL_RVALID <= #UDLY 1'b1;
+        s_axi_rvalid <= 1'd1;
+        s_axi_rdata  <= io_rdata;
+        s_axi_rresp  <= 2'd0;
     end
-    else if(S_AXI_CTRL_RVALID & S_AXI_CTRL_RREADY) begin
-        S_AXI_CTRL_RVALID <= #UDLY 1'b0;
-    end
+    else if(s_axi_rready & s_axi_rvalid)
+        s_axi_rvalid <= 1'd0;
 end
 
 //////////////////////////////////////////////////
 //2. Address Decode
 //////////////////////////////////////////////////
-
-assign reg_0000h_rd = rd_access
-                    & (S_AXI_CTRL_ARADDR[1:0] == 2'b00)
-                    & (S_AXI_CTRL_ARADDR == MIG_STA_OFFSET);
+assign reg_0000h_rd = (axi_araddr_r == 32'h00000000) & rd_access;
 
 //////////////////////////////////////////////////
-//3. Register Encode
+//3. Write & Read REG
 //////////////////////////////////////////////////
-
-assign reg_0000h = {
-    29'd0                      ,
-    MIG_READY                  ,
-    UI_RST_ACTIVE_SYNC         ,
-    INIT_CALIB_COMPLETE_SYNC
-};
+assign reg_0000h = {31'd0, calib_complete};
 
 assign io_rdata = ({32{reg_0000h_rd}} & reg_0000h);
 
