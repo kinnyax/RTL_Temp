@@ -8,7 +8,7 @@ module MIG_TOP(
     output    wire                          mig_ddr4_clk                                   ,
     output    wire                          mig_ddr4_rst_n                                 ,
 
-    input               [ 3:0]              s_axi_mem_awid                                 ,
+    input               [ 7:0]              s_axi_mem_awid                                 ,
     input               [31:0]              s_axi_mem_awaddr                               ,
     input               [ 7:0]              s_axi_mem_awlen                                ,
     input               [ 2:0]              s_axi_mem_awsize                               ,
@@ -26,12 +26,12 @@ module MIG_TOP(
     input                                   s_axi_mem_wvalid                               ,
     output    wire                          s_axi_mem_wready                               ,
 
-    output    wire      [ 3:0]              s_axi_mem_bid                                  ,
+    output    wire      [ 7:0]              s_axi_mem_bid                                  ,
     output    wire      [ 1:0]              s_axi_mem_bresp                                ,
     output    wire                          s_axi_mem_bvalid                               ,
     input                                   s_axi_mem_bready                               ,
 
-    input               [ 3:0]              s_axi_mem_arid                                 ,
+    input               [ 7:0]              s_axi_mem_arid                                 ,
     input               [31:0]              s_axi_mem_araddr                               ,
     input               [ 7:0]              s_axi_mem_arlen                                ,
     input               [ 2:0]              s_axi_mem_arsize                               ,
@@ -43,7 +43,7 @@ module MIG_TOP(
     input                                   s_axi_mem_arvalid                              ,
     output    wire                          s_axi_mem_arready                              ,
 
-    output    wire      [ 3:0]              s_axi_mem_rid                                  ,
+    output    wire      [ 7:0]              s_axi_mem_rid                                  ,
     output    wire      [255:0]             s_axi_mem_rdata                                ,
     output    wire      [ 1:0]              s_axi_mem_rresp                                ,
     output    wire                          s_axi_mem_rlast                                ,
