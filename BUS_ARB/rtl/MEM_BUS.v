@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module BUS_ARB(
+module MEM_BUS(
     input                                   s01_axi_clk                                    ,
     input                                   s01_axi_rst_n                                  ,
     input                                   s00_axi_clk                                    ,
@@ -125,7 +125,7 @@ wire                                        s01_full_axi_rready                 
 //////////////////////////////////////////////////
 //1. S01 AXI Protocol Conversion
 //////////////////////////////////////////////////
-BUS_ARB_ASU_AXI_PROTOCOL_CONVERTER bus_arb_s01_axi_protocol_converter(
+AXI2MEM axi2mem(
     .aclk                                (s01_axi_clk                                  ),
     .aresetn                             (s01_axi_rst_n                                ),
     .s_axi_awaddr                        (s01_axi_awaddr                               ),
@@ -187,7 +187,7 @@ BUS_ARB_ASU_AXI_PROTOCOL_CONVERTER bus_arb_s01_axi_protocol_converter(
 //////////////////////////////////////////////////
 //2. AXI Interconnect
 //////////////////////////////////////////////////
-BUS_ARB_AXI_INTERCONNECT bus_arb_axi_interconnect(
+MEM_ARB mem_arb(
     .INTERCONNECT_ACLK                   (mig_ddr4_clk                                 ),
     .INTERCONNECT_ARESETN                (mig_ddr4_rst_n                               ),
     .S00_AXI_ARESET_OUT_N                (                                             ),
