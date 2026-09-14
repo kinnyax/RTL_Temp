@@ -3,8 +3,10 @@
 module DMA_TOP(
     input                                   sys_clk                                        ,
     input                                   sys_rst_n                                      ,
-    input                                   dma_clk                                        ,
-    input                                   dma_rst_n                                      ,
+    input                                   src_clk                                        ,
+    input                                   src_rst_n                                      ,
+    input                                   dev_clk                                        ,
+    input                                   dev_rst_n                                      ,
 
     input               [ 7:0]              s_axi_awaddr                                   ,
     input               [ 2:0]              s_axi_awprot                                   ,
@@ -90,8 +92,6 @@ module DMA_TOP(
     output    wire                          dma_irq
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 wire                    [31:0]              ch0_addr                                       ;
 wire                    [31:0]              ch0_num                                        ;
 wire                    [31:0]              ch0_ctl                                        ;
@@ -117,18 +117,20 @@ wire                    [31:0]              ch7_addr                            
 wire                    [31:0]              ch7_num                                        ;
 wire                    [31:0]              ch7_ctl                                        ;
 
-wire                    [ 7:0]              chn_busy                                       ;
+wire                    [ 7:0]              txd_busy                                       ;
 wire                    [ 7:0]              fifo_empty                                     ;
 wire                    [ 7:0]              fifo_full                                      ;
 wire                    [ 7:0]              half_trans                                     ;
 wire                    [ 7:0]              trans_comp                                     ;
 wire                    [ 7:0]              axi_error                                      ;
-wire                    [ 7:0]              chn_busy_sync                                  ;
+wire                    [ 7:0]              run_clear                                      ;
+wire                    [ 7:0]              txd_busy_sync                                  ;
 wire                    [ 7:0]              fifo_empty_sync                                ;
 wire                    [ 7:0]              fifo_full_sync                                 ;
 wire                    [ 7:0]              half_trans_sync                                ;
 wire                    [ 7:0]              trans_comp_sync                                ;
 wire                    [ 7:0]              axi_error_sync                                 ;
+wire                    [ 7:0]              run_clear_sync                                 ;
 
 wire                    [ 7:0]              chn_awid                                       ;
 wire                    [255:0]             chn_awaddr                                     ;
@@ -200,12 +202,13 @@ DMA_REG dma_reg(
     .ch7_addr                            (ch7_addr                                     ) ,
     .ch7_num                             (ch7_num                                      ) ,
     .ch7_ctl                             (ch7_ctl                                      ) ,
-    .chn_busy_sync                       (chn_busy_sync                                ) ,
-    .fifo_empty_sync                     (fifo_empty_sync                              ) ,
-    .fifo_full_sync                      (fifo_full_sync                               ) ,
-    .half_trans_sync                     (half_trans_sync                              ) ,
-    .trans_comp_sync                     (trans_comp_sync                              ) ,
-    .axi_error_sync                      (axi_error_sync                               ) ,
+    .txd_busy                            (txd_busy_sync                                ) ,
+    .fifo_empty                          (fifo_empty_sync                              ) ,
+    .fifo_full                           (fifo_full_sync                               ) ,
+    .half_trans                          (half_trans_sync                              ) ,
+    .trans_comp                          (trans_comp_sync                              ) ,
+    .axi_error                           (axi_error_sync                               ) ,
+    .run_clear                           (run_clear_sync                               ) ,
     .dma_irq                             (dma_irq                                      )
 );
 
@@ -213,8 +216,10 @@ DMA_REG dma_reg(
 //2. Channel Engines
 //////////////////////////////////////////////////
 DMA_CHN dma_chn0(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s00_axis_tdata                               ) ,
     .s_axis_tlast                        (s00_axis_tlast                               ) ,
     .s_axis_tvalid                       (s00_axis_tvalid                              ) ,
@@ -242,17 +247,20 @@ DMA_CHN dma_chn0(
     .m_axi_bresp                         (chn_bresp[1:0]                               ) ,
     .m_axi_bvalid                        (chn_bvalid[0]                                ) ,
     .m_axi_bready                        (chn_bready[0]                                ) ,
-    .chn_busy                            (chn_busy[0]                                  ) ,
+    .txd_busy                            (txd_busy[0]                                  ) ,
     .fifo_empty                          (fifo_empty[0]                                ) ,
     .fifo_full                           (fifo_full[0]                                 ) ,
     .half_trans                          (half_trans[0]                                ) ,
     .trans_comp                          (trans_comp[0]                                ) ,
-    .axi_error                           (axi_error[0]                                 )
+    .axi_error                           (axi_error[0]                                 ) ,
+    .run_clear                           (run_clear[0]                                 )
 );
 
 DMA_CHN dma_chn1(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s01_axis_tdata                               ) ,
     .s_axis_tlast                        (s01_axis_tlast                               ) ,
     .s_axis_tvalid                       (s01_axis_tvalid                              ) ,
@@ -280,17 +288,20 @@ DMA_CHN dma_chn1(
     .m_axi_bresp                         (chn_bresp[3:2]                               ) ,
     .m_axi_bvalid                        (chn_bvalid[1]                                ) ,
     .m_axi_bready                        (chn_bready[1]                                ) ,
-    .chn_busy                            (chn_busy[1]                                  ) ,
+    .txd_busy                            (txd_busy[1]                                  ) ,
     .fifo_empty                          (fifo_empty[1]                                ) ,
     .fifo_full                           (fifo_full[1]                                 ) ,
     .half_trans                          (half_trans[1]                                ) ,
     .trans_comp                          (trans_comp[1]                                ) ,
-    .axi_error                           (axi_error[1]                                 )
+    .axi_error                           (axi_error[1]                                 ) ,
+    .run_clear                           (run_clear[1]                                 )
 );
 
 DMA_CHN dma_chn2(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s02_axis_tdata                               ) ,
     .s_axis_tlast                        (s02_axis_tlast                               ) ,
     .s_axis_tvalid                       (s02_axis_tvalid                              ) ,
@@ -318,17 +329,20 @@ DMA_CHN dma_chn2(
     .m_axi_bresp                         (chn_bresp[5:4]                               ) ,
     .m_axi_bvalid                        (chn_bvalid[2]                                ) ,
     .m_axi_bready                        (chn_bready[2]                                ) ,
-    .chn_busy                            (chn_busy[2]                                  ) ,
+    .txd_busy                            (txd_busy[2]                                  ) ,
     .fifo_empty                          (fifo_empty[2]                                ) ,
     .fifo_full                           (fifo_full[2]                                 ) ,
     .half_trans                          (half_trans[2]                                ) ,
     .trans_comp                          (trans_comp[2]                                ) ,
-    .axi_error                           (axi_error[2]                                 )
+    .axi_error                           (axi_error[2]                                 ) ,
+    .run_clear                           (run_clear[2]                                 )
 );
 
 DMA_CHN dma_chn3(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s03_axis_tdata                               ) ,
     .s_axis_tlast                        (s03_axis_tlast                               ) ,
     .s_axis_tvalid                       (s03_axis_tvalid                              ) ,
@@ -356,17 +370,20 @@ DMA_CHN dma_chn3(
     .m_axi_bresp                         (chn_bresp[7:6]                               ) ,
     .m_axi_bvalid                        (chn_bvalid[3]                                ) ,
     .m_axi_bready                        (chn_bready[3]                                ) ,
-    .chn_busy                            (chn_busy[3]                                  ) ,
+    .txd_busy                            (txd_busy[3]                                  ) ,
     .fifo_empty                          (fifo_empty[3]                                ) ,
     .fifo_full                           (fifo_full[3]                                 ) ,
     .half_trans                          (half_trans[3]                                ) ,
     .trans_comp                          (trans_comp[3]                                ) ,
-    .axi_error                           (axi_error[3]                                 )
+    .axi_error                           (axi_error[3]                                 ) ,
+    .run_clear                           (run_clear[3]                                 )
 );
 
 DMA_CHN dma_chn4(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s04_axis_tdata                               ) ,
     .s_axis_tlast                        (s04_axis_tlast                               ) ,
     .s_axis_tvalid                       (s04_axis_tvalid                              ) ,
@@ -394,17 +411,20 @@ DMA_CHN dma_chn4(
     .m_axi_bresp                         (chn_bresp[9:8]                               ) ,
     .m_axi_bvalid                        (chn_bvalid[4]                                ) ,
     .m_axi_bready                        (chn_bready[4]                                ) ,
-    .chn_busy                            (chn_busy[4]                                  ) ,
+    .txd_busy                            (txd_busy[4]                                  ) ,
     .fifo_empty                          (fifo_empty[4]                                ) ,
     .fifo_full                           (fifo_full[4]                                 ) ,
     .half_trans                          (half_trans[4]                                ) ,
     .trans_comp                          (trans_comp[4]                                ) ,
-    .axi_error                           (axi_error[4]                                 )
+    .axi_error                           (axi_error[4]                                 ) ,
+    .run_clear                           (run_clear[4]                                 )
 );
 
 DMA_CHN dma_chn5(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s05_axis_tdata                               ) ,
     .s_axis_tlast                        (s05_axis_tlast                               ) ,
     .s_axis_tvalid                       (s05_axis_tvalid                              ) ,
@@ -432,17 +452,20 @@ DMA_CHN dma_chn5(
     .m_axi_bresp                         (chn_bresp[11:10]                             ) ,
     .m_axi_bvalid                        (chn_bvalid[5]                                ) ,
     .m_axi_bready                        (chn_bready[5]                                ) ,
-    .chn_busy                            (chn_busy[5]                                  ) ,
+    .txd_busy                            (txd_busy[5]                                  ) ,
     .fifo_empty                          (fifo_empty[5]                                ) ,
     .fifo_full                           (fifo_full[5]                                 ) ,
     .half_trans                          (half_trans[5]                                ) ,
     .trans_comp                          (trans_comp[5]                                ) ,
-    .axi_error                           (axi_error[5]                                 )
+    .axi_error                           (axi_error[5]                                 ) ,
+    .run_clear                           (run_clear[5]                                 )
 );
 
 DMA_CHN dma_chn6(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s06_axis_tdata                               ) ,
     .s_axis_tlast                        (s06_axis_tlast                               ) ,
     .s_axis_tvalid                       (s06_axis_tvalid                              ) ,
@@ -470,17 +493,20 @@ DMA_CHN dma_chn6(
     .m_axi_bresp                         (chn_bresp[13:12]                             ) ,
     .m_axi_bvalid                        (chn_bvalid[6]                                ) ,
     .m_axi_bready                        (chn_bready[6]                                ) ,
-    .chn_busy                            (chn_busy[6]                                  ) ,
+    .txd_busy                            (txd_busy[6]                                  ) ,
     .fifo_empty                          (fifo_empty[6]                                ) ,
     .fifo_full                           (fifo_full[6]                                 ) ,
     .half_trans                          (half_trans[6]                                ) ,
     .trans_comp                          (trans_comp[6]                                ) ,
-    .axi_error                           (axi_error[6]                                 )
+    .axi_error                           (axi_error[6]                                 ) ,
+    .run_clear                           (run_clear[6]                                 )
 );
 
 DMA_CHN dma_chn7(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .src_clk                             (src_clk                                      ) ,
+    .src_rst_n                           (src_rst_n                                    ) ,
+    .dev_clk                             (dev_clk                                      ) ,
+    .dev_rst_n                           (dev_rst_n                                    ) ,
     .s_axis_tdata                        (s07_axis_tdata                               ) ,
     .s_axis_tlast                        (s07_axis_tlast                               ) ,
     .s_axis_tvalid                       (s07_axis_tvalid                              ) ,
@@ -508,12 +534,13 @@ DMA_CHN dma_chn7(
     .m_axi_bresp                         (chn_bresp[15:14]                             ) ,
     .m_axi_bvalid                        (chn_bvalid[7]                                ) ,
     .m_axi_bready                        (chn_bready[7]                                ) ,
-    .chn_busy                            (chn_busy[7]                                  ) ,
+    .txd_busy                            (txd_busy[7]                                  ) ,
     .fifo_empty                          (fifo_empty[7]                                ) ,
     .fifo_full                           (fifo_full[7]                                 ) ,
     .half_trans                          (half_trans[7]                                ) ,
     .trans_comp                          (trans_comp[7]                                ) ,
-    .axi_error                           (axi_error[7]                                 )
+    .axi_error                           (axi_error[7]                                 ) ,
+    .run_clear                           (run_clear[7]                                 )
 );
 
 //////////////////////////////////////////////////
@@ -522,10 +549,10 @@ DMA_CHN dma_chn7(
 DMA_SYNC dma_sync(
     .sys_clk                             (sys_clk                                      ) ,
     .sys_rst_n                           (sys_rst_n                                    ) ,
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
-    .chn_busy                            (chn_busy                                     ) ,
-    .chn_busy_sync                       (chn_busy_sync                                ) ,
+    .dma_clk                             (dev_clk                                      ) ,
+    .dma_rst_n                           (dev_rst_n                                    ) ,
+    .txd_busy                            (txd_busy                                     ) ,
+    .txd_busy_sync                       (txd_busy_sync                                ) ,
     .fifo_empty                          (fifo_empty                                   ) ,
     .fifo_empty_sync                     (fifo_empty_sync                              ) ,
     .fifo_full                           (fifo_full                                    ) ,
@@ -535,15 +562,17 @@ DMA_SYNC dma_sync(
     .trans_comp                          (trans_comp                                   ) ,
     .trans_comp_sync                     (trans_comp_sync                              ) ,
     .axi_error                           (axi_error                                    ) ,
-    .axi_error_sync                      (axi_error_sync                               )
+    .axi_error_sync                      (axi_error_sync                               ) ,
+    .run_clear                           (run_clear                                    ) ,
+    .run_clear_sync                      (run_clear_sync                               )
 );
 
 //////////////////////////////////////////////////
 //4. Write Arbitration
 //////////////////////////////////////////////////
 DMA_ARB dma_arb(
-    .dma_clk                             (dma_clk                                      ) ,
-    .dma_rst_n                           (dma_rst_n                                    ) ,
+    .dma_clk                             (dev_clk                                      ) ,
+    .dma_rst_n                           (dev_rst_n                                    ) ,
     .s00_axi_awid                        (chn_awid[0]                                  ) ,
     .s00_axi_awaddr                      (chn_awaddr[31:0]                             ) ,
     .s00_axi_awlen                       (chn_awlen[7:0]                               ) ,

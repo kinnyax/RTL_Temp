@@ -194,8 +194,6 @@ module DMA_ARB(
     output    wire                          m00_axi_bready
 );
 
-parameter                                   UDLY                     = 1                   ;
-
 //////////////////////////////////////////////////
 //1. AXI Interconnect
 //////////////////////////////////////////////////

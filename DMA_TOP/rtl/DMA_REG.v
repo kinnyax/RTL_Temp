@@ -49,16 +49,15 @@ module DMA_REG(
     output    reg       [31:0]              ch7_num                                        ,
     output    reg       [31:0]              ch7_ctl                                        ,
 
-    input               [ 7:0]              chn_busy_sync                                  ,
-    input               [ 7:0]              fifo_empty_sync                                ,
-    input               [ 7:0]              fifo_full_sync                                 ,
-    input               [ 7:0]              half_trans_sync                                ,
-    input               [ 7:0]              trans_comp_sync                                ,
-    input               [ 7:0]              axi_error_sync                                 ,
+    input               [ 7:0]              txd_busy                                       ,
+    input               [ 7:0]              fifo_empty                                     ,
+    input               [ 7:0]              fifo_full                                      ,
+    input               [ 7:0]              half_trans                                     ,
+    input               [ 7:0]              trans_comp                                     ,
+    input               [ 7:0]              axi_error                                      ,
+    input               [ 7:0]              run_clear                                      ,
     output    reg                           dma_irq
 );
-
-parameter                                   UDLY                     = 1                   ;
 
 wire                    [31:0]              io_rdata                                       ;
 wire                                        wr_access                                      ;
@@ -168,58 +167,58 @@ assign wr_done   = s_axi_bready & s_axi_bvalid;
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_awready <= #UDLY 1'd0;
-        aw_busy       <= #UDLY 1'd0;
+        s_axi_awready <= 1'd0;
+        aw_busy       <= 1'd0;
     end
     else if(wr_addr) begin
-        s_axi_awready <= #UDLY 1'd1;
-        aw_busy       <= #UDLY 1'd1;
+        s_axi_awready <= 1'd1;
+        aw_busy       <= 1'd1;
     end
     else if(wr_done) begin
-        s_axi_awready <= #UDLY 1'd0;
-        aw_busy       <= #UDLY 1'd0;
+        s_axi_awready <= 1'd0;
+        aw_busy       <= 1'd0;
     end
     else
-        s_axi_awready <= #UDLY 1'd0;
+        s_axi_awready <= 1'd0;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        axi_awaddr_r <= #UDLY 8'd0;
+        axi_awaddr_r <= 8'd0;
     else if(wr_addr)
-        axi_awaddr_r <= #UDLY s_axi_awaddr;
+        axi_awaddr_r <= s_axi_awaddr;
 end
 
 assign w_ready = ~s_axi_wready & s_axi_wvalid & (wait_data | wr_addr);
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_wready <= #UDLY 1'd0;
-        wait_data    <= #UDLY 1'd0;
+        s_axi_wready <= 1'd0;
+        wait_data    <= 1'd0;
     end
     else if(w_ready) begin
-        s_axi_wready <= #UDLY 1'd1;
-        wait_data    <= #UDLY 1'd0;
+        s_axi_wready <= 1'd1;
+        wait_data    <= 1'd0;
     end
     else if(wr_addr) begin
-        wait_data <= #UDLY 1'd1;
+        wait_data <= 1'd1;
     end
     else begin
-        s_axi_wready <= #UDLY 1'd0;
+        s_axi_wready <= 1'd0;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_bvalid <= #UDLY 1'd0;
-        s_axi_bresp  <= #UDLY 2'd0;
+        s_axi_bvalid <= 1'd0;
+        s_axi_bresp  <= 2'd0;
     end
     else if(wr_data) begin
-        s_axi_bvalid <= #UDLY 1'd1;
-        s_axi_bresp  <= #UDLY 2'd0;
+        s_axi_bvalid <= 1'd1;
+        s_axi_bresp  <= 2'd0;
     end
     else if(wr_done)
-        s_axi_bvalid <= #UDLY 1'd0;
+        s_axi_bvalid <= 1'd0;
 end
 
 assign ar_idle   = ~s_axi_rvalid | (s_axi_rvalid & s_axi_rready);
@@ -227,30 +226,30 @@ assign rd_access = s_axi_arready & s_axi_arvalid;
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_arready <= #UDLY 1'd0;
-        axi_araddr_r  <= #UDLY 8'd0;
+        s_axi_arready <= 1'd0;
+        axi_araddr_r  <= 8'd0;
     end
     else if(~s_axi_arready & s_axi_arvalid & ar_idle) begin
-        s_axi_arready <= #UDLY 1'd1;
-        axi_araddr_r  <= #UDLY s_axi_araddr;
+        s_axi_arready <= 1'd1;
+        axi_araddr_r  <= s_axi_araddr;
     end
     else
-        s_axi_arready <= #UDLY 1'd0;
+        s_axi_arready <= 1'd0;
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        s_axi_rvalid <= #UDLY 1'd0;
-        s_axi_rdata  <= #UDLY 32'd0;
-        s_axi_rresp  <= #UDLY 2'd0;
+        s_axi_rvalid <= 1'd0;
+        s_axi_rdata  <= 32'd0;
+        s_axi_rresp  <= 2'd0;
     end
     else if(rd_access) begin
-        s_axi_rvalid <= #UDLY 1'd1;
-        s_axi_rdata  <= #UDLY io_rdata;
-        s_axi_rresp  <= #UDLY 2'd0;
+        s_axi_rvalid <= 1'd1;
+        s_axi_rdata  <= io_rdata;
+        s_axi_rresp  <= 2'd0;
     end
     else if(s_axi_rready & s_axi_rvalid)
-        s_axi_rvalid <= #UDLY 1'd0;
+        s_axi_rvalid <= 1'd0;
 end
 
 //////////////////////////////////////////////////
@@ -316,134 +315,150 @@ assign reg_0088h_rd = (axi_araddr_r == 8'h88) & rd_access;
 //////////////////////////////////////////////////
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        ch0_addr <= #UDLY 32'd0; ch1_addr <= #UDLY 32'd0;
-        ch2_addr <= #UDLY 32'd0; ch3_addr <= #UDLY 32'd0;
-        ch4_addr <= #UDLY 32'd0; ch5_addr <= #UDLY 32'd0;
-        ch6_addr <= #UDLY 32'd0; ch7_addr <= #UDLY 32'd0;
+        ch0_addr <= 32'd0; ch1_addr <= 32'd0;
+        ch2_addr <= 32'd0; ch3_addr <= 32'd0;
+        ch4_addr <= 32'd0; ch5_addr <= 32'd0;
+        ch6_addr <= 32'd0; ch7_addr <= 32'd0;
     end
     else begin
-        if(reg_0000h_wr) ch0_addr <= #UDLY s_axi_wdata;
-        if(reg_0010h_wr) ch1_addr <= #UDLY s_axi_wdata;
-        if(reg_0020h_wr) ch2_addr <= #UDLY s_axi_wdata;
-        if(reg_0030h_wr) ch3_addr <= #UDLY s_axi_wdata;
-        if(reg_0040h_wr) ch4_addr <= #UDLY s_axi_wdata;
-        if(reg_0050h_wr) ch5_addr <= #UDLY s_axi_wdata;
-        if(reg_0060h_wr) ch6_addr <= #UDLY s_axi_wdata;
-        if(reg_0070h_wr) ch7_addr <= #UDLY s_axi_wdata;
+        if(reg_0000h_wr) ch0_addr <= s_axi_wdata;
+        if(reg_0010h_wr) ch1_addr <= s_axi_wdata;
+        if(reg_0020h_wr) ch2_addr <= s_axi_wdata;
+        if(reg_0030h_wr) ch3_addr <= s_axi_wdata;
+        if(reg_0040h_wr) ch4_addr <= s_axi_wdata;
+        if(reg_0050h_wr) ch5_addr <= s_axi_wdata;
+        if(reg_0060h_wr) ch6_addr <= s_axi_wdata;
+        if(reg_0070h_wr) ch7_addr <= s_axi_wdata;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        ch0_num <= #UDLY 32'd0; ch1_num <= #UDLY 32'd0;
-        ch2_num <= #UDLY 32'd0; ch3_num <= #UDLY 32'd0;
-        ch4_num <= #UDLY 32'd0; ch5_num <= #UDLY 32'd0;
-        ch6_num <= #UDLY 32'd0; ch7_num <= #UDLY 32'd0;
+        ch0_num <= 32'd0; ch1_num <= 32'd0;
+        ch2_num <= 32'd0; ch3_num <= 32'd0;
+        ch4_num <= 32'd0; ch5_num <= 32'd0;
+        ch6_num <= 32'd0; ch7_num <= 32'd0;
     end
     else begin
-        if(reg_0004h_wr) ch0_num <= #UDLY s_axi_wdata;
-        if(reg_0014h_wr) ch1_num <= #UDLY s_axi_wdata;
-        if(reg_0024h_wr) ch2_num <= #UDLY s_axi_wdata;
-        if(reg_0034h_wr) ch3_num <= #UDLY s_axi_wdata;
-        if(reg_0044h_wr) ch4_num <= #UDLY s_axi_wdata;
-        if(reg_0054h_wr) ch5_num <= #UDLY s_axi_wdata;
-        if(reg_0064h_wr) ch6_num <= #UDLY s_axi_wdata;
-        if(reg_0074h_wr) ch7_num <= #UDLY s_axi_wdata;
+        if(reg_0004h_wr) ch0_num <= s_axi_wdata;
+        if(reg_0014h_wr) ch1_num <= s_axi_wdata;
+        if(reg_0024h_wr) ch2_num <= s_axi_wdata;
+        if(reg_0034h_wr) ch3_num <= s_axi_wdata;
+        if(reg_0044h_wr) ch4_num <= s_axi_wdata;
+        if(reg_0054h_wr) ch5_num <= s_axi_wdata;
+        if(reg_0064h_wr) ch6_num <= s_axi_wdata;
+        if(reg_0074h_wr) ch7_num <= s_axi_wdata;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n) begin
-        ch0_ctl <= #UDLY 32'd0; ch1_ctl <= #UDLY 32'd0;
-        ch2_ctl <= #UDLY 32'd0; ch3_ctl <= #UDLY 32'd0;
-        ch4_ctl <= #UDLY 32'd0; ch5_ctl <= #UDLY 32'd0;
-        ch6_ctl <= #UDLY 32'd0; ch7_ctl <= #UDLY 32'd0;
+        ch0_ctl <= 32'd0; ch1_ctl <= 32'd0;
+        ch2_ctl <= 32'd0; ch3_ctl <= 32'd0;
+        ch4_ctl <= 32'd0; ch5_ctl <= 32'd0;
+        ch6_ctl <= 32'd0; ch7_ctl <= 32'd0;
     end
     else begin
-        if(reg_0008h_wr) ch0_ctl <= #UDLY s_axi_wdata;
-        if(reg_0018h_wr) ch1_ctl <= #UDLY s_axi_wdata;
-        if(reg_0028h_wr) ch2_ctl <= #UDLY s_axi_wdata;
-        if(reg_0038h_wr) ch3_ctl <= #UDLY s_axi_wdata;
-        if(reg_0048h_wr) ch4_ctl <= #UDLY s_axi_wdata;
-        if(reg_0058h_wr) ch5_ctl <= #UDLY s_axi_wdata;
-        if(reg_0068h_wr) ch6_ctl <= #UDLY s_axi_wdata;
-        if(reg_0078h_wr) ch7_ctl <= #UDLY s_axi_wdata;
+        if(reg_0008h_wr) ch0_ctl <= s_axi_wdata;
+        else if(run_clear[0])
+            ch0_ctl[1] <= 1'd0;
+        if(reg_0018h_wr) ch1_ctl <= s_axi_wdata;
+        else if(run_clear[1])
+            ch1_ctl[1] <= 1'd0;
+        if(reg_0028h_wr) ch2_ctl <= s_axi_wdata;
+        else if(run_clear[2])
+            ch2_ctl[1] <= 1'd0;
+        if(reg_0038h_wr) ch3_ctl <= s_axi_wdata;
+        else if(run_clear[3])
+            ch3_ctl[1] <= 1'd0;
+        if(reg_0048h_wr) ch4_ctl <= s_axi_wdata;
+        else if(run_clear[4])
+            ch4_ctl[1] <= 1'd0;
+        if(reg_0058h_wr) ch5_ctl <= s_axi_wdata;
+        else if(run_clear[5])
+            ch5_ctl[1] <= 1'd0;
+        if(reg_0068h_wr) ch6_ctl <= s_axi_wdata;
+        else if(run_clear[6])
+            ch6_ctl[1] <= 1'd0;
+        if(reg_0078h_wr) ch7_ctl <= s_axi_wdata;
+        else if(run_clear[7])
+            ch7_ctl[1] <= 1'd0;
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        dma_ie <= #UDLY 24'd0;
+        dma_ie <= 24'd0;
     else if(reg_0084h_wr)
-        dma_ie <= #UDLY s_axi_wdata[23:0];
+        dma_ie <= s_axi_wdata[23:0];
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        dma_pd <= #UDLY 24'd0;
+        dma_pd <= 24'd0;
     else begin
-        if(half_trans_sync[0]) dma_pd[0]  <= #UDLY 1'd1;
-        if(half_trans_sync[1]) dma_pd[1]  <= #UDLY 1'd1;
-        if(half_trans_sync[2]) dma_pd[2]  <= #UDLY 1'd1;
-        if(half_trans_sync[3]) dma_pd[3]  <= #UDLY 1'd1;
-        if(half_trans_sync[4]) dma_pd[4]  <= #UDLY 1'd1;
-        if(half_trans_sync[5]) dma_pd[5]  <= #UDLY 1'd1;
-        if(half_trans_sync[6]) dma_pd[6]  <= #UDLY 1'd1;
-        if(half_trans_sync[7]) dma_pd[7]  <= #UDLY 1'd1;
-        if(trans_comp_sync[0]) dma_pd[8]  <= #UDLY 1'd1;
-        if(trans_comp_sync[1]) dma_pd[9]  <= #UDLY 1'd1;
-        if(trans_comp_sync[2]) dma_pd[10] <= #UDLY 1'd1;
-        if(trans_comp_sync[3]) dma_pd[11] <= #UDLY 1'd1;
-        if(trans_comp_sync[4]) dma_pd[12] <= #UDLY 1'd1;
-        if(trans_comp_sync[5]) dma_pd[13] <= #UDLY 1'd1;
-        if(trans_comp_sync[6]) dma_pd[14] <= #UDLY 1'd1;
-        if(trans_comp_sync[7]) dma_pd[15] <= #UDLY 1'd1;
-        if(axi_error_sync[0] ) dma_pd[16] <= #UDLY 1'd1;
-        if(axi_error_sync[1] ) dma_pd[17] <= #UDLY 1'd1;
-        if(axi_error_sync[2] ) dma_pd[18] <= #UDLY 1'd1;
-        if(axi_error_sync[3] ) dma_pd[19] <= #UDLY 1'd1;
-        if(axi_error_sync[4] ) dma_pd[20] <= #UDLY 1'd1;
-        if(axi_error_sync[5] ) dma_pd[21] <= #UDLY 1'd1;
-        if(axi_error_sync[6] ) dma_pd[22] <= #UDLY 1'd1;
-        if(axi_error_sync[7] ) dma_pd[23] <= #UDLY 1'd1;
+        if(half_trans[0]) dma_pd[0]  <= 1'd1;
+        if(half_trans[1]) dma_pd[1]  <= 1'd1;
+        if(half_trans[2]) dma_pd[2]  <= 1'd1;
+        if(half_trans[3]) dma_pd[3]  <= 1'd1;
+        if(half_trans[4]) dma_pd[4]  <= 1'd1;
+        if(half_trans[5]) dma_pd[5]  <= 1'd1;
+        if(half_trans[6]) dma_pd[6]  <= 1'd1;
+        if(half_trans[7]) dma_pd[7]  <= 1'd1;
+        if(trans_comp[0]) dma_pd[8]  <= 1'd1;
+        if(trans_comp[1]) dma_pd[9]  <= 1'd1;
+        if(trans_comp[2]) dma_pd[10] <= 1'd1;
+        if(trans_comp[3]) dma_pd[11] <= 1'd1;
+        if(trans_comp[4]) dma_pd[12] <= 1'd1;
+        if(trans_comp[5]) dma_pd[13] <= 1'd1;
+        if(trans_comp[6]) dma_pd[14] <= 1'd1;
+        if(trans_comp[7]) dma_pd[15] <= 1'd1;
+        if(axi_error[0] ) dma_pd[16] <= 1'd1;
+        if(axi_error[1] ) dma_pd[17] <= 1'd1;
+        if(axi_error[2] ) dma_pd[18] <= 1'd1;
+        if(axi_error[3] ) dma_pd[19] <= 1'd1;
+        if(axi_error[4] ) dma_pd[20] <= 1'd1;
+        if(axi_error[5] ) dma_pd[21] <= 1'd1;
+        if(axi_error[6] ) dma_pd[22] <= 1'd1;
+        if(axi_error[7] ) dma_pd[23] <= 1'd1;
         for(i=0;i<24;i=i+1) begin
-            if(reg_0088h_wr & s_axi_wdata[i]) dma_pd[i] <= #UDLY 1'd0;
+            if(reg_0088h_wr & s_axi_wdata[i]) dma_pd[i] <= 1'd0;
         end
     end
 end
 
 always @(posedge sys_clk or negedge sys_rst_n) begin
     if(~sys_rst_n)
-        dma_irq <= #UDLY 1'd0;
+        dma_irq <= 1'd0;
     else
-        dma_irq <= #UDLY |(dma_ie & dma_pd);
+        dma_irq <= |(dma_ie & dma_pd);
 end
 
 assign reg_0000h = ch0_addr;
 assign reg_0004h = {19'd0, ch0_num[12:0]};
-assign reg_0008h = {21'd0, ch0_ctl[10], 1'd0, ch0_ctl[8], 1'd0, ch0_ctl[6:2], 1'd0, ch0_ctl[0]};
+assign reg_0008h = {21'd0, ch0_ctl[10], 1'd0, ch0_ctl[8], 1'd0, ch0_ctl[6:2], ch0_ctl[1:0]};
 assign reg_0010h = ch1_addr;
 assign reg_0014h = {19'd0, ch1_num[12:0]};
-assign reg_0018h = {21'd0, ch1_ctl[10], 1'd0, ch1_ctl[8], 1'd0, ch1_ctl[6:2], 1'd0, ch1_ctl[0]};
+assign reg_0018h = {21'd0, ch1_ctl[10], 1'd0, ch1_ctl[8], 1'd0, ch1_ctl[6:2], ch1_ctl[1:0]};
 assign reg_0020h = ch2_addr;
 assign reg_0024h = {19'd0, ch2_num[12:0]};
-assign reg_0028h = {21'd0, ch2_ctl[10], 1'd0, ch2_ctl[8], 1'd0, ch2_ctl[6:2], 1'd0, ch2_ctl[0]};
+assign reg_0028h = {21'd0, ch2_ctl[10], 1'd0, ch2_ctl[8], 1'd0, ch2_ctl[6:2], ch2_ctl[1:0]};
 assign reg_0030h = ch3_addr;
 assign reg_0034h = {19'd0, ch3_num[12:0]};
-assign reg_0038h = {21'd0, ch3_ctl[10], 1'd0, ch3_ctl[8], 1'd0, ch3_ctl[6:2], 1'd0, ch3_ctl[0]};
+assign reg_0038h = {21'd0, ch3_ctl[10], 1'd0, ch3_ctl[8], 1'd0, ch3_ctl[6:2], ch3_ctl[1:0]};
 assign reg_0040h = ch4_addr;
 assign reg_0044h = {19'd0, ch4_num[12:0]};
-assign reg_0048h = {21'd0, ch4_ctl[10], 1'd0, ch4_ctl[8], 1'd0, ch4_ctl[6:2], 1'd0, ch4_ctl[0]};
+assign reg_0048h = {21'd0, ch4_ctl[10], 1'd0, ch4_ctl[8], 1'd0, ch4_ctl[6:2], ch4_ctl[1:0]};
 assign reg_0050h = ch5_addr;
 assign reg_0054h = {19'd0, ch5_num[12:0]};
-assign reg_0058h = {21'd0, ch5_ctl[10], 1'd0, ch5_ctl[8], 1'd0, ch5_ctl[6:2], 1'd0, ch5_ctl[0]};
+assign reg_0058h = {21'd0, ch5_ctl[10], 1'd0, ch5_ctl[8], 1'd0, ch5_ctl[6:2], ch5_ctl[1:0]};
 assign reg_0060h = ch6_addr;
 assign reg_0064h = {19'd0, ch6_num[12:0]};
-assign reg_0068h = {21'd0, ch6_ctl[10], 1'd0, ch6_ctl[8], 1'd0, ch6_ctl[6:2], 1'd0, ch6_ctl[0]};
+assign reg_0068h = {21'd0, ch6_ctl[10], 1'd0, ch6_ctl[8], 1'd0, ch6_ctl[6:2], ch6_ctl[1:0]};
 assign reg_0070h = ch7_addr;
 assign reg_0074h = {19'd0, ch7_num[12:0]};
-assign reg_0078h = {21'd0, ch7_ctl[10], 1'd0, ch7_ctl[8], 1'd0, ch7_ctl[6:2], 1'd0, ch7_ctl[0]};
-assign reg_0080h = {8'd0, fifo_full_sync, fifo_empty_sync, chn_busy_sync};
+assign reg_0078h = {21'd0, ch7_ctl[10], 1'd0, ch7_ctl[8], 1'd0, ch7_ctl[6:2], ch7_ctl[1:0]};
+assign reg_0080h = {8'd0, fifo_full, fifo_empty, txd_busy};
 assign reg_0084h = {8'd0, dma_ie};
 assign reg_0088h = {8'd0, dma_pd};
 

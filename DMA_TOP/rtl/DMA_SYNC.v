@@ -6,8 +6,8 @@ module DMA_SYNC(
     input                                   dma_clk                                        ,
     input                                   dma_rst_n                                      ,
 
-    input               [ 7:0]              chn_busy                                       ,
-    output    wire      [ 7:0]              chn_busy_sync                                  ,
+    input               [ 7:0]              txd_busy                                       ,
+    output    wire      [ 7:0]              txd_busy_sync                                  ,
     input               [ 7:0]              fifo_empty                                     ,
     output    wire      [ 7:0]              fifo_empty_sync                                ,
     input               [ 7:0]              fifo_full                                      ,
@@ -17,15 +17,15 @@ module DMA_SYNC(
     input               [ 7:0]              trans_comp                                     ,
     output    wire      [ 7:0]              trans_comp_sync                                ,
     input               [ 7:0]              axi_error                                      ,
-    output    wire      [ 7:0]              axi_error_sync
+    output    wire      [ 7:0]              axi_error_sync                                 ,
+    input               [ 7:0]              run_clear                                      ,
+    output    wire      [ 7:0]              run_clear_sync
 );
-
-parameter                                   UDLY                     = 1                   ;
 
 //////////////////////////////////////////////////
 //1. Level Synchronization
 //////////////////////////////////////////////////
-levels_sync #(.DS(8), .RV(1'd0)) chn_busy_levels_sync(.clk(sys_clk), .rst_n(sys_rst_n), .in(chn_busy), .out(chn_busy_sync));
+levels_sync #(.DS(8), .RV(1'd0)) txd_busy_levels_sync(.clk(sys_clk), .rst_n(sys_rst_n), .in(txd_busy), .out(txd_busy_sync));
 levels_sync #(.DS(8), .RV(1'd0)) fifo_empty_levels_sync(.clk(sys_clk), .rst_n(sys_rst_n), .in(fifo_empty), .out(fifo_empty_sync));
 levels_sync #(.DS(8), .RV(1'd0)) fifo_full_levels_sync(.clk(sys_clk), .rst_n(sys_rst_n), .in(fifo_full), .out(fifo_full_sync));
 
@@ -56,5 +56,17 @@ pulse_sync axi_error4_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rs
 pulse_sync axi_error5_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(axi_error[5]), .out(axi_error_sync[5]));
 pulse_sync axi_error6_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(axi_error[6]), .out(axi_error_sync[6]));
 pulse_sync axi_error7_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(axi_error[7]), .out(axi_error_sync[7]));
+
+//////////////////////////////////////////////////
+//3. Reliable Run Clear Synchronization
+//////////////////////////////////////////////////
+pulse_sync run_clear0_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[0]), .out(run_clear_sync[0]));
+pulse_sync run_clear1_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[1]), .out(run_clear_sync[1]));
+pulse_sync run_clear2_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[2]), .out(run_clear_sync[2]));
+pulse_sync run_clear3_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[3]), .out(run_clear_sync[3]));
+pulse_sync run_clear4_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[4]), .out(run_clear_sync[4]));
+pulse_sync run_clear5_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[5]), .out(run_clear_sync[5]));
+pulse_sync run_clear6_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[6]), .out(run_clear_sync[6]));
+pulse_sync run_clear7_pulse_sync(.clka(dma_clk), .clkb(sys_clk), .rst_n_a(dma_rst_n), .rst_n_b(sys_rst_n), .in(run_clear[7]), .out(run_clear_sync[7]));
 
 endmodule

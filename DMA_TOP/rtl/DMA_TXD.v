@@ -1,17 +1,19 @@
 `timescale 1ns / 1ps
 
 module DMA_TXD(
-    input                                   dma_clk                                        ,
-    input                                   dma_rst_n                                      ,
+    input                                   dev_clk                                        ,
+    input                                   dev_rst_n                                      ,
 
     input               [31:0]              chn_addr                                       ,
     input               [12:0]              chn_num                                        ,
     input               [31:0]              chn_ctl                                        ,
     input                                   chn_en                                         ,
+    input                                   chn_run                                        ,
 
     input               [255:0]             fifo_rdat                                      ,
     input                                   fifo_empty                                     ,
     input               [ 8:0]              fifo_rlevel                                    ,
+    input                                   fifo_rd_ready                                  ,
     output    wire                          fifo_rinc                                      ,
 
     output    wire                          m_axi_awid                                     ,
@@ -37,13 +39,12 @@ module DMA_TXD(
     input                                   m_axi_bvalid                                   ,
     output    wire                          m_axi_bready                                   ,
 
-    output    reg                           chn_busy                                       ,
+    output    reg                           txd_busy                                       ,
     output    reg                           half_trans                                     ,
     output    reg                           trans_comp                                     ,
-    output    reg                           axi_error
+    output    reg                           axi_error                                      ,
+    output    reg                           run_clear
 );
-
-parameter                                   UDLY                     = 1                   ;
 
 localparam                                  TXD_IDLE                 = 3'd0                ;
 localparam                                  TXD_AW                   = 3'd1                ;
@@ -54,51 +55,53 @@ localparam                                  TXD_END                  = 3'd4     
 wire                    [ 1:0]              width                                          ;
 wire                    [ 2:0]              burst_size                                     ;
 wire                                        loop                                           ;
-wire                    [12:0]              remain_data                                    ;
-wire                    [12:0]              cnt_next                                       ;
-wire                    [12:0]              half_cnt                                       ;
-wire                                        start_event                                    ;
-wire                                        task_start                                     ;
-wire                                        stop_req                                       ;
-wire                                        txd_start                                      ;
+wire                                        txd_run                                        ;
+wire                    [ 5:0]              full_num                                       ;
+wire                    [12:0]              data_remain                                    ;
+wire                    [10:0]              beat_remain                                    ;
+wire                    [ 8:0]              burst_num                                      ;
+wire                    [ 5:0]              data_num                                       ;
+wire                    [12:0]              data_inc                                       ;
+wire                    [ 7:0]              beat_inc                                       ;
+wire                                        beat_end                                       ;
+wire                    [12:0]              addr_inc                                       ;
+wire                                        burst_ready                                    ;
+wire                                        task_clr                                       ;
+wire                    [12:0]              half_num                                       ;
+wire                                        half_end                                       ;
+wire                                        data_end                                       ;
+wire                                        resp_ok                                        ;
+wire                                        resp_end                                       ;
+wire                                        resp_err                                       ;
+wire                                        trans_end                                      ;
+wire                                        loop_end                                       ;
+wire                                        half_set                                       ;
+wire                                        data_clr                                       ;
+wire                                        beat_clr                                       ;
+wire                                        half_clr                                       ;
+wire                                        addr_clr                                       ;
 wire                                        aw_handshake                                   ;
 wire                                        w_handshake                                    ;
 wire                                        b_handshake                                    ;
-wire                                        beat_last                                      ;
 wire                                        txd_idle                                       ;
 wire                                        txd_aw                                         ;
 wire                                        txd_wdata                                      ;
 wire                                        txd_bresp                                      ;
 wire                                        txd_end                                        ;
-wire                                        resp_ok                                        ;
-wire                                        burst_commit                                   ;
-wire                                        half_done                                      ;
-wire                                        trans_done                                     ;
-wire                                        burst_last                                     ;
-wire                                        fifo_ready                                     ;
 
-reg                     [ 5:0]              pack_num                                       ;
+reg                                         txd_en                                         ;
 reg                     [ 7:0]              burst_max                                      ;
-reg                     [10:0]              beat_num_raw                                   ;
-reg                     [ 5:0]              byte_num_raw                                   ;
-reg                     [10:0]              beat_num                                       ;
-reg                     [12:0]              data_num                                       ;
-reg                     [ 5:0]              byte_num                                       ;
-reg                     [ 7:0]              beat_max                                       ;
-reg                     [12:0]              burst_num                                      ;
-reg                     [31:0]              strb_last                                      ;
-reg                                         start_armed                                    ;
-reg                     [ 2:0]              txd_state                                      ;
-reg                     [ 2:0]              txd_state_next                                 ;
-reg                     [ 7:0]              beat_cnt                                       ;
-reg                     [31:0]              axi_addr                                       ;
+reg                     [31:0]              addr_cnt                                       ;
 reg                     [12:0]              data_cnt                                       ;
-reg                     [ 1:0]              bresp                                          ;
-reg                                         bid                                            ;
-reg                                         stop_pending                                   ;
+reg                     [ 7:0]              beat_cnt                                       ;
+reg                     [ 7:0]              awlen                                          ;
+reg                                         half_flag                                      ;
+reg                                         task_end                                       ;
+reg                     [ 2:0]              txd_fsm                                        ;
+reg                     [ 2:0]              txd_fsm_nx                                     ;
 
 //////////////////////////////////////////////////
-//1. Configuration And Burst Parameters
+//1. Task And Burst Planning
 //////////////////////////////////////////////////
 assign width      = chn_ctl[3:2];
 assign burst_size = chn_ctl[6:4];
@@ -118,138 +121,112 @@ always @(*) begin
     endcase
 end
 
-assign remain_data = chn_num - data_cnt;
+assign full_num = width[1] ? 6'd8 :
+                  width[0] ? 6'd16 : 6'd32;
 
-always @(*) begin
-    case(width)
-        2'b00 : begin
-            pack_num = 6'd32;
-            beat_num_raw = {3'd0, remain_data[12:5]} + {10'd0, |remain_data[4:0]};
-            byte_num_raw = (remain_data[4:0] == 5'd0) ? 6'd32 : {1'd0, remain_data[4:0]};
-        end
-        2'b01 : begin
-            pack_num = 6'd16;
-            beat_num_raw = {2'd0, remain_data[12:4]} + {10'd0, |remain_data[3:0]};
-            byte_num_raw = (remain_data[3:0] == 4'd0) ? 6'd32 : {1'd0, remain_data[3:0], 1'd0};
-        end
-        2'b10, 2'b11 : begin
-            pack_num = 6'd8;
-            beat_num_raw = {1'd0, remain_data[12:3]} + {10'd0, |remain_data[2:0]};
-            byte_num_raw = (remain_data[2:0] == 3'd0) ? 6'd32 : {1'd0, remain_data[2:0], 2'd0};
-        end
-        default : begin
-            pack_num = 6'd32;
-            beat_num_raw = {3'd0, remain_data[12:5]} + {10'd0, |remain_data[4:0]};
-            byte_num_raw = (remain_data[4:0] == 5'd0) ? 6'd32 : {1'd0, remain_data[4:0]};
-        end
-    endcase
-end
-
-assign burst_last = (beat_num_raw <= {3'd0, burst_max});
-
-always @(*) begin
-    beat_num = beat_num_raw;
-    data_num = remain_data;
-    byte_num = byte_num_raw;
-    if(~burst_last) begin
-        beat_num = {3'd0, burst_max};
-        data_num = {5'd0, burst_max} * pack_num;
-        byte_num = 6'd32;
-    end
-end
-
-assign fifo_ready = (beat_num != 11'd0) & ({2'd0, fifo_rlevel} >= beat_num);
-assign stop_req    = ~chn_en | stop_pending;
-assign txd_start   = txd_idle & chn_busy & ~stop_req & fifo_ready;
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n) begin
-        beat_max  <= #UDLY 8'd0;
-        burst_num <= #UDLY 13'd0;
-        strb_last <= #UDLY 32'd0;
-    end
-    else if(txd_start) begin
-        beat_max  <= #UDLY beat_num[7:0] - 8'd1;
-        burst_num <= #UDLY data_num;
-        if(byte_num == 6'd32)
-            strb_last <= #UDLY 32'hffff_ffff;
-        else
-            strb_last <= #UDLY 32'hffff_ffff >> (6'd32 - byte_num);
-    end
-end
-
-assign start_event = chn_en & start_armed;
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        start_armed <= #UDLY 1'd0;
-    else if(~chn_en)
-        start_armed <= #UDLY 1'd1;
-    else if(start_event)
-        start_armed <= #UDLY 1'd0;
-end
+assign data_remain = chn_num - data_cnt;
+assign beat_remain = width[1] ? {1'd0, data_remain[12:3]} + {10'd0, |data_remain[2:0]} :
+                     width[0] ? {2'd0, data_remain[12:4]} + {10'd0, |data_remain[3:0]} :
+                                {3'd0, data_remain[12:5]} + {10'd0, |data_remain[4:0]};
+assign burst_num   = (beat_remain <= {3'd0, burst_max}) ? beat_remain[8:0] : {1'd0, burst_max};
+assign beat_end    = (beat_cnt == awlen);
+assign burst_ready = fifo_rd_ready & (fifo_rlevel >= burst_num);
 
 //////////////////////////////////////////////////
 //2. AXI4-Full Write
 //////////////////////////////////////////////////
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        txd_state <= #UDLY TXD_IDLE;
-    else
-        txd_state <= #UDLY txd_state_next;
-end
-
 assign aw_handshake = m_axi_awvalid & m_axi_awready;
 assign w_handshake  = m_axi_wvalid & m_axi_wready;
 assign b_handshake  = m_axi_bvalid & m_axi_bready;
-assign beat_last    = (beat_cnt == beat_max);
+
+assign txd_run   = txd_idle & txd_en & chn_run & (chn_num != 13'd0) & burst_ready;
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        txd_en <= 1'd0;
+    else if(txd_idle | txd_end)
+        txd_en <= chn_en;
+end
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        txd_fsm <= TXD_IDLE;
+    else if(~txd_en)
+        txd_fsm <= TXD_IDLE;
+    else
+        txd_fsm <= txd_fsm_nx;
+end
 
 always @(*) begin
-    case(txd_state)
+    case(txd_fsm)
         TXD_IDLE : begin
-            if(txd_start)
-                txd_state_next = TXD_AW;
+            if(txd_run)
+                txd_fsm_nx = TXD_AW;
             else
-                txd_state_next = TXD_IDLE;
+                txd_fsm_nx = TXD_IDLE;
         end
         TXD_AW : begin
             if(aw_handshake)
-                txd_state_next = TXD_WDATA;
-            else if(stop_req)
-                txd_state_next = TXD_IDLE;
+                txd_fsm_nx = TXD_WDATA;
             else
-                txd_state_next = TXD_AW;
+                txd_fsm_nx = TXD_AW;
         end
         TXD_WDATA : begin
-            if(w_handshake & beat_last)
-                txd_state_next = TXD_BRESP;
+            if(w_handshake & beat_end)
+                txd_fsm_nx = TXD_BRESP;
             else
-                txd_state_next = TXD_WDATA;
+                txd_fsm_nx = TXD_WDATA;
         end
         TXD_BRESP : begin
-            if(b_handshake)
-                txd_state_next = TXD_END;
+            if(resp_end | resp_err)
+                txd_fsm_nx = TXD_END;
             else
-                txd_state_next = TXD_BRESP;
+                txd_fsm_nx = TXD_BRESP;
         end
         TXD_END : begin
-            txd_state_next = TXD_IDLE;
+            if(task_end & chn_run)
+                txd_fsm_nx = TXD_END;
+            else
+                txd_fsm_nx = TXD_IDLE;
         end
         default : begin
-            txd_state_next = TXD_IDLE;
+            txd_fsm_nx = TXD_IDLE;
         end
     endcase
 end
 
-assign txd_idle  = (txd_state == TXD_IDLE);
-assign txd_aw    = (txd_state == TXD_AW);
-assign txd_wdata = (txd_state == TXD_WDATA);
-assign txd_bresp = (txd_state == TXD_BRESP);
-assign txd_end   = (txd_state == TXD_END);
+assign txd_idle  = (txd_fsm == TXD_IDLE);
+assign txd_aw    = (txd_fsm == TXD_AW);
+assign txd_wdata = (txd_fsm == TXD_WDATA);
+assign txd_bresp = (txd_fsm == TXD_BRESP);
+assign txd_end   = (txd_fsm == TXD_END);
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        txd_busy <= 1'd0;
+    else if(~txd_en)
+        txd_busy <= 1'd0;
+    else
+        txd_busy <= (txd_fsm_nx == TXD_AW)    |
+                    (txd_fsm_nx == TXD_WDATA) |
+                    (txd_fsm_nx == TXD_BRESP) |
+                    (txd_fsm_nx == TXD_END);
+end
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        awlen <= 8'd0;
+    else if(~txd_en)
+        awlen <= 8'd0;
+    else if(task_clr)
+        awlen <= 8'd0;
+    else if(txd_run)
+        awlen <= burst_num[7:0] - 8'd1;
+end
 
 assign m_axi_awid    = 1'd0;
-assign m_axi_awaddr  = axi_addr;
-assign m_axi_awlen   = beat_max;
+assign m_axi_awaddr  = addr_cnt;
+assign m_axi_awlen   = awlen;
 assign m_axi_awsize  = 3'd5;
 assign m_axi_awburst = 2'b01;
 assign m_axi_awlock  = 1'd0;
@@ -258,128 +235,115 @@ assign m_axi_awprot  = 3'b000;
 assign m_axi_awqos   = 4'd0;
 assign m_axi_awvalid = txd_aw;
 
+assign data_num = (data_remain <= {7'd0, full_num}) ? data_remain[5:0] : full_num;
 assign m_axi_wdata  = fifo_rdat;
-assign m_axi_wstrb  = beat_last ? strb_last : 32'hffff_ffff;
-assign m_axi_wlast  = m_axi_wvalid & beat_last;
-assign m_axi_wvalid = txd_wdata & ~fifo_empty;
+assign m_axi_wstrb  = width[1] ? 32'hffff_ffff >> (6'd32 - {data_num[3:0], 2'd0}) :
+                      width[0] ? 32'hffff_ffff >> (6'd32 - {data_num[4:0], 1'd0}) :
+                                 32'hffff_ffff >> (6'd32 - data_num);
+assign m_axi_wlast  = m_axi_wvalid & beat_end;
+assign m_axi_wvalid = txd_wdata & fifo_rd_ready & ~fifo_empty;
 assign fifo_rinc    = w_handshake;
 
 assign m_axi_bready = txd_bresp;
 
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        beat_cnt <= #UDLY 8'd0;
-    else if(txd_idle)
-        beat_cnt <= #UDLY 8'd0;
+//////////////////////////////////////////////////
+//3. Counters And Completion
+//////////////////////////////////////////////////
+assign resp_ok    = (m_axi_bresp == 2'b00) & ~m_axi_bid;
+assign half_num  = chn_num >> 1;
+assign half_end  = (data_cnt >= half_num);
+assign data_end  = (data_cnt == chn_num);
+assign resp_end  = b_handshake & resp_ok;
+assign resp_err  = b_handshake & ~resp_ok;
+assign trans_end = resp_end & data_end;
+assign loop_end  = trans_end & loop & chn_run;
+assign half_set  = resp_end & half_end & ~half_flag;
+assign task_clr  = (txd_end & ~chn_run) | (txd_idle & (data_cnt != 13'd0) & ~chn_run);
+
+assign addr_clr = task_clr | loop_end | (txd_run & (data_cnt == 13'd0));
+assign addr_inc = {awlen + 8'd1, 5'd0};
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        addr_cnt <= 32'd0;
+    else if(~txd_en)
+        addr_cnt <= chn_addr;
+    else if(addr_clr)
+        addr_cnt <= chn_addr;
+    else if(resp_end)
+        addr_cnt <= addr_cnt + {19'd0, addr_inc};
+end
+
+assign data_clr = task_clr | loop_end;
+assign data_inc = data_cnt + {7'd0, data_num};
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        data_cnt <= 13'd0;
+    else if(~txd_en)
+        data_cnt <= 13'd0;
+    else if(data_clr)
+        data_cnt <= 13'd0;
     else if(w_handshake)
-        beat_cnt <= #UDLY beat_cnt + 8'd1;
+        data_cnt <= data_inc;
 end
 
-//////////////////////////////////////////////////
-//3. Status Errors And Events
-//////////////////////////////////////////////////
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n) begin
-        bresp <= #UDLY 2'd0;
-        bid   <= #UDLY 1'd0;
+assign beat_clr = task_clr | txd_run;
+assign beat_inc = beat_cnt + 8'd1;
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        beat_cnt <= 8'd0;
+    else if(~txd_en)
+        beat_cnt <= 8'd0;
+    else if(beat_clr)
+        beat_cnt <= 8'd0;
+    else if(w_handshake)
+        beat_cnt <= beat_inc;
+end
+
+assign half_clr = task_clr | loop_end;
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        half_flag <= 1'd0;
+    else if(~txd_en)
+        half_flag <= 1'd0;
+    else if(half_clr)
+        half_flag <= 1'd0;
+    else if(half_set)
+        half_flag <= 1'd1;
+end
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n)
+        task_end <= 1'd0;
+    else if(~txd_en)
+        task_end <= 1'd0;
+    else if(task_clr)
+        task_end <= 1'd0;
+    else if(b_handshake)
+        task_end <= resp_err | (resp_end & ~chn_run) | (trans_end & ~loop);
+end
+
+always @(posedge dev_clk or negedge dev_rst_n) begin
+    if(~dev_rst_n) begin
+        half_trans <= 1'd0;
+        trans_comp <= 1'd0;
+        axi_error  <= 1'd0;
+        run_clear  <= 1'd0;
     end
-    else if(b_handshake) begin
-        bresp <= #UDLY m_axi_bresp;
-        bid   <= #UDLY m_axi_bid;
-    end
-end
-
-assign resp_ok = (bresp == 2'b00) & ~bid;
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        stop_pending <= #UDLY 1'd0;
-    else if(~chn_busy)
-        stop_pending <= #UDLY 1'd0;
-    else if(~chn_en)
-        stop_pending <= #UDLY 1'd1;
-end
-
-assign task_start = start_event & ~chn_busy;
-assign cnt_next   = data_cnt + burst_num;
-assign trans_done = (cnt_next == chn_num);
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        chn_busy <= #UDLY 1'd0;
-    else if(txd_end) begin
-        if(~resp_ok)
-            chn_busy <= #UDLY 1'd0;
-        else if(trans_done) begin
-            if(~loop | stop_req)
-                chn_busy <= #UDLY 1'd0;
-        end
-        else begin
-            if(stop_req)
-                chn_busy <= #UDLY 1'd0;
-        end
-    end
-    else if(txd_idle & chn_busy & stop_req)
-        chn_busy <= #UDLY 1'd0;
-    else if(task_start & (chn_num != 13'd0))
-        chn_busy <= #UDLY 1'd1;
-end
-
-assign burst_commit = txd_end & resp_ok;
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        axi_addr <= #UDLY 32'd0;
-    else if(burst_commit) begin
-        if(trans_done)
-            axi_addr <= #UDLY chn_addr;
-        else
-            axi_addr <= #UDLY axi_addr + {19'd0, (beat_max + 8'd1), 5'd0};
-    end
-    else if(task_start)
-        axi_addr <= #UDLY chn_addr;
-end
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        data_cnt <= #UDLY 13'd0;
-    else if(burst_commit) begin
-        if(trans_done)
-            data_cnt <= #UDLY 13'd0;
-        else
-            data_cnt <= #UDLY cnt_next;
-    end
-    else if(task_start)
-        data_cnt <= #UDLY 13'd0;
-end
-
-assign half_cnt  = chn_num >> 1;
-assign half_done = (data_cnt < half_cnt) & (cnt_next >= half_cnt);
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n) begin
-        half_trans <= #UDLY 1'd0;
-        trans_comp <= #UDLY 1'd0;
+    else if(~txd_en) begin
+        half_trans <= 1'd0;
+        trans_comp <= 1'd0;
+        axi_error  <= 1'd0;
+        run_clear  <= 1'd0;
     end
     else begin
-        half_trans <= #UDLY 1'd0;
-        trans_comp <= #UDLY 1'd0;
-        if(burst_commit) begin
-            if(half_done)
-                half_trans <= #UDLY 1'd1;
-            if(trans_done)
-                trans_comp <= #UDLY 1'd1;
-        end
-    end
-end
-
-always @(posedge dma_clk or negedge dma_rst_n) begin
-    if(~dma_rst_n)
-        axi_error <= #UDLY 1'd0;
-    else begin
-        axi_error <= #UDLY 1'd0;
-        if(txd_end & ~resp_ok)
-            axi_error <= #UDLY 1'd1;
+        half_trans <= half_set;
+        trans_comp <= trans_end;
+        axi_error  <= resp_err;
+        run_clear  <= resp_err | (trans_end & ~loop);
     end
 end
 
